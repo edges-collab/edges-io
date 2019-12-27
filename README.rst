@@ -64,7 +64,7 @@ that has a sub-folder ``25C/``, which has subfolders ``Spectra/``, ``Resistance/
 There are a few options you can use, example changing the temperature of the observation,
 and enabling automatic fixes. The latter can be achieved simply with the ``--fix`` flag.
 If you find that a particular kind of error happens regularly,
-`<https://github.com/edges-collab/edges-io/issues/new> make an issue`_ so we can add the
+`make an issue<https://github.com/edges-collab/edges-io/issues/new>`_ so we can add the
 fix.
 
 Library
@@ -86,7 +86,7 @@ For example::
     >>> ambient_spectrum = obs.spectra.ambient.read()
 
 See how ``edges-io`` is used in
-`<https://github.com/edges-collab/cal_coefficients/tree/master/src/edges_cal/cal_coefficients.py>edges-cal`_
+`edges-cal<https://github.com/edges-collab/cal_coefficients/tree/master/src/edges_cal/cal_coefficients.py>`_
 for a more involved example.
 
 Note
