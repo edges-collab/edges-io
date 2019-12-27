@@ -13,13 +13,9 @@ python:
   - 3.8
 
 install:
-  - pip install -U tox-travis coverage coveralls
+  - pip install -U tox-travis coverage
 script:
   - tox
-after_success:
-  - if [[ "$COVERAGE" == "true" ]]; then coveralls || echo "failed"; fi
-after_script:
-  - travis-cleanup
 cache:
   pip: true
   directories:
