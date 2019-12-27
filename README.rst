@@ -8,21 +8,21 @@ edges-io
 This package implements all necessary functionality for reading EDGES data.
 It's two main concerns are:
 
-    1. Reading the various file formats required for VNA readings, fastspec, etc.
-    2. Verifying and exploring databases of measurements in a robust and reliable way.
+1. Reading the various file formats required for VNA readings, fastspec, etc.
+2. Verifying and exploring databases of measurements in a robust and reliable way.
 
 Features
 ========
-Some features currently implemented::
+Some features currently implemented:
 
-    * Verify a "calibration observation" quickly without reading any actual data, with
-      a nice command-line tool: ``edges-io check``.
-    * Optionally apply various automatic _fixes_ to a calibration observation to bring
-      it into line with standard database layout.
-    * Read ``acq``, ``h5``, ``mat`` and ``npz`` spectrum files seamlessly.
-    * Read S1P files.
-    * Verification of read data.
-    * Intuitive class hierarchy so that any subset of an observation can be handled.
+* Verify a "calibration observation" quickly without reading any actual data, with
+  a nice command-line tool: ``edges-io check``.
+* Optionally apply various automatic _fixes_ to a calibration observation to bring
+  it into line with standard database layout.
+* Read ``acq``, ``h5``, ``mat`` and ``npz`` spectrum files seamlessly.
+* Read S1P files.
+* Verification of read data.
+* Intuitive class hierarchy so that any subset of an observation can be handled.
 
 Installation
 ============
