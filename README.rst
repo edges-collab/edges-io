@@ -2,6 +2,9 @@
 edges-io
 ========
 
+.. image:: https://travis-ci.org/edges-collab/edges-io.svg?branch=master
+    :target: https://travis-ci.org/edges-collab/edges-io
+
 
 **Module for reading EDGES data and working with EDGES databases.**
 
