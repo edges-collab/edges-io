@@ -14,9 +14,11 @@ jobs:
       env: TOXENV=lint
 
 install:
-  - pip install -U pip tox-travis coverage
+  - pip install -U pip tox-travis coverage codecov
 script:
   - tox
+after_success:
+  - codecov
 cache:
   pip: true
   directories:
