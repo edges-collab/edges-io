@@ -4,7 +4,8 @@ edges-io
 
 .. image:: https://travis-ci.org/edges-collab/edges-io.svg?branch=master
     :target: https://travis-ci.org/edges-collab/edges-io
-
+.. image:: https://codecov.io/gh/edges-collab/edges-io/branch/master/graph/badge.svg
+  :target: https://codecov.io/gh/edges-collab/edges-io
 
 **Module for reading EDGES data and working with EDGES databases.**
 
