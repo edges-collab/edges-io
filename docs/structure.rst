@@ -11,63 +11,168 @@ This standard is enforced by the code `edges-io <https://github.com/edges-collab
 
 Format
 ------
-* Root directory name format
-  + ReceiverXX_YYYY_MM_DD_LLL_to_HHH_MHz
-  + XX----------Receiver version number (01,02,03)
-  + LLL---------Start frequency in MHz
-  + HHH---------Stop frequency in MHz
-  + YYYY_MM_DD--Calibration start date
-      - eg.---------Receiver03_2019_040_to_200_MHz
-* Root directory consists of three subdirectories depending on temperature of receiver
-    + 15C---------Calibration is done with receiver temperature set to 15 deg Celsius
-    + 25C---------Calibration is done with receiver temperature set to 25 deg Celsius
-    + 35C---------Calibration is done with receiver temperature set to 35 deg Celsius
-* Each Sub directory consists of three sub folders
-    + Resistance--Consists of temperature value from thermistor in .csv format
-    + S11---------Consists of VNA measurement in sub folders for different loads and receiver.
-     - ReceiverReadingXX---------------XX represents the number of runs with same settings
-            ReceiverReadingYY.s1p---S11 of receiver, YY is the number of runs
-            ShortYY.s1p-------------S11 of internal short, YY is the number of runs
-            OpenYY.s1p--------------S11 of internal open, YY is the number of runs
-            MatchYY.s1p-------------S11 of internal Matched, YY is the number of runs
-      - AntSimX-------------------------X represents different antenna simulators 1,2,3,4
-            ExternalYY--------------S11 of AntsimX, YY is the number of runs
-            ShortYY.s1p-------------S11 of internal short, YY is the number of runs
-            OpenYY.s1p--------------S11 of internal open, YY is the number of runs
-            MatchYY.s1p-------------S11 of internal Matched, YY is the number of runs
-     - SwitchingstateXX----------------XX represents the number of runs with same settings
-            ShortYY.s1p-------------S11 of internal short, YY is the number of runs
-            MatchYY.s1p-------------S11 of internal Matched, YY is the number of runs
-            OpenYY.s1p--------------S11 of internal open, YY is the number of runs
-            ExternalMatchYY.s1p-----S11 of External standard Matched, YY is the number of runs
-            ExternalShortYY.s1p-----S11 of External standard Short, YY is the number of runs
-            ExternalOpenYY.s1p------S11 of External standard Open, YY is the number of runs
-     - LongCableShort---------------Long cable is connected to short
-            ExternalYY--------------S11 of Long cable with short connected, YY is the number of runs
-            ShortYY.s1p-------------S11 of internal short, YY is the number of runs
-            OpenYY.s1p--------------S11 of internal open, YY is the number of runs
-            MatchYY.s1p-------------S11 of internal Matched, YY is the number of runs
-     - LongCableOpen-------------------Long cable is connected to open
-            ExternalYY--------------S11 of Long cable with open connected, YY is the number of runs
-            ShortYY.s1p-------------S11 of internal short, YY is the number of runs
-            OpenYY.s1p--------------S11 of internal open, YY is the number of runs
-            MatchYY.s1p-------------S11 of internal Matched, YY is the number of runs
-  - Ambient-------------------------
-            ExternalYY--------------S11 of Long cable with open connected, YY is the number of runs
-            ShortYY.s1p-------------S11 of internal short, YY is the number of runs
-            OpenYY.s1p--------------S11 of internal open, YY is the number of runs
-            MatchYY.s1p-------------S11 of internal Matched, YY is the number of runs
-     - HotLoad-------------------------
-            ExternalYY--------------S11 of Long cable with open connected, YY is the number of runs
-            ShortYY.s1p-------------S11 of internal short, YY is the number of runs
-            OpenYY.s1p--------------S11 of internal open, YY is the number of runs
-            MatchYY.s1p-------------S11 of internal Matched, YY is the number of runs
-  + Spectra----- Consists of digitizer output for all loads, there could be multiple files for each load.
-      - file name will be in the format Loadname_YYYY_DDD_HH.acq where YYYY is the year DDD is the day and HH is the Hour.
-   | Load Name | Original name format | Renaming format |Notes |
-         | --- | --- | --- | ---|
-         |  Hotload |  2017_139_19.acq |  HotLoad_2017_139_19.acq | |
-         | Ambient  | 2017_141_17.acq  |  Ambient_2017_141_17.acq | |
-         | AntSimX  |  2017_143_12.acq |  AntsimX_2017_143_12.acq | X is the antenna simulator version |
-         | LongCableShort  |  2017_146_00.acq | LongCableShort_2017_146_00.acq  | |
-         |  LongCableOpen | 2017_148_00.acq  |  LongCableOpen_2017_148_00.acq | |
+The following format description will be as formal and complete as possible. Pay special
+attention to modifiers such as "definitely", "possibly" and "solely". In general, there
+is a well-defined list of files/folders that should be in any one place, and extra files
+will be considered *erroneous*, as they may confuse file readers into reading incorrect
+information silently.
+
+A global exception to this rule are files with the following suffices: ``.old``, ``.invalid``,
+``.ignore``. These may be kept in the observation and will always be ignored by the
+checker and reader. In addition, a file called ``Notes.txt`` may be placed anywhere
+in the structure.
+
+Throughout the following description, we will use formats such as ``FileXX_YYY.txt``.
+In these, some groups of letters are intended to be placeholders for meta-information.
+These will *always* be capital letters. They will *usually* be a repeat set of such letters,
+but not always. It will *always* be made explicit in the context which letters are meant
+to be placeholders. The number of such letters in a given position is strict: the actual
+replacement data must match it. For example, in the above, if ``YYY`` represented the
+day of the year, it must be insert as a three-digit string. If the day was the 40th, it
+must be inserted as ``040`` rather than simply ``40``.
+
+*Optional* format entries will be marked with square brackets, eg. ``File[XX]_YYY.txt``.
+In this case, one could have a file such as ``File_040.txt``, or a file such as
+``File30_040.txt``. Each would be valid and identifiable.
+
+Entries that have a limited number of choices may be identified with the following
+notation: ``File_(this|that|the_other).txt``. In this case, the filename ``File_this.txt``
+would be equally valid as ``File_the_other.txt``. But not ``File_this_that.txt``.
+
+Outline
+~~~~~~~
+The following directory tree gives a summary view of the structure of an observation.
+Here, curly brackets represent the idea that *all* of a given pattern must be present.
+Conversely, angle brackets represent the idea that *any* of a given pattern could be
+present (including none)::
+
+    ReceiverXX_YYYY_MM_DD_LLL_to_HHH_MHz/
+        <15|25|35>C/
+            Resistance/
+                {Ambient|HotLoad|LongCableOpen|LongCableShorted}_<NN>_YYYY_DDD_HH_MM_SS_lab.csv
+                <AntSimX>_{NN}_YYYY_DDD_HH_MM_SS_lab.csv
+            Spectra/
+                {Ambient|HotLoad|LongCableOpen|LongCableShorted}_<NN>_YYYY_DDD_HH_MM_SS_lab.<h5|acq|mat|npz>
+                <AntSimX>_<NN>_YYYY_DDD_HH_MM_SS_lab.{h5|acq|mat|npz}
+            S11/
+                ReceiverReading<RR>/
+                    {ReceiverReading|Open|Short|Match}<NN>.s1p
+                SwitchingState<RR>/
+                    {Open|Short|Match|ExternalOpen|ExternalShort|ExternalMatch}<NN>.s1p
+                {LongCableOpen|LongCableShort|Ambient|HotLoad}/
+                    {Open|Short|Match|External}.s1p
+                <AntSimX>/
+                    {Open|Short|Match|External}.s1p
+
+We will go through each format in more detail below to identify any vague points and
+also describe the metadata of each entry.
+
+Root
+~~~~
+Format: ``ReceiverXX_YYYY_MM_DD_LLL_to_HHH_MHz/``
+
+Entries:
+    * ``XX``: Receiver version number ``(01|02|03)``
+    * ``LLL``: Start frequency in MHz
+    * ``HHH``: Stop frequency in MHz
+    * ``YYYY_MM_DD``: Calibration start date
+
+Example: ``Receiver03_2019_040_to_200_MHz``
+
+The root directory contains *up to* three subdirectories defining the temperature of the
+receiver. This "temperature subdirectory" can be considered part of the root name,
+as a calibration observation is fully contained in each.
+
+Format: ``<15|25|35>C``.
+
+The options here are temperatures in Celsius.
+
+Top-Level Subdirectories
+~~~~~~~~~~~~~~~~~~~~~~~~
+Root (with temperature) definitely consists of three sub folders:
+
+    * ``Resistance/``: Contains temperature measurements of thermistor.
+    * ``S11/``: Contains VNA measurements in sub folders for different loads and receiver.
+    * ``Spectra/``: Contains digitizer output for all loads.
+
+S11 Folder
+~~~~~~~~~~
+The ``S11`` directory consists *solely* of the following subdirectories. Any other file
+or directory will be flagged as an **error** (besides global exceptions defined above).
+
+Each subdirectory contains a number of ``.s1p`` format files. We define explicitly
+which files may be contained in each directory below. Nevertheless, we here
+emphasise that the format of these files contains a single entry ``<NN>``, called
+the "run number", which identifies a chronological ordering of when the data was taken.
+It is an integer, and the entries in any given directory for any given file kind must
+start at one and increment by one. There may be an arbitrary number of run numbers for
+any given directory and file kind. Here are the definitions:
+
+    * ``ReceiverReading<RR>/``
+        - ``<RR>``: the "repeat number" of the observation. An integer. Lowest value
+          *must* be ``01``, and it must increment by unity. Any number of directories
+          may be present. Each represents a repetition of the entire measurement.
+        - Contains ``ReceiverReading<NN>.s1p``, ``Short<NN>.s1p``, ``Open<NN>.s1p``
+          and ``Match<NN>.s1p``. See notes on ``<NN>`` above. Each corresponds to the
+          measurement of a different standard.
+    * ``Switchingstate<RR>/``
+        - ``<RR>``: See note for ``ReceiverReading<RR>``.
+        - Contains ``{Open|Short|Match|ExternalOpen|ExternalShort|ExternalMatch}<NN>.s1p``.
+          These are again all measurements of different internal/external standards. Again,
+          see notes on ``<NN>`` above.
+    * ``{Ambient|HotLoad|LongCableOpen|LongCableShort}/``
+        - *All* of these options *must* be present. They represent the S11 measurements
+          of the four calibration loads. Note there is no repeat number here.
+        - Each contains *all* of ``{External|Short|Open|Match}<NN>.s1p``.
+    * ``[AntSim<X>]/``
+        - Any number of Antenna Simulators *may* be present (up to 9). If present, ``X``
+          identifies the simulator (an integer from 1-9).
+        - The contents of an antenna simulation are the same as a Load. All of:
+          ``{External|Short|Open|Match}<NN>.s1p``.
+
+Spectra Folder
+~~~~~~~~~~~~~~
+Contents Format: ``{Ambient|HotLoad|LongCableOpen|LongCableShorted}_<NN>_YYYY_DDD_HH_MM_SS_lab.<h5|acq|mat|npz>``
+
+Entries:
+
+    * ``{Ambient|HotLoad|LongCableOpen|LongCableShorted}``: input calibration load. All must exist.
+    * <NN>: "run number". Multiple of these may exist for any given load, and other entries can be different for each run num.
+      The lowest value for a given load must be ``01`` and they must increment by unity.
+    * ``YYYY``: year of observation (must match root folder)
+    * ``DDD``: numbered day of year (need not match root folder, but should be close).
+    * ``HH``: hour observation started
+    * ``MM``: minute observation started
+    * ``SS``: second observation started.
+    * ``<h5|acq|mat|npz>``: format of the spectrum file. Any may be present (and different ones
+      may be present for different loads and run numbers). Current default is to use acq.
+
+Additional contents: there also *may* exist any number of files with the same format, but
+with the load name replaced with ``AntSim<X>``, where ``X`` represents the antenna simulator
+number (from 1-9).
+
+Resistance Folder
+~~~~~~~~~~~~~~~~~
+The contents have exactly the same formatting as the ``Spectra/`` folder, except that
+the file extension *must* be ``.csv``. The timing entries for the resistance *do not*
+need to be the same as their counterpart in ``Spectra/``, nor do there need to be the
+same number of runs of each. Nevertheless, all loads (including simulators) in one
+*must* be present in the other.
+
+Version History
+---------------
+**Note:** this version history reflects changes in this file (not the broader ``edges-io``
+code), and therefore the standard itself. Versions are in the form ``MAJOR.MINOR.PATCH``,
+which correspond to:
+
+* ``PATCH``: a change to this document intended to clarify a point that was already true
+  (or formatting changes). Does not change the standard at all.
+* ``MINOR``: standard changed in a backwards-compatible way. Eg. a new possible file
+  or convention added for which all possible readers will still give the same value.
+* ``MAJOR``: backwards-incompatible change. A change such that the reader itself must
+  be changed in order to give the same results, or not error. In this case, all
+  observations on disk will require updating.
+
+v1.0.0
+~~~~~~
+First version of format standard, based on original memo #113.

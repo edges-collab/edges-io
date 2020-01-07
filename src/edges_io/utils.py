@@ -11,7 +11,10 @@ def get_active_files(path):
     return [
         fl
         for fl in fls
-        if not fl.endswith(".old") and not os.path.basename(fl) == "Notes.txt"
+        if not fl.endswith(".old")
+        and not os.path.basename(fl) == "Notes.txt"
+        and not fl.endswith(".ignore")
+        and not fl.endswith(".invalid")
     ]
 
 
