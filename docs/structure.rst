@@ -1,6 +1,8 @@
 ===========================================
 EDGES Calibration File Structure Definition
 ===========================================
+**VERSION:** v1.0.0
+
 This document is based on
 `memo #113 "Receiver calibration procedure document" <http://loco.lab.asu.edu/loco-memos/edges_reports/tom_20180523_Calibration_Steps.pdf>`_,
 by Tom Mozden. It *defines* the directory structure and file naming
@@ -178,10 +180,6 @@ which correspond to:
 * ``MAJOR``: backwards-incompatible change. A change such that the reader itself must
   be changed in order to give the same results, or not error. In this case, all
   observations on disk will require updating.
-
-v1.0.1
-~~~~~~
-* Fixed some RST formatting.
 
 v1.0.0
 ~~~~~~
