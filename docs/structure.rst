@@ -69,7 +69,8 @@ also describe the metadata of each entry.
 
 Root
 ~~~~
-Format: ``ReceiverXX_YYYY_MM_DD_LLL_to_HHH_MHz/``
+Format:
+    * ``ReceiverXX_YYYY_MM_DD_LLL_to_HHH_MHz/``
 
 Entries:
     * ``XX``: Receiver version number ``(01|02|03)``
@@ -77,20 +78,21 @@ Entries:
     * ``HHH``: Stop frequency in MHz
     * ``YYYY_MM_DD``: Calibration start date
 
-Example: ``Receiver03_2019_040_to_200_MHz``
+Example:
+    * ``Receiver03_2019_040_to_200_MHz``
 
 The root directory contains *up to* three subdirectories defining the temperature of the
 receiver. This "temperature subdirectory" can be considered part of the root name,
 as a calibration observation is fully contained in each.
 
-Format: ``<15|25|35>C``.
+Format:
+    * ``<15|25|35>C``.
 
 The options here are temperatures in Celsius.
 
 Top-Level Subdirectories
 ~~~~~~~~~~~~~~~~~~~~~~~~
 Root (with temperature) definitely consists of three sub folders:
-
     * ``Resistance/``: Contains temperature measurements of thermistor.
     * ``S11/``: Contains VNA measurements in sub folders for different loads and receiver.
     * ``Spectra/``: Contains digitizer output for all loads.
@@ -107,7 +109,6 @@ the "run number", which identifies a chronological ordering of when the data was
 It is an integer, and the entries in any given directory for any given file kind must
 start at one and increment by one. There may be an arbitrary number of run numbers for
 any given directory and file kind. Here are the definitions:
-
     * ``ReceiverReading<RR>/``
         - ``<RR>``: the "repeat number" of the observation. An integer. Lowest value
           *must* be ``01``, and it must increment by unity. Any number of directories
@@ -132,10 +133,10 @@ any given directory and file kind. Here are the definitions:
 
 Spectra Folder
 ~~~~~~~~~~~~~~
-Contents Format: ``{Ambient|HotLoad|LongCableOpen|LongCableShorted}_<NN>_YYYY_DDD_HH_MM_SS_lab.<h5|acq|mat|npz>``
+Contents Format:
+    * ``{Ambient|HotLoad|LongCableOpen|LongCableShorted}_<NN>_YYYY_DDD_HH_MM_SS_lab.<h5|acq|mat|npz>``
 
 Entries:
-
     * ``{Ambient|HotLoad|LongCableOpen|LongCableShorted}``: input calibration load. All must exist.
     * <NN>: "run number". Multiple of these may exist for any given load, and other entries can be different for each run num.
       The lowest value for a given load must be ``01`` and they must increment by unity.
@@ -146,6 +147,9 @@ Entries:
     * ``SS``: second observation started.
     * ``<h5|acq|mat|npz>``: format of the spectrum file. Any may be present (and different ones
       may be present for different loads and run numbers). Current default is to use acq.
+
+Example:
+    * ``Ambient_01_2019_351_12_35_56_lab.acq``
 
 Additional contents: there also *may* exist any number of files with the same format, but
 with the load name replaced with ``AntSim<X>``, where ``X`` represents the antenna simulator
@@ -173,6 +177,10 @@ which correspond to:
   be changed in order to give the same results, or not error. In this case, all
   observations on disk will require updating.
 
+v1.0.1
+~~~~~~
+* Fixed some RST formatting.
+
 v1.0.0
 ~~~~~~
-First version of format standard, based on original memo #113.
+* First version of format standard, based on original memo #113.
