@@ -108,7 +108,9 @@ emphasise that the format of these files contains a single entry ``<NN>``, calle
 the "run number", which identifies a chronological ordering of when the data was taken.
 It is an integer, and the entries in any given directory for any given file kind must
 start at one and increment by one. There may be an arbitrary number of run numbers for
-any given directory and file kind. Here are the definitions:
+any given directory and file kind.
+
+Contents Format:
     * ``ReceiverReading<RR>/``
         - ``<RR>``: the "repeat number" of the observation. An integer. Lowest value
           *must* be ``01``, and it must increment by unity. Any number of directories
