@@ -13,23 +13,36 @@ from abc import ABC, abstractmethod
 import h5py
 import numpy as np
 import read_acq
+from bidict import bidict
 from cached_property import cached_property
 from scipy import io as sio
 
 from . import utils
 from .logging import logger
 
-LOAD_ALIASES = {
-    "ambient": "Ambient",
-    "hot_load": "HotLoad",
-    "open": "LongCableOpen",
-    "short": "LongCableShorted",
-}
+LOAD_ALIASES = bidict(
+    {
+        "ambient": "Ambient",
+        "hot_load": "HotLoad",
+        "open": "LongCableOpen",
+        "short": "LongCableShorted",
+    }
+)
 
 
 class _DataFile(ABC):
     def __init__(self, path, fix=False):
-        self.path, self._re_match = self.check_self(path)
+        self.path, match = self.check_self(path)
+
+        try:
+            self._match_dict = match.groupdict()
+        except AttributeError:
+            try:
+                self._match_dict = [m.groupdict() for m in match]
+            except TypeError:
+                self._match_dict = match
+        except Exception:
+            raise
 
     @staticmethod
     @abstractmethod
@@ -41,8 +54,18 @@ class _DataContainer(ABC):
     _content_type = None
 
     def __init__(self, path, fix=False):
-        self.path, self._re_match = self.check_self(path, fix)
+        self.path, match = self.check_self(path, fix)
         self.check_contents(self.path, fix)
+
+        try:
+            self._match_dict = match.groupdict()
+        except AttributeError:
+            try:
+                self._match_dict = [m.groupdict() for m in match]
+            except TypeError:
+                self._match_dict = match
+        except Exception:
+            raise
 
         # For a container, if the checks failed, then we ought to bow out now
         if logger.errored:
@@ -97,12 +120,14 @@ class _DataContainer(ABC):
                             shutil.move(fl, fl.replace("odt", "txt"))
                             fl = fl.replace("odt", "txt")
                             logger.success("Successfully renamed to {}".format(fl))
-                        fixed = utils._ask_to_rm(fl)
+                            logger.success("Successfully renamed to {}".format(fl))
+                        else:
+                            fixed = utils._ask_to_rm(fl)
 
-                        if fixed:
-                            logger.success("Successfully removed.")
+                            if fixed:
+                                logger.success("Successfully removed.")
 
-                    break
+                    continue
             else:
                 content_type = cls._content_type
 
@@ -130,12 +155,12 @@ class _SpectrumOrResistance(_DataFile):
         super().__init__(path, fix)
 
         # Get out metadata
-        self._groups = [match.groupdict() for match in self._re_match]
+        self._groups = self._match_dict
 
     @classmethod
     def _fix(cls, root, basename):
-        if "AmbientLoad_" in basename:
-            newname = basename.replace("AmbientLoad_", "Ambient_")
+        if "AmbientLoad" in basename:
+            newname = basename.replace("AmbientLoad", "Ambient")
         elif "LongCableShort_" in basename:
             newname = basename.replace("LongCableShort_", "LongCableShorted_")
         else:
@@ -149,41 +174,61 @@ class _SpectrumOrResistance(_DataFile):
             return os.path.join(root, newname), match
 
         # Try fixing from standard old format with redundant 25C in it.
-        old_pattern = (
-            r"^(?P<load_name>%s|AntSim\d)" % ("|".join(LOAD_ALIASES.values()))
-            + r"_25C_(?P<month>\d{1,2})_(?P<day>\d{1,2})_("
-            r"?P<year>\d\d\d\d)_(?P<hour>\d{1,2})_(?P<minute>\d{"
-            r"1,2})_(?P<second>\d{1,2}).(?P<file_format>\w{2,3})$"
-        )
+        loads = "|".join(LOAD_ALIASES.values())
 
-        match = re.search(old_pattern, newname)
-
-        if match is None:
-            # Try a pattern where the name is followed by a number directly
-            loads = "|".join(LOAD_ALIASES.values())
-            old_pattern = (
+        bad_patterns = [
+            (
+                r"^(?P<load_name>%s|AntSim\d)" % loads
+                + r"_25C_(?P<month>\d{1,2})_(?P<day>\d{1,2})_("
+                r"?P<year>\d\d\d\d)_(?P<hour>\d{1,2})_(?P<minute>\d{"
+                r"1,2})_(?P<second>\d{1,2}).(?P<file_format>\w{2,3})$"
+            ),
+            (
                 "^(?P<load_name>{})".format(loads)
                 + r"(?P<run_num>\d{1,2})_25C_(?P<month>\d{1,"
                 r"2})_(?P<day>\d{1,2})_(?P<year>\d\d\d\d)_("
                 r"?P<hour>\d{1,2})_(?P<minute>\d{1,"
                 r"2})_(?P<second>\d{1,2}).(?P<file_format>\w{2,3})$"
-            )
-            match = re.search(old_pattern, newname)
-
-        if match is None:
-            # Try a pattern where there is no run_num
-            old_pattern = (
-                r"(?P<load_name>%s|AntSim\d)" % ("|".join(LOAD_ALIASES.values()))
+            ),
+            (
+                r"(?P<load_name>%s|AntSim\d)" % loads
                 + r"_(?P<year>\d{4})_(?P<day>\d{3})_"
                 r"(?P<hour>\d{2})_(?P<minute>\d{2})_(?P<second>\d{2})_lab."
                 r"(?P<file_format>\w{2,3})$"
-            )
-            match = re.search(old_pattern, newname)
+            ),
+            (
+                r"(?P<load_name>%s|AntSim\d)" % loads
+                + r"_(?P<year>\d{4})_(?P<day>\d{3})_(?P<hour>\d{2}).(?P<file_format>\w{2,3})$"
+            ),
+            (
+                r"(?P<load_name>%s|AntSim\d)" % loads
+                + r"_(?P<year>\d{4})_(?P<day>\d{3})_(?P<hour>\d{2}).(?P<file_format>\w{2,3})$"
+            ),
+            (
+                r"(?P<load_name>%s|AntSim\d)" % loads
+                + r"_(?P<year>\d{4})_(?P<day>\d{3})_lab.(?P<file_format>\w{2,3})$"
+            ),
+            (
+                r"(?P<load_name>%s|AntSim\d)" % loads
+                + r"_(?P<run_num>\d)_(?P<year>\d{4})_(?P<day>\d{3})_lab.(?P<file_format>\w{2,"
+                r"3})$"
+            ),
+            (
+                r"(?P<load_name>%s|AntSim\d)" % loads
+                + r"_\d{2}C_(?P<month>\d{1,2})_(?P<day>\d{1,2})_(?P<year>\d{4})_(?P<hour>\d{"
+                r"1,2})_(?P<minute>\d{1,2})_(?P<second>\d{1,2}).(?P<file_format>\w{2,3})"
+            ),
+        ]
+        i = 0
+        while match is None and i < len(bad_patterns):
+            pattern = bad_patterns[i]
+            match = re.search(pattern, newname)
+            i += 1
 
         if match is None:
             logger.warning("\tCould not auto-fix it.")
 
-            fixed = utils._ask_to_rm(os.path.join(root, newname))
+            fixed = utils._ask_to_rm(os.path.join(root, basename))
             if fixed:
                 logger.success("Successfully removed.")
             return None, None
@@ -199,6 +244,15 @@ class _SpectrumOrResistance(_DataFile):
 
             if "run_num" not in dct:
                 dct["run_num"] = "01"
+
+            if "hour" not in dct:
+                dct["hour"] = "00"
+
+            if "minute" not in dct:
+                dct["minute"] = "00"
+
+            if "second" not in dct:
+                dct["second"] = "00"
 
             newname = (
                 "{load_name}_{run_num:0>2}_{year:0>4}_{jd:0>3}_{hour:0>2}_{minute:0>2}_"
@@ -301,6 +355,13 @@ class _SpectrumOrResistance(_DataFile):
 
         if filetype:
             files = [fl for fl in files if fl.endswith("." + filetype)]
+            if not files:
+                raise ValueError(
+                    "No files exist for the load {} with filetype {} on the path: {}".format(
+                        load, filetype, direc
+                    )
+                )
+
         else:
             # Use any format so long as it is supported
             restricted_files = []
@@ -309,12 +370,13 @@ class _SpectrumOrResistance(_DataFile):
                 if restricted_files:
                     break
             files = restricted_files
-            filetype = ftype
 
-        if not files:
-            raise ValueError(
-                "No files exist for the load {} on that path: {}".format(load, direc)
-            )
+            if not files:
+                raise ValueError(
+                    "No files exist for the load {} for any filetype on that path: {}".format(
+                        load, direc
+                    )
+                )
 
         # Restrict to the given run_num (default last run)
         run_nums = [
@@ -323,12 +385,14 @@ class _SpectrumOrResistance(_DataFile):
         if run_num is None:
             run_num = max(run_nums)
 
+        pre_files = files.copy()
         files = [fl for fl, num in zip(files, run_nums) if num == run_num]
 
         if not files:
             raise ValueError(
-                "No files exist for that load ({}) in that path ({}) with that "
-                "filetype ({})".format(load, direc, filetype)
+                "No {} files exist on path ({}) with run_num={}. Potential files: {}".format(
+                    load, direc, run_num, pre_files
+                )
             )
 
         return cls(files)
@@ -371,7 +435,9 @@ class _SpectrumOrResistance(_DataFile):
 
     @cached_property
     def load_name(self):
-        return self._groups[0]["load_name"]
+        return LOAD_ALIASES.inverse.get(
+            self._groups[0]["load_name"], self._groups[0]["load_name"]
+        )
 
     @cached_property
     def hours(self):
@@ -616,8 +682,8 @@ class S1P(_DataFile):
     def __init__(self, path, fix=False):
         super().__init__(path, fix)
 
-        self.kind = self._re_match.groupdict()["kind"]
-        self.run_num = int(self._re_match.groupdict()["run_num"])
+        self.kind = self._match_dict["kind"]
+        self.run_num = int(self._match_dict["run_num"])
 
         self.s11, self.freq = self.read(self.path)
 
@@ -636,6 +702,14 @@ class S1P(_DataFile):
                     "The file {} has a kind ({}) that is not supported. "
                     "Possible: {}".format(path, groups["kind"], cls.POSSIBLE_KINDS)
                 )
+
+                if fix:
+                    if groups["kind"].capitalize() in cls.POSSIBLE_KINDS:
+                        shutil.move(
+                            path,
+                            os.path.join(os.path.dirname(path), basename.capitalize()),
+                        )
+                        logger.success("Changed to ", basename.capitalize())
 
             if int(groups["run_num"]) < 1:
                 logger.error(
@@ -735,9 +809,9 @@ class _S11SubDir(_DataContainer):
             )
 
             if fix:
-                if "AmbientLoad_" in path:
+                if "AmbientLoad" in path:
                     newpath = path.replace("AmbientLoad", "Ambient")
-                elif "LongCableShort_" in path:
+                elif "LongCableShort_" in path or path.endswith("LongCableShort"):
                     newpath = path.replace("LongCableShort", "LongCableShorted")
                 elif "InternalSwitch" in path:
                     newpath = path.replace("InternalSwitch", "SwitchingState")
@@ -784,7 +858,9 @@ class LoadS11(_S11SubDir):
 
     def __init__(self, direc, run_num=None, fix=False):
         super().__init__(direc, run_num, fix)
-        self.load_name = self._re_match.groupdict()["load_name"]
+        self.load_name = LOAD_ALIASES.inverse.get(
+            self._match_dict["load_name"], self._match_dict["load_name"]
+        )
 
 
 class AntSimS11(LoadS11):
@@ -794,7 +870,7 @@ class AntSimS11(LoadS11):
 class _RepeatNumberableS11SubDir(_S11SubDir):
     def __init__(self, direc, run_num=None, fix=False):
         super().__init__(direc, run_num, fix)
-        self.repeat_num = int(self._re_match.groupdict()["repeat_num"])
+        self.repeat_num = int(self._match_dict["repeat_num"])
 
 
 class SwitchingState(_RepeatNumberableS11SubDir):
@@ -822,6 +898,7 @@ class S11Dir(_DataContainer):
             "SwitchingState": SwitchingState,
             "ReceiverReading": ReceiverReading,
             "InternalSwitch": SwitchingState,  # To catch the old way so it can be fixed.
+            "LongCableShort": LoadS11,
         },
     }
 
@@ -902,7 +979,7 @@ class S11Dir(_DataContainer):
             logger.error("This path does not exist: {}".format(path))
 
         if not os.path.basename(path) == "S11":
-            logger.error("The S11 folder sho**kwargsuld be called S11")
+            logger.error("The S11 folder should be called S11")
 
         return path, True
 
@@ -932,8 +1009,8 @@ class S11Dir(_DataContainer):
 
 class CalibrationObservation(_DataContainer):
     file_pattern = (
-        r"Receiver(?P<rcv_num>\d{2})_(?P<year>\d{4})_(?P<month>\d{2})_(?P<day>\d{2})_("
-        r"?P<freq_low>\d{3})_to_(?P<freq_hi>\d{3})MHz"
+        r"^Receiver(?P<rcv_num>\d{2})_(?P<year>\d{4})_(?P<month>\d{2})_(?P<day>\d{2})_("
+        r"?P<freq_low>\d{3})_to_(?P<freq_hi>\d{3})MHz/(?P<temp>\d{2})C$"
     )
     _content_type = {"S11": S11Dir, "Spectra": Spectra, "Resistance": Resistances}
 
@@ -950,7 +1027,7 @@ class CalibrationObservation(_DataContainer):
         super().__init__(path, fix)
 
         self.ambient_temp = ambient_temp
-        self._groups = self._re_match.groupdict()
+        self._groups = self._match_dict
         self.receiver_num = int(self._groups["rcv_num"])
         self.year = int(self._groups["year"])
         self.month = int(self._groups["month"])
@@ -985,9 +1062,15 @@ class CalibrationObservation(_DataContainer):
         logger.structure("Checking root folder: {}".format(path))
 
         if not os.path.exists(path):
-            logger.error("The path {} does not exist!".format(path))
+            raise IOError("The path {} does not exist!".format(path))
 
-        match = re.search(cls.file_pattern, path)
+        path = os.path.normpath(path)
+        base = os.path.dirname(os.path.dirname(path))
+        name = os.path.join(
+            os.path.basename(os.path.dirname(path)), os.path.basename(path)
+        )
+
+        match = re.search(cls.file_pattern, name)
 
         if match is None:
             logger.error(
@@ -995,22 +1078,34 @@ class CalibrationObservation(_DataContainer):
             )
 
             if fix:
+
                 bad_pattern = (
                     r"^Receiver(\d{1,2})_(\d{4})_(\d{1,2})_(\d{1,2})_(\d{2,3})_to_(\d{"
-                    r"2,3})MHz$"
+                    r"2,3})MHz/(?P<temp>\d{2})C$"
                 )
-                base = os.path.dirname(os.path.normpath(path))
-                name = os.path.basename(os.path.normpath(path))
 
                 match = re.search(bad_pattern, name)
 
+                if match is None:
+                    bad_pattern = (
+                        r"Receiver(?P<rcv_num>\d{2})_(?P<year>\d{4})_(?P<month>\d{2})_(?P<day>\d{2})_("
+                        r"?P<freq_low>\d{3})_to_(?P<freq_hi>\d{3})_MHz/(?P<temp>\d{2})C$"
+                    )
+                    match = re.search(bad_pattern, name)
+
                 if match is not None:
-                    newname = "Receiver{:0>2}_{}_{:0>2}_{:0>2}_{:0>3}_to_{:0>3}MHz".format(
+                    newname = "Receiver{:0>2}_{}_{:0>2}_{:0>2}_{:0>3}_to_{:0>3}MHz/{}C".format(
                         *match.groups()
                     )
                     shutil.move(
-                        os.path.normpath(path) + "/", os.path.join(base, newname)
+                        os.path.normpath(os.path.dirname(path)),
+                        os.path.join(base, os.path.dirname(newname)),
                     )
+
+                    # # If top-level directory is now empty, remove it.
+                    # if not glob.glob(os.path.join(os.path.dirname(os.path.normpath(path))), "*"):
+                    #     os.rmdir(os.path.dirname(os.path.normpath(path)))
+
                     name = newname
                     path = os.path.join(base, name)
                     logger.success("Successfully renamed to {}".format(newname))
@@ -1040,6 +1135,8 @@ class CalibrationObservation(_DataContainer):
                 )
 
             logger.info("Calibration Observation Metadata: {}".format(groups))
+
+        logger.debug("\tReturning path={}".format(path))
 
         return path, match
 

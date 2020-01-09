@@ -31,7 +31,11 @@ def _ask_to_rm(fl):
     while True:
         reply = (
             str(
-                input("Would you like to (recursively) remove {} (y/i/N)?: ".format(fl))
+                input(
+                    "Would you like to (recursively) remove {} ([y]es/[i]gnore/[m]ove/[n]o)?: ".format(
+                        fl
+                    )
+                )
             )
             .lower()
             .strip()
@@ -44,6 +48,11 @@ def _ask_to_rm(fl):
             break
         elif reply.startswith("i"):
             rm = None
+            kind = "i"
+            break
+        elif reply.startswith("m"):
+            rm = None
+            kind = "m"
             break
         else:
             print("please select (y/n) only")
@@ -55,8 +64,17 @@ def _ask_to_rm(fl):
             os.remove(fl)
         return True
     elif rm is None:
-        shutil.move(fl, fl + ".old")
-        return True
+        if kind == "i":
+            shutil.move(fl, fl + ".old")
+            return True
+        elif kind == "m":
+            reply = str(input("Change {} to: ".format(os.path.basename(fl))))
+            newfile = os.path.join(os.path.dirname(os.path.normpath(fl)), reply)
+            try:
+                shutil.move(fl, newfile)
+            except Exception:
+                print("Couldn't rename the file {} as you asked.".format(newfile))
+                raise
     else:
         return False
 

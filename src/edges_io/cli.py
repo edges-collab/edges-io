@@ -1,23 +1,24 @@
-import logging
 from os import path
 from os.path import join
 
 import click
-from edges_cal import cal_coefficients as cc
 
 from . import io
-from .logging import logger
+from .logging import logging
+
+logger = logging.getLogger("edges-io")
 
 main = click.Group()
 
 
 @main.command()
 @click.argument("root")
-@click.option("--temp", default=25, type=click.Choice([15, 25, 35]))
+@click.option("--temp", default="25", type=click.Choice(["15", "25", "35"]))
 @click.option("-v", "--verbosity", count=True, help="increase output verbosity")
 @click.option("-V", "--less-verbose", count=True, help="decrease output verbosity")
 @click.option("--fix/--no-fix", default=False, help="apply common fixes")
 def check(root, temp, verbosity, less_verbose, fix):
+
     root = path.abspath(root)
 
     v0 = verbosity or 0
@@ -41,7 +42,7 @@ def check(root, temp, verbosity, less_verbose, fix):
     )
 
     actual_root = join(root, "{}C".format(temp))
-    io.CalibrationObservation.check_self(actual_root, fix)
+    actual_root, _ = io.CalibrationObservation.check_self(actual_root, fix)
     io.CalibrationObservation.check_contents(actual_root, fix)
 
     if not logger.errored:
