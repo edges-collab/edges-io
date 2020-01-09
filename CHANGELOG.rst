@@ -2,9 +2,23 @@
 Changelog
 =========
 
-Version 0.1
-===========
+v0.2.0
+======
 
-- Feature A added
-- FIX: nasty bug #1729 fixed
-- add your changes here!
+Added
+-----
+* New auto-fixes for the root directory and spectra.
+
+Changed
+-------
+* load_name is now a simpler alias (ambient, hot_load, open, short)
+
+Fixed
+-----
+* Several bug-fixes found when fixing actual data on disk.
+
+
+v0.1.0
+======
+
+- First public version
