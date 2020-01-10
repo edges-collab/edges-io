@@ -442,7 +442,7 @@ class _SpectrumOrResistance(_DataFile):
     @cached_property
     def hours(self):
         """List of integer hours (one per file) at which data acquisition was begun"""
-        return [int(group["day"]) for group in self._groups]
+        return [int(group["hour"]) for group in self._groups]
 
     @cached_property
     def minutes(self):
