@@ -1,0 +1,11 @@
+[AntSim1]
+kind = "passive"
+
+[AntSim2]
+kind = "passive"
+
+[AntSim3]
+kind = "passive"
+
+[AlanNoiseSource]
+kind = "active"
