@@ -13,11 +13,13 @@ from abc import ABC, abstractmethod
 import h5py
 import numpy as np
 import read_acq
+import toml
 from bidict import bidict
 from cached_property import cached_property
 from scipy import io as sio
 
 from . import utils
+from .data import DATA_PATH
 from .logging import logger
 
 LOAD_ALIASES = bidict(
@@ -28,6 +30,9 @@ LOAD_ALIASES = bidict(
         "short": "LongCableShorted",
     }
 )
+
+with open(os.path.join(DATA_PATH, "antenna_simulators.toml")) as fl:
+    ANTENNA_SIMULATORS = toml.load(fl)
 
 
 class _DataFile(ABC):
@@ -143,8 +148,10 @@ class _DataContainer(ABC):
 
 
 class _SpectrumOrResistance(_DataFile):
+    load_pattern = "|".join(LOAD_ALIASES.values())
+    antsim_pattern = "|".join(ANTENNA_SIMULATORS.keys())
     file_pattern = (
-        r"(?P<load_name>%s|AntSim\d)" % ("|".join(LOAD_ALIASES.values()))
+        r"(?P<load_name>%s|%s)" % (load_pattern, antsim_pattern)
         + r"_(?P<run_num>\d{2})_(?P<year>\d{4})_(?P<day>\d{3})_("
         r"?P<hour>\d{2})_(?P<minute>\d{2})_(?P<second>\d{2})_lab.(?P<file_format>\w{2,"
         r"3})$"
@@ -173,48 +180,45 @@ class _SpectrumOrResistance(_DataFile):
             logger.success("Successfully converted to {}".format(newname))
             return os.path.join(root, newname), match
 
-        # Try fixing from standard old format with redundant 25C in it.
-        loads = "|".join(LOAD_ALIASES.values())
-
         bad_patterns = [
             (
-                r"^(?P<load_name>%s|AntSim\d)" % loads
+                r"^(?P<load_name>%s|%s)" % (cls.load_pattern, cls.antsim_pattern)
                 + r"_25C_(?P<month>\d{1,2})_(?P<day>\d{1,2})_("
                 r"?P<year>\d\d\d\d)_(?P<hour>\d{1,2})_(?P<minute>\d{"
                 r"1,2})_(?P<second>\d{1,2}).(?P<file_format>\w{2,3})$"
             ),
             (
-                "^(?P<load_name>{})".format(loads)
+                "^(?P<load_name>{})".format(cls.load_pattern)
                 + r"(?P<run_num>\d{1,2})_25C_(?P<month>\d{1,"
                 r"2})_(?P<day>\d{1,2})_(?P<year>\d\d\d\d)_("
                 r"?P<hour>\d{1,2})_(?P<minute>\d{1,"
                 r"2})_(?P<second>\d{1,2}).(?P<file_format>\w{2,3})$"
             ),
             (
-                r"(?P<load_name>%s|AntSim\d)" % loads
+                r"(?P<load_name>%s|%s)" % (cls.load_pattern, cls.antsim_pattern)
                 + r"_(?P<year>\d{4})_(?P<day>\d{3})_"
                 r"(?P<hour>\d{2})_(?P<minute>\d{2})_(?P<second>\d{2})_lab."
                 r"(?P<file_format>\w{2,3})$"
             ),
             (
-                r"(?P<load_name>%s|AntSim\d)" % loads
+                r"(?P<load_name>%s|%s)" % (cls.load_pattern, cls.antsim_pattern)
                 + r"_(?P<year>\d{4})_(?P<day>\d{3})_(?P<hour>\d{2}).(?P<file_format>\w{2,3})$"
             ),
             (
-                r"(?P<load_name>%s|AntSim\d)" % loads
+                r"(?P<load_name>%s|%s)" % (cls.load_pattern, cls.antsim_pattern)
                 + r"_(?P<year>\d{4})_(?P<day>\d{3})_(?P<hour>\d{2}).(?P<file_format>\w{2,3})$"
             ),
             (
-                r"(?P<load_name>%s|AntSim\d)" % loads
+                r"(?P<load_name>%s|%s)" % (cls.load_pattern, cls.antsim_pattern)
                 + r"_(?P<year>\d{4})_(?P<day>\d{3})_lab.(?P<file_format>\w{2,3})$"
             ),
             (
-                r"(?P<load_name>%s|AntSim\d)" % loads
+                r"(?P<load_name>%s|%s)" % (cls.load_pattern, cls.antsim_pattern)
                 + r"_(?P<run_num>\d)_(?P<year>\d{4})_(?P<day>\d{3})_lab.(?P<file_format>\w{2,"
                 r"3})$"
             ),
             (
-                r"(?P<load_name>%s|AntSim\d)" % loads
+                r"(?P<load_name>%s|%s)" % (cls.load_pattern, cls.antsim_pattern)
                 + r"_\d{2}C_(?P<month>\d{1,2})_(?P<day>\d{1,2})_(?P<year>\d{4})_(?P<hour>\d{"
                 r"1,2})_(?P<minute>\d{1,2})_(?P<second>\d{1,2}).(?P<file_format>\w{2,3})"
             ),
@@ -342,7 +346,7 @@ class _SpectrumOrResistance(_DataFile):
         if load in LOAD_ALIASES:
             load = LOAD_ALIASES[load]
 
-        if load not in LOAD_ALIASES.values() and not load.startswith("AntSim"):
+        if load not in LOAD_ALIASES.values() and load not in ANTENNA_SIMULATORS:
             logger.error(
                 "The load specified {} is not one of the options available.".format(
                     load
@@ -898,7 +902,7 @@ class LoadS11(_S11SubDir):
 
 
 class AntSimS11(LoadS11):
-    folder_pattern = r"(?P<load_name>AntSim\d)$"
+    folder_pattern = r"(?P<load_name>%s)$" % ("|".join(ANTENNA_SIMULATORS.keys()))
 
 
 class _RepeatNumberableS11SubDir(_S11SubDir):
@@ -928,12 +932,12 @@ class S11Dir(_DataContainer):
     _content_type = {
         **{load: LoadS11 for load in LOAD_ALIASES.values()},
         **{
-            "AntSim": AntSimS11,
             "SwitchingState": SwitchingState,
             "ReceiverReading": ReceiverReading,
             "InternalSwitch": SwitchingState,  # To catch the old way so it can be fixed.
             "LongCableShort": LoadS11,
         },
+        **{key: AntSimS11 for key in ANTENNA_SIMULATORS.keys()},
     }
 
     def __init__(self, path, repeat_num=None, run_num=None, fix=False):
@@ -1035,7 +1039,9 @@ class S11Dir(_DataContainer):
                 [
                     os.path.basename(fl)
                     for fl in fls
-                    if os.path.basename(fl).startswith("AntSim")
+                    if any(
+                        os.path.basename(fl).startswith(k) for k in ANTENNA_SIMULATORS
+                    )
                 ]
             )
         )
