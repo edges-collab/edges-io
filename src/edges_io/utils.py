@@ -8,7 +8,7 @@ def get_active_files(path):
     if not os.path.isdir(path):
         raise ValueError("{} is not a directory!".format(path))
     fls = glob.glob(os.path.join(path, "*"))
-    ok_extra_files = ["Notes.txt", "calibration_analysis.ipynb"]
+    ok_extra_files = ["Notes.txt", "calibration_analysis.ipynb", "derived"]
 
     return [
         fl

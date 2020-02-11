@@ -1099,7 +1099,7 @@ class CalibrationObservation(_DataContainer):
         if ambient_temp not in [15, 25, 35]:
             raise ValueError("ambient temp must be one of 15, 25, 35!")
 
-        path = os.path.join(path, "{}C".format(ambient_temp))
+        path = os.path.join(os.path.abspath(path), "{}C".format(ambient_temp))
 
         super().__init__(path, fix)
 
