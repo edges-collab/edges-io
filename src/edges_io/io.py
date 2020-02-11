@@ -34,6 +34,11 @@ LOAD_ALIASES = bidict(
 with open(os.path.join(DATA_PATH, "antenna_simulators.toml")) as fl:
     ANTENNA_SIMULATORS = toml.load(fl)
 
+# Dictionary of misspelled:true mappings.
+ANTSIM_REVERSE = {
+    v: k for k, val in ANTENNA_SIMULATORS.items() for v in val.get("misspells", [])
+}
+
 
 class _DataFile(ABC):
     def __init__(self, path, fix=False):
@@ -222,6 +227,11 @@ class _SpectrumOrResistance(_DataFile):
                 + r"_\d{2}C_(?P<month>\d{1,2})_(?P<day>\d{1,2})_(?P<year>\d{4})_(?P<hour>\d{"
                 r"1,2})_(?P<minute>\d{1,2})_(?P<second>\d{1,2}).(?P<file_format>\w{2,3})"
             ),
+            (
+                r"(?P<load_name>%s)" % ("|".join(ANTSIM_REVERSE.keys()))
+                + r"_\d{2}C_(?P<month>\d{1,2})_(?P<day>\d{1,2})_(?P<year>\d{4})_(?P<hour>\d{"
+                r"1,2})_(?P<minute>\d{1,2})_(?P<second>\d{1,2}).(?P<file_format>\w{2,3})"
+            ),
         ]
         i = 0
         while match is None and i < len(bad_patterns):
@@ -257,6 +267,10 @@ class _SpectrumOrResistance(_DataFile):
 
             if "second" not in dct:
                 dct["second"] = "00"
+
+            # Switch Antenna Simulator "misspells" to true form.
+            if dct["load_name"] in ANTSIM_REVERSE:
+                dct["load_name"] = ANTSIM_REVERSE[dct["load_name"]]
 
             newname = (
                 "{load_name}_{run_num:0>2}_{year:0>4}_{jd:0>3}_{hour:0>2}_{minute:0>2}_"
@@ -314,7 +328,7 @@ class _SpectrumOrResistance(_DataFile):
                     logger.error("The minute for {} is outside 0-60!".format(newname))
                 if not (0 <= int(groups["second"]) <= 60):
                     logger.error("The second for {} is outside 0-60!".format(newname))
-                if not groups["file_format"] in cls.supported_formats:
+                if groups["file_format"] not in cls.supported_formats:
                     logger.error(
                         "The file {} is not of a supported format ({}). Got format "
                         "{}".format(
@@ -741,13 +755,11 @@ class S1P(_DataFile):
                     "Possible: {}".format(path, groups["kind"], cls.POSSIBLE_KINDS)
                 )
 
-                if fix:
-                    if groups["kind"].capitalize() in cls.POSSIBLE_KINDS:
-                        shutil.move(
-                            path,
-                            os.path.join(os.path.dirname(path), basename.capitalize()),
-                        )
-                        logger.success("Changed to ", basename.capitalize())
+                if fix and groups["kind"].capitalize() in cls.POSSIBLE_KINDS:
+                    shutil.move(
+                        path, os.path.join(os.path.dirname(path), basename.capitalize())
+                    )
+                    logger.success("Changed to ", basename.capitalize())
 
             if int(groups["run_num"]) < 1:
                 logger.error(
@@ -904,6 +916,30 @@ class LoadS11(_S11SubDir):
 class AntSimS11(LoadS11):
     folder_pattern = r"(?P<load_name>%s)$" % ("|".join(ANTENNA_SIMULATORS.keys()))
 
+    @classmethod
+    def check_self(cls, path, fix=False):
+        path, match = super().check_self(path, fix)
+
+        if match is None and fix:
+            bad_patterns = [r"(?P<load_name>%s)$" % ("|".join(ANTSIM_REVERSE.keys()))]
+
+            for pattern in bad_patterns:
+                match = re.search(pattern, os.path.basename(path))
+
+            if match is not None:
+                loadname = match.groupdict()["load_name"]
+
+                if loadname in ANTSIM_REVERSE:
+                    loadname = ANTSIM_REVERSE[loadname]
+
+                newpath = os.path.join(os.path.dirname(path), loadname)
+
+                shutil.move(path, newpath)
+                path = newpath
+                logger.success("Successfully converted to {}".format(path))
+
+        return path, match
+
 
 class _RepeatNumberableS11SubDir(_S11SubDir):
     def __init__(self, direc, run_num=None, fix=False):
@@ -938,6 +974,7 @@ class S11Dir(_DataContainer):
             "LongCableShort": LoadS11,
         },
         **{key: AntSimS11 for key in ANTENNA_SIMULATORS.keys()},
+        **{key: AntSimS11 for key in ANTSIM_REVERSE.keys()},
     }
 
     def __init__(self, path, repeat_num=None, run_num=None, fix=False):
@@ -1016,7 +1053,7 @@ class S11Dir(_DataContainer):
         if not os.path.exists(path):
             logger.error("This path does not exist: {}".format(path))
 
-        if not os.path.basename(path) == "S11":
+        if os.path.basename(path) != "S11":
             logger.error("The S11 folder should be called S11")
 
         return path, True
