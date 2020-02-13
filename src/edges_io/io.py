@@ -79,6 +79,7 @@ class _DataContainer(ABC):
 
         # For a container, if the checks failed, then we ought to bow out now
         if logger.errored:
+            logger.errored = False
             raise utils.FileStructureError()
 
     @classmethod
@@ -605,9 +606,10 @@ class Resistance(_SpectrumOrResistance):
 
     supported_formats = ("csv",)
 
-    def __init__(self, path, fix=False):
+    def __init__(self, path, fix=False, store_data=True):
         super(Resistance, self).__init__(path, fix=fix)
         self.path = self.path[0]
+        self.store_data = store_data
 
     @classmethod
     def check_self(cls, path, fix=False):
@@ -624,8 +626,55 @@ class Resistance(_SpectrumOrResistance):
         return "csv"
 
     def read(self):
-        meta = {}
-        return np.genfromtxt(self.path, skip_header=1, delimiter=",")[:, -3], meta
+
+        try:
+            return self._data, self._meta
+        except AttributeError:
+            data = np.genfromtxt(
+                self.path,
+                skip_header=1,
+                delimiter=",",
+                dtype=np.dtype(
+                    [
+                        ("date", "S10"),
+                        ("time", "S8"),
+                        ("lna_voltage", np.float),
+                        ("lna_resistance", np.float),
+                        ("lna_temp", np.float),
+                        ("sp4t_voltage", np.float),
+                        ("sp4t_resistance", np.float),
+                        ("sp4t_temp", np.float),
+                        ("load_voltage", np.float),
+                        ("load_resistance", np.float),
+                        ("load_temp", np.float),
+                        ("room_temp", np.float),
+                    ]
+                ),
+            )
+
+            if self.store_data:
+                self._data = data[:, -3]
+                self._meta = data
+
+            return self._data, self._meta
+
+    @property
+    def resistance(self):
+        """The resistance measurement in the file.
+
+        Note that this is only cached in memory if `store_data` is True, otherwise
+        the data is re-read from disk each time `resistance` is accessed.
+        """
+        return self.read()[0]
+
+    @property
+    def ancillary(self):
+        """The full raw data from the CSV file.
+
+        Note that this is only cached in memory if `store_data` is True, otherwise
+        the data is re-read from disk each time `resistance` is accessed.
+        """
+        return self.read()[1]
 
 
 class _SpectraOrResistanceFolder(_DataContainer):
@@ -647,6 +696,13 @@ class _SpectraOrResistanceFolder(_DataContainer):
                 self._content_type.from_load(
                     load, path, run_nums.get(load, None), filetype
                 ),
+            )
+
+        # Populate simulators.
+        self.simulators = {}
+        for name in self.get_simulator_names(self.path):
+            self.simulators[name] = self._content_type.from_load(
+                name, self.path, run_nums.get(name, None), filetype
             )
 
     @classmethod
@@ -673,6 +729,17 @@ class _SpectraOrResistanceFolder(_DataContainer):
                         cls.__name__, load
                     )
                 )
+
+    @classmethod
+    def get_all_load_names(cls, path):
+        """Get all load names found in the Spectra directory"""
+        fls = utils.get_active_files(path)
+        return {os.path.basename(fl).split("_")[0] for fl in fls}
+
+    @classmethod
+    def get_simulator_names(cls, path):
+        load_names = cls.get_all_load_names(path)
+        return {name for name in load_names if name in ANTENNA_SIMULATORS}
 
     @classmethod
     def _check_file_consistency(cls, path):
@@ -855,7 +922,9 @@ class _S11SubDir(_DataContainer):
         if match is None:
             logger.error(
                 "The folder {} did not match any of the correct folder name "
-                "criteria".format(path)
+                "criteria. Required pattern: {} [class={}]".format(
+                    path, cls.folder_pattern, cls.__name__
+                )
             )
 
             if fix:
@@ -1039,6 +1108,12 @@ class S11Dir(_DataContainer):
                 LoadS11(os.path.join(path, load), run_num=run_nums.get(load, None)),
             )
 
+        self.simulators = {}
+        for name in self.get_simulator_names(path):
+            self.simulators[name] = AntSimS11(
+                os.path.join(path, name), run_num=run_nums.get(name, None)
+            )
+
     @classmethod
     def _get_highest_rep_num(cls, path, kind):
         fls = utils.get_active_files(os.path.join(path))
@@ -1070,18 +1145,24 @@ class S11Dir(_DataContainer):
 
     @classmethod
     def _check_file_consistency(cls, path):
-        fls = utils.get_active_files(path)
-        logger.info(
-            "Found the following Antenna Simulators in S11: {}".format(
-                [
-                    os.path.basename(fl)
-                    for fl in fls
-                    if any(
-                        os.path.basename(fl).startswith(k) for k in ANTENNA_SIMULATORS
-                    )
-                ]
+        simulators = cls.get_simulator_names(path)
+        if simulators:
+            logger.info(
+                "Found the following Antenna Simulators in S11: {}".format(
+                    ",".join(simulators)
+                )
             )
-        )
+        else:
+            logger.info("No Antenna Simulators in S11.")
+
+    @classmethod
+    def get_simulator_names(cls, path):
+        fls = utils.get_active_files(path)
+        return {
+            os.path.basename(fl)
+            for fl in fls
+            if any(os.path.basename(fl).startswith(k) for k in ANTENNA_SIMULATORS)
+        }
 
 
 class CalibrationObservation(_DataContainer):
@@ -1133,6 +1214,8 @@ class CalibrationObservation(_DataContainer):
             repeat_num=repeat_num,
             fix=fix,
         )
+
+        self.simulator_names = self.get_simulator_names(self.path)
 
     @classmethod
     def check_self(cls, path, fix=False):
@@ -1225,7 +1308,27 @@ class CalibrationObservation(_DataContainer):
 
     @classmethod
     def _check_file_consistency(cls, path):
-        pass
+        cls.get_simulator_names(
+            path
+        )  # checks whether simulators are the same between each.
+
+    @classmethod
+    def get_simulator_names(cls, path):
+        # Go through the subdirectories and check their simulators
+        dct = {
+            name: tuple(sorted(kls.get_simulator_names(os.path.join(path, name))))
+            for name, kls in cls._content_type.items()
+        }
+
+        # If any list of simulators is not the same as the others, make an error.
+        if len(set(dct.values())) != 1:
+            logger.error(
+                "Antenna Simulators do not match in all subdirectories. Got {}".format(
+                    dct
+                )
+            )
+
+        return set(list(dct.values())[0])
 
     def read_all(self):
         """Read all spectra and resistance files."""
