@@ -1158,7 +1158,7 @@ class CalibrationObservation(_DataContainer):
 
     def frequencies(self):
         for name, load in LOAD_ALIASES.items():
-            freqs=np.linspace(self.freq_low, self.freq_high, vars(self.spectra)[name].spectra['p0'].shape[0])
+            freqs=np.linspace(0, self.freq_high, vars(self.spectra)[name].spectra['p0'].shape[0])
             setattr(
                 vars(self.spectra)[name],
                 "frequencies",
