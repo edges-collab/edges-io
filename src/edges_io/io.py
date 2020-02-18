@@ -485,7 +485,7 @@ class Spectrum(_SpectrumOrResistance):
         ):
             raise ValueError("not all file formats are the same!")
         return formats[0]
-
+    
     def read(self):
         """
         Read the files of the object, and concatenate their data.
@@ -502,7 +502,7 @@ class Spectrum(_SpectrumOrResistance):
                     out[key] = this_spec[key]
                 else:
                     out[key] = np.concatenate((out[key], this_spec[key]), axis=1)
-
+        setattr(self, 'spectra', out)
         return out
 
     @staticmethod
@@ -1154,3 +1154,13 @@ class CalibrationObservation(_DataContainer):
         """Read all spectra and resistance files."""
         self.spectra.read_all()
         self.resistance.read_all()
+        self.frequencies()
+
+    def frequencies(self):
+        for name, load in LOAD_ALIASES.items():
+            freqs=np.linspace(self.freq_low, self.freq_high, vars(self.spectra)[name].spectra['p0'].shape[0])
+            setattr(
+                vars(self.spectra)[name],
+                "frequencies",
+                freqs
+            )
