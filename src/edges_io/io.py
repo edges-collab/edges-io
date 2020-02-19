@@ -485,7 +485,7 @@ class Spectrum(_SpectrumOrResistance):
         ):
             raise ValueError("not all file formats are the same!")
         return formats[0]
-    
+
     def read(self):
         """
         Read the files of the object, and concatenate their data.
@@ -523,7 +523,7 @@ class Spectrum(_SpectrumOrResistance):
         """
         # loading data and extracting main array
         d = sio.loadmat(file_name)
-        meta= {}
+        meta = {}
         # Return dict of all things
         if "Qratio" not in d:
             raise IOError(
