@@ -493,9 +493,10 @@ class Spectrum(_SpectrumOrResistance):
         Adds the attributes 'p0', 'p1', 'p2' and 'uncalibrated_spectrum'.
         """
         out = {}
+        meta = {}
         keys = ["p0", "p1", "p2", "Qratio"]
         for fl in self.path:
-            this_spec = getattr(self, "_read_" + self.file_format)(fl)
+            this_spec, meta = getattr(self, "_read_" + self.file_format)(fl)
 
             for key in keys:
                 if key not in out:
@@ -503,7 +504,8 @@ class Spectrum(_SpectrumOrResistance):
                 else:
                     out[key] = np.concatenate((out[key], this_spec[key]), axis=1)
         setattr(self, 'spectra', out)
-        return out
+        setattr(self, 'metadata', meta)
+        return out, meta
 
     @staticmethod
     def _read_mat(file_name):
@@ -521,7 +523,7 @@ class Spectrum(_SpectrumOrResistance):
         """
         # loading data and extracting main array
         d = sio.loadmat(file_name)
-
+        meta= {}
         # Return dict of all things
         if "Qratio" not in d:
             raise IOError(
@@ -529,23 +531,24 @@ class Spectrum(_SpectrumOrResistance):
                 "Please re-convert it."
             )
 
-        return d
+        return d, meta
 
     @staticmethod
     def _read_acq(file_name):
-        Q, px = read_acq.decode_file(file_name, progress=False, write_formats=[])
-        return {"Qratio": Q.T, "p0": px[0].T, "p1": px[1].T, "p2": px[2].T}
+        Q, px, meta = read_acq.decode_file(file_name, progress=False, write_formats=[], meta=True)
+        return {"Qratio": Q.T, "p0": px[0].T, "p1": px[1].T, "p2": px[2].T}, meta
 
     @staticmethod
     def _read_h5(file_name):
         out = {}
+        meta = {}
         with h5py.File(file_name, "r") as fl:
             out["Qratio"] = fl["Qratio"][...]
             out["p0"] = fl["p0"][...]
             out["p1"] = fl["p1"][...]
             out["p2"] = fl["p2"][...]
 
-        return out
+        return out, meta
 
 
 class Resistance(_SpectrumOrResistance):
@@ -574,7 +577,8 @@ class Resistance(_SpectrumOrResistance):
         return "csv"
 
     def read(self):
-        return np.genfromtxt(self.path, skip_header=1, delimiter=",")[:, -3]
+        meta = {}
+        return np.genfromtxt(self.path, skip_header=1, delimiter=",")[:, -3], meta
 
 
 class _SpectraOrResistanceFolder(_DataContainer):
@@ -649,8 +653,9 @@ class _SpectraOrResistanceFolder(_DataContainer):
     def read_all(self):
         """Read all spectra"""
         out = {}
+        meta = {}
         for name in LOAD_ALIASES:
-            out[name] = getattr(self, name).read()
+            out[name], meta[name] = getattr(self, name).read()
         return out
 
 
@@ -1158,7 +1163,10 @@ class CalibrationObservation(_DataContainer):
 
     def frequencies(self):
         for name, load in LOAD_ALIASES.items():
-            freqs=np.linspace(0, self.freq_high, vars(self.spectra)[name].spectra['p0'].shape[0])
+            if not vars(self.spectra)[name].metadata:
+                freqs = np.linspace(0, self.freq_max, vars(self.spectra)[name].spectra["p0"].shape[0])
+            else:
+                freqs = np.linspace(vars(self.spectra)[name].metadata["freq_min"], vars(self.spectra)[name].metadata["freq_max"], vars(self.spectra)[name].metadata["nfreq"])
             setattr(
                 vars(self.spectra)[name],
                 "frequencies",
