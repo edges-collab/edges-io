@@ -503,8 +503,8 @@ class Spectrum(_SpectrumOrResistance):
                     out[key] = this_spec[key]
                 else:
                     out[key] = np.concatenate((out[key], this_spec[key]), axis=1)
-        setattr(self, 'spectra', out)
-        setattr(self, 'metadata', meta)
+        setattr(self, "spectra", out)
+        setattr(self, "metadata", meta)
         return out, meta
 
     @staticmethod
@@ -535,20 +535,49 @@ class Spectrum(_SpectrumOrResistance):
 
     @staticmethod
     def _read_acq(file_name):
-        Q, px, meta = read_acq.decode_file(file_name, progress=False, write_formats=[], meta=True)
-        return {"Qratio": Q.T, "p0": px[0].T, "p1": px[1].T, "p2": px[2].T}, meta
+        Q, px, anc = read_acq.decode_file(
+            file_name, progress=False, write_formats=[], meta=True
+        )
+        ancillary = {
+            "fastspec_version": anc.fastspec_version,
+            "size": anc.size,
+            "time_data": anc.data,
+            "frequencies": anc.frequencies,
+            "temperature": anc.meta["temperature"],
+            "nblk": anc.meta["nblk"],
+            "freq_min": anc.meta["freq_min"],
+            "freq_max": anc.meta["freq_max"],
+        }
+        if "data_drops" in anc.meta:
+            ancillary["data_drops"] = anc.meta["data_drops"]
+        else:
+            ancillary["resolution"] = anc.meta["resolution"]
+        return {"Qratio": Q.T, "p0": px[0].T, "p1": px[1].T, "p2": px[2].T}, ancillary
 
     @staticmethod
     def _read_h5(file_name):
         out = {}
-        meta = {}
+        ancillary = {}
         with h5py.File(file_name, "r") as fl:
-            out["Qratio"] = fl["Qratio"][...]
-            out["p0"] = fl["p0"][...]
-            out["p1"] = fl["p1"][...]
-            out["p2"] = fl["p2"][...]
+            out["Qratio"] = fl["Qratio"][...].T
+            out["p0"] = fl["p0"][...].T
+            out["p1"] = fl["p1"][...].T
+            out["p2"] = fl["p2"][...].T
+            ancillary["fastspec_version"] = fl["fastspec_version"][...]
+            ancillary["size"] = fl["size"][...]
+            ancillary["time_data"] = fl["time_data"][...]
+            ancillary["frequencies"] = fl["freqs"][...]
+            if "data_drops" in fl.attrs:
+                ancillary["data_drops"] = fl.attrs["data_drops"][...]
+            else:
+                ancillary["resolution"] = fl.attrs["resolution"][...]
+            ancillary["resolution"] = fl.attrs["resolution"][...]
+            ancillary["temperature"] = fl.attrs["temperature"][...]
+            ancillary["nblk"] = fl.attrs["nblk"][...]
+            ancillary["freq_min"] = fl.attrs["freq_min"][...]
+            ancillary["freq_max"] = fl.attrs["freq_max"][...]
 
-        return out, meta
+        return out, ancillary
 
 
 class Resistance(_SpectrumOrResistance):
@@ -1159,16 +1188,3 @@ class CalibrationObservation(_DataContainer):
         """Read all spectra and resistance files."""
         self.spectra.read_all()
         self.resistance.read_all()
-        self.frequencies()
-
-    def frequencies(self):
-        for name, load in LOAD_ALIASES.items():
-            if not vars(self.spectra)[name].metadata:
-                freqs = np.linspace(0, self.freq_max, vars(self.spectra)[name].spectra["p0"].shape[0])
-            else:
-                freqs = np.linspace(vars(self.spectra)[name].metadata["freq_min"], vars(self.spectra)[name].metadata["freq_max"], vars(self.spectra)[name].metadata["nfreq"])
-            setattr(
-                vars(self.spectra)[name],
-                "frequencies",
-                freqs
-            )
