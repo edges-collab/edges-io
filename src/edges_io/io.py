@@ -1322,13 +1322,20 @@ class CalibrationObservation(_DataContainer):
 
         # If any list of simulators is not the same as the others, make an error.
         if len(set(dct.values())) != 1:
-            logger.error(
+            logger.warning(
                 "Antenna Simulators do not match in all subdirectories. Got {}".format(
                     dct
                 )
             )
+            names = [
+                name
+                for name in ANTENNA_SIMULATORS
+                if all(name in val for val in dct.values())
+            ]
+        else:
+            names = list(dct.values())[0]
 
-        return set(list(dct.values())[0])
+        return set(names)
 
     def read_all(self):
         """Read all spectra and resistance files."""
