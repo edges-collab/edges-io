@@ -208,7 +208,7 @@ def auxiliary_data(weather_file, thermlog_file, year, day, band=None):
     structured array :
         The thermlog data (see :func:`read_thermlog_file`)
     """
-    weather = read_weather_file(weather_file, day, year)
-    thermlog = read_thermlog_file(band, day, thermlog_file, year, band)
+    weather = read_weather_file(weather_file, year, day)
+    thermlog = read_thermlog_file(thermlog_file, year, day, band)
 
     return weather, thermlog
