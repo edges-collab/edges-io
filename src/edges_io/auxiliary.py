@@ -93,7 +93,6 @@ def read_weather_file(weather_file, year, day):
         * ``lna_temp``: temperature of the LNA (K).
     """
     start_line, n_lines = _get_chunk_pos_and_size(weather_file, year, day)
-    print(start_line, n_lines)
     weather = np.zeros(
         n_lines,
         dtype=[
