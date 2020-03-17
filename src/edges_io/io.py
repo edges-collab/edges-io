@@ -889,7 +889,7 @@ class S1P(_DataFile):
                     break
 
         #  loading data
-        d = np.genfromtxt(path_filename, skip_header=comment_rows)
+        d = np.genfromtxt(path_filename, skip_header=comment_rows, delimiter=",")
 
         return d, flag
 
