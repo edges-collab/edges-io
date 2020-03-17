@@ -10,7 +10,7 @@ _WEATHER_PATTERN = re.compile(
     r"^(?P<year>\d{4}):(?P<day>\d{3}):(?P<hour>\d{2}):(?P<minute>\d{2}):(?P<second>\d{2})  "
     r"rack_temp  (?P<rack_temp>\d{3}.\d{2}) Kelvin, "
     r"ambient_temp  (?P<ambient_temp>\d{3}.\d{2}) Kelvin, "
-    r"ambient_hum  (?P<ambient_hum>[\d ]{3}.\d{2}) percent, "
+    r"ambient_hum  (?P<ambient_hum>[\d\- ]{3}.\d{2}) percent, "
     r"frontend  (?P<frontend_temp>\d{3}.\d{2}) Kelvin, "
     r"rcv3_lna  (?P<lna_temp>\d{3}.\d{2}) Kelvin"
 )
