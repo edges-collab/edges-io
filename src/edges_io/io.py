@@ -8,6 +8,7 @@ import glob
 import os
 import re
 import shutil
+import warnings
 from abc import ABC, abstractmethod
 
 import h5py
@@ -665,6 +666,11 @@ class Resistance(_SpectrumOrResistance):
         Note that this is only cached in memory if `store_data` is True, otherwise
         the data is re-read from disk each time `resistance` is accessed.
         """
+        if not self.store_data:
+            warnings.warn(
+                "'resistance' is not being cached -- using it reads the resistance file each time it is accessed!"
+            )
+
         return self.read()[0]
 
     @property
@@ -674,6 +680,11 @@ class Resistance(_SpectrumOrResistance):
         Note that this is only cached in memory if `store_data` is True, otherwise
         the data is re-read from disk each time `resistance` is accessed.
         """
+        if not self.store_data:
+            warnings.warn(
+                "'ancillary' is not being cached -- using it reads the resistance file each time it is accessed!"
+            )
+
         return self.read()[1]
 
 
