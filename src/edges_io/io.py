@@ -493,17 +493,19 @@ class Spectrum(_SpectrumOrResistance):
         Adds the attributes 'p0', 'p1', 'p2' and 'uncalibrated_spectrum'.
         """
         out = {}
+        meta = {}
         keys = ["p0", "p1", "p2", "Qratio"]
         for fl in self.path:
-            this_spec = getattr(self, "_read_" + self.file_format)(fl)
+            this_spec, meta = getattr(self, "_read_" + self.file_format)(fl)
 
             for key in keys:
                 if key not in out:
                     out[key] = this_spec[key]
                 else:
                     out[key] = np.concatenate((out[key], this_spec[key]), axis=1)
-
-        return out
+        setattr(self, "spectra", out)
+        setattr(self, "metadata", meta)
+        return out, meta
 
     @staticmethod
     def _read_mat(file_name):
@@ -521,7 +523,7 @@ class Spectrum(_SpectrumOrResistance):
         """
         # loading data and extracting main array
         d = sio.loadmat(file_name)
-
+        meta = {}
         # Return dict of all things
         if "Qratio" not in d:
             raise IOError(
@@ -529,23 +531,53 @@ class Spectrum(_SpectrumOrResistance):
                 "Please re-convert it."
             )
 
-        return d
+        return d, meta
 
     @staticmethod
     def _read_acq(file_name):
-        Q, px = read_acq.decode_file(file_name, progress=False, write_formats=[])
-        return {"Qratio": Q.T, "p0": px[0].T, "p1": px[1].T, "p2": px[2].T}
+        Q, px, anc = read_acq.decode_file(
+            file_name, progress=False, write_formats=[], meta=True
+        )
+        ancillary = {
+            "fastspec_version": anc.fastspec_version,
+            "size": anc.size,
+            "time_data": anc.data,
+            "frequencies": anc.frequencies,
+            "temperature": anc.meta["temperature"],
+            "nblk": anc.meta["nblk"],
+            "freq_min": anc.meta["freq_min"],
+            "freq_max": anc.meta["freq_max"],
+        }
+        if "data_drops" in anc.meta:
+            ancillary["data_drops"] = anc.meta["data_drops"]
+        else:
+            ancillary["resolution"] = anc.meta["resolution"]
+        return {"Qratio": Q.T, "p0": px[0].T, "p1": px[1].T, "p2": px[2].T}, ancillary
 
     @staticmethod
     def _read_h5(file_name):
         out = {}
+        ancillary = {}
         with h5py.File(file_name, "r") as fl:
-            out["Qratio"] = fl["Qratio"][...]
-            out["p0"] = fl["p0"][...]
-            out["p1"] = fl["p1"][...]
-            out["p2"] = fl["p2"][...]
+            out["Qratio"] = fl["Qratio"][...].T
+            out["p0"] = fl["p0"][...].T
+            out["p1"] = fl["p1"][...].T
+            out["p2"] = fl["p2"][...].T
+            ancillary["fastspec_version"] = fl["fastspec_version"][...]
+            ancillary["size"] = fl["size"][...]
+            ancillary["time_data"] = fl["time_data"][...]
+            ancillary["frequencies"] = fl["freqs"][...]
+            if "data_drops" in fl.attrs:
+                ancillary["data_drops"] = fl.attrs["data_drops"][...]
+            else:
+                ancillary["resolution"] = fl.attrs["resolution"][...]
+            ancillary["resolution"] = fl.attrs["resolution"][...]
+            ancillary["temperature"] = fl.attrs["temperature"][...]
+            ancillary["nblk"] = fl.attrs["nblk"][...]
+            ancillary["freq_min"] = fl.attrs["freq_min"][...]
+            ancillary["freq_max"] = fl.attrs["freq_max"][...]
 
-        return out
+        return out, ancillary
 
 
 class Resistance(_SpectrumOrResistance):
@@ -574,7 +606,8 @@ class Resistance(_SpectrumOrResistance):
         return "csv"
 
     def read(self):
-        return np.genfromtxt(self.path, skip_header=1, delimiter=",")[:, -3]
+        meta = {}
+        return np.genfromtxt(self.path, skip_header=1, delimiter=",")[:, -3], meta
 
 
 class _SpectraOrResistanceFolder(_DataContainer):
@@ -649,8 +682,9 @@ class _SpectraOrResistanceFolder(_DataContainer):
     def read_all(self):
         """Read all spectra"""
         out = {}
+        meta = {}
         for name in LOAD_ALIASES:
-            out[name] = getattr(self, name).read()
+            out[name], meta[name] = getattr(self, name).read()
         return out
 
 
