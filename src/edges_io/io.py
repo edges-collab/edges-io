@@ -8,16 +8,19 @@ import glob
 import os
 import re
 import shutil
+import warnings
 from abc import ABC, abstractmethod
 
 import h5py
 import numpy as np
 import read_acq
+import toml
 from bidict import bidict
 from cached_property import cached_property
 from scipy import io as sio
 
 from . import utils
+from .data import DATA_PATH
 from .logging import logger
 
 LOAD_ALIASES = bidict(
@@ -28,6 +31,14 @@ LOAD_ALIASES = bidict(
         "short": "LongCableShorted",
     }
 )
+
+with open(os.path.join(DATA_PATH, "antenna_simulators.toml")) as fl:
+    ANTENNA_SIMULATORS = toml.load(fl)
+
+# Dictionary of misspelled:true mappings.
+ANTSIM_REVERSE = {
+    v: k for k, val in ANTENNA_SIMULATORS.items() for v in val.get("misspells", [])
+}
 
 
 class _DataFile(ABC):
@@ -69,6 +80,7 @@ class _DataContainer(ABC):
 
         # For a container, if the checks failed, then we ought to bow out now
         if logger.errored:
+            logger.errored = False
             raise utils.FileStructureError()
 
     @classmethod
@@ -143,8 +155,10 @@ class _DataContainer(ABC):
 
 
 class _SpectrumOrResistance(_DataFile):
+    load_pattern = "|".join(LOAD_ALIASES.values())
+    antsim_pattern = "|".join(ANTENNA_SIMULATORS.keys())
     file_pattern = (
-        r"(?P<load_name>%s|AntSim\d)" % ("|".join(LOAD_ALIASES.values()))
+        r"(?P<load_name>%s|%s)" % (load_pattern, antsim_pattern)
         + r"_(?P<run_num>\d{2})_(?P<year>\d{4})_(?P<day>\d{3})_("
         r"?P<hour>\d{2})_(?P<minute>\d{2})_(?P<second>\d{2})_lab.(?P<file_format>\w{2,"
         r"3})$"
@@ -173,48 +187,50 @@ class _SpectrumOrResistance(_DataFile):
             logger.success("Successfully converted to {}".format(newname))
             return os.path.join(root, newname), match
 
-        # Try fixing from standard old format with redundant 25C in it.
-        loads = "|".join(LOAD_ALIASES.values())
-
         bad_patterns = [
             (
-                r"^(?P<load_name>%s|AntSim\d)" % loads
+                r"^(?P<load_name>%s|%s)" % (cls.load_pattern, cls.antsim_pattern)
                 + r"_25C_(?P<month>\d{1,2})_(?P<day>\d{1,2})_("
                 r"?P<year>\d\d\d\d)_(?P<hour>\d{1,2})_(?P<minute>\d{"
                 r"1,2})_(?P<second>\d{1,2}).(?P<file_format>\w{2,3})$"
             ),
             (
-                "^(?P<load_name>{})".format(loads)
+                "^(?P<load_name>{})".format(cls.load_pattern)
                 + r"(?P<run_num>\d{1,2})_25C_(?P<month>\d{1,"
                 r"2})_(?P<day>\d{1,2})_(?P<year>\d\d\d\d)_("
                 r"?P<hour>\d{1,2})_(?P<minute>\d{1,"
                 r"2})_(?P<second>\d{1,2}).(?P<file_format>\w{2,3})$"
             ),
             (
-                r"(?P<load_name>%s|AntSim\d)" % loads
+                r"(?P<load_name>%s|%s)" % (cls.load_pattern, cls.antsim_pattern)
                 + r"_(?P<year>\d{4})_(?P<day>\d{3})_"
                 r"(?P<hour>\d{2})_(?P<minute>\d{2})_(?P<second>\d{2})_lab."
                 r"(?P<file_format>\w{2,3})$"
             ),
             (
-                r"(?P<load_name>%s|AntSim\d)" % loads
+                r"(?P<load_name>%s|%s)" % (cls.load_pattern, cls.antsim_pattern)
                 + r"_(?P<year>\d{4})_(?P<day>\d{3})_(?P<hour>\d{2}).(?P<file_format>\w{2,3})$"
             ),
             (
-                r"(?P<load_name>%s|AntSim\d)" % loads
+                r"(?P<load_name>%s|%s)" % (cls.load_pattern, cls.antsim_pattern)
                 + r"_(?P<year>\d{4})_(?P<day>\d{3})_(?P<hour>\d{2}).(?P<file_format>\w{2,3})$"
             ),
             (
-                r"(?P<load_name>%s|AntSim\d)" % loads
+                r"(?P<load_name>%s|%s)" % (cls.load_pattern, cls.antsim_pattern)
                 + r"_(?P<year>\d{4})_(?P<day>\d{3})_lab.(?P<file_format>\w{2,3})$"
             ),
             (
-                r"(?P<load_name>%s|AntSim\d)" % loads
+                r"(?P<load_name>%s|%s)" % (cls.load_pattern, cls.antsim_pattern)
                 + r"_(?P<run_num>\d)_(?P<year>\d{4})_(?P<day>\d{3})_lab.(?P<file_format>\w{2,"
                 r"3})$"
             ),
             (
-                r"(?P<load_name>%s|AntSim\d)" % loads
+                r"(?P<load_name>%s|%s)" % (cls.load_pattern, cls.antsim_pattern)
+                + r"_\d{2}C_(?P<month>\d{1,2})_(?P<day>\d{1,2})_(?P<year>\d{4})_(?P<hour>\d{"
+                r"1,2})_(?P<minute>\d{1,2})_(?P<second>\d{1,2}).(?P<file_format>\w{2,3})"
+            ),
+            (
+                r"(?P<load_name>%s)" % ("|".join(ANTSIM_REVERSE.keys()))
                 + r"_\d{2}C_(?P<month>\d{1,2})_(?P<day>\d{1,2})_(?P<year>\d{4})_(?P<hour>\d{"
                 r"1,2})_(?P<minute>\d{1,2})_(?P<second>\d{1,2}).(?P<file_format>\w{2,3})"
             ),
@@ -253,6 +269,10 @@ class _SpectrumOrResistance(_DataFile):
 
             if "second" not in dct:
                 dct["second"] = "00"
+
+            # Switch Antenna Simulator "misspells" to true form.
+            if dct["load_name"] in ANTSIM_REVERSE:
+                dct["load_name"] = ANTSIM_REVERSE[dct["load_name"]]
 
             newname = (
                 "{load_name}_{run_num:0>2}_{year:0>4}_{jd:0>3}_{hour:0>2}_{minute:0>2}_"
@@ -310,7 +330,7 @@ class _SpectrumOrResistance(_DataFile):
                     logger.error("The minute for {} is outside 0-60!".format(newname))
                 if not (0 <= int(groups["second"]) <= 60):
                     logger.error("The second for {} is outside 0-60!".format(newname))
-                if not groups["file_format"] in cls.supported_formats:
+                if groups["file_format"] not in cls.supported_formats:
                     logger.error(
                         "The file {} is not of a supported format ({}). Got format "
                         "{}".format(
@@ -342,7 +362,7 @@ class _SpectrumOrResistance(_DataFile):
         if load in LOAD_ALIASES:
             load = LOAD_ALIASES[load]
 
-        if load not in LOAD_ALIASES.values() and not load.startswith("AntSim"):
+        if load not in LOAD_ALIASES.values() and load not in ANTENNA_SIMULATORS:
             logger.error(
                 "The load specified {} is not one of the options available.".format(
                     load
@@ -587,9 +607,10 @@ class Resistance(_SpectrumOrResistance):
 
     supported_formats = ("csv",)
 
-    def __init__(self, path, fix=False):
+    def __init__(self, path, fix=False, store_data=True):
         super(Resistance, self).__init__(path, fix=fix)
         self.path = self.path[0]
+        self.store_data = store_data
 
     @classmethod
     def check_self(cls, path, fix=False):
@@ -606,8 +627,65 @@ class Resistance(_SpectrumOrResistance):
         return "csv"
 
     def read(self):
-        meta = {}
-        return np.genfromtxt(self.path, skip_header=1, delimiter=",")[:, -3], meta
+
+        try:
+            return self._data, self._meta
+        except AttributeError:
+            data = np.genfromtxt(
+                self.path,
+                skip_header=1,
+                delimiter=",",
+                dtype=np.dtype(
+                    [
+                        ("date", "S10"),
+                        ("time", "S8"),
+                        ("lna_voltage", np.float),
+                        ("lna_resistance", np.float),
+                        ("lna_temp", np.float),
+                        ("sp4t_voltage", np.float),
+                        ("sp4t_resistance", np.float),
+                        ("sp4t_temp", np.float),
+                        ("load_voltage", np.float),
+                        ("load_resistance", np.float),
+                        ("load_temp", np.float),
+                        ("room_temp", np.float),
+                    ]
+                ),
+            )
+
+            if self.store_data:
+                self._data = data[:, -3]
+                self._meta = data
+
+            return self._data, self._meta
+
+    @property
+    def resistance(self):
+        """The resistance measurement in the file.
+
+        Note that this is only cached in memory if `store_data` is True, otherwise
+        the data is re-read from disk each time `resistance` is accessed.
+        """
+        if not self.store_data:
+            warnings.warn(
+                "'resistance' is not being cached -- using it reads the resistance file each time it is accessed!"
+            )
+
+        return self.read()[0]
+
+    @property
+    def ancillary(self):
+        """The full raw data from the CSV file.
+
+        Note that this is only cached in memory if `store_data` is True, otherwise
+        the data is re-read from disk each time `resistance` is accessed.
+        """
+        if not self.store_data:
+            warnings.warn(
+                "'ancillary' is not being cached -- using it reads the resistance file each time it is accessed!"
+            )
+
+        return self.read()[1]
 
 
 class _SpectraOrResistanceFolder(_DataContainer):
@@ -629,6 +707,13 @@ class _SpectraOrResistanceFolder(_DataContainer):
                 self._content_type.from_load(
                     load, path, run_nums.get(load, None), filetype
                 ),
+            )
+
+        # Populate simulators.
+        self.simulators = {}
+        for name in self.get_simulator_names(self.path):
+            self.simulators[name] = self._content_type.from_load(
+                name, self.path, run_nums.get(name, None), filetype
             )
 
     @classmethod
@@ -655,6 +740,17 @@ class _SpectraOrResistanceFolder(_DataContainer):
                         cls.__name__, load
                     )
                 )
+
+    @classmethod
+    def get_all_load_names(cls, path):
+        """Get all load names found in the Spectra directory"""
+        fls = utils.get_active_files(path)
+        return {os.path.basename(fl).split("_")[0] for fl in fls}
+
+    @classmethod
+    def get_simulator_names(cls, path):
+        load_names = cls.get_all_load_names(path)
+        return {name for name in load_names if name in ANTENNA_SIMULATORS}
 
     @classmethod
     def _check_file_consistency(cls, path):
@@ -737,13 +833,11 @@ class S1P(_DataFile):
                     "Possible: {}".format(path, groups["kind"], cls.POSSIBLE_KINDS)
                 )
 
-                if fix:
-                    if groups["kind"].capitalize() in cls.POSSIBLE_KINDS:
-                        shutil.move(
-                            path,
-                            os.path.join(os.path.dirname(path), basename.capitalize()),
-                        )
-                        logger.success("Changed to ", basename.capitalize())
+                if fix and groups["kind"].capitalize() in cls.POSSIBLE_KINDS:
+                    shutil.move(
+                        path, os.path.join(os.path.dirname(path), basename.capitalize())
+                    )
+                    logger.success("Changed to ", basename.capitalize())
 
             if int(groups["run_num"]) < 1:
                 logger.error(
@@ -839,7 +933,9 @@ class _S11SubDir(_DataContainer):
         if match is None:
             logger.error(
                 "The folder {} did not match any of the correct folder name "
-                "criteria".format(path)
+                "criteria. Required pattern: {} [class={}]".format(
+                    path, cls.folder_pattern, cls.__name__
+                )
             )
 
             if fix:
@@ -898,7 +994,31 @@ class LoadS11(_S11SubDir):
 
 
 class AntSimS11(LoadS11):
-    folder_pattern = r"(?P<load_name>AntSim\d)$"
+    folder_pattern = r"(?P<load_name>%s)$" % ("|".join(ANTENNA_SIMULATORS.keys()))
+
+    @classmethod
+    def check_self(cls, path, fix=False):
+        path, match = super().check_self(path, fix)
+
+        if match is None and fix:
+            bad_patterns = [r"(?P<load_name>%s)$" % ("|".join(ANTSIM_REVERSE.keys()))]
+
+            for pattern in bad_patterns:
+                match = re.search(pattern, os.path.basename(path))
+
+            if match is not None:
+                loadname = match.groupdict()["load_name"]
+
+                if loadname in ANTSIM_REVERSE:
+                    loadname = ANTSIM_REVERSE[loadname]
+
+                newpath = os.path.join(os.path.dirname(path), loadname)
+
+                shutil.move(path, newpath)
+                path = newpath
+                logger.success("Successfully converted to {}".format(path))
+
+        return path, match
 
 
 class _RepeatNumberableS11SubDir(_S11SubDir):
@@ -928,12 +1048,13 @@ class S11Dir(_DataContainer):
     _content_type = {
         **{load: LoadS11 for load in LOAD_ALIASES.values()},
         **{
-            "AntSim": AntSimS11,
             "SwitchingState": SwitchingState,
             "ReceiverReading": ReceiverReading,
             "InternalSwitch": SwitchingState,  # To catch the old way so it can be fixed.
             "LongCableShort": LoadS11,
         },
+        **{key: AntSimS11 for key in ANTENNA_SIMULATORS.keys()},
+        **{key: AntSimS11 for key in ANTSIM_REVERSE.keys()},
     }
 
     def __init__(self, path, repeat_num=None, run_num=None, fix=False):
@@ -998,6 +1119,12 @@ class S11Dir(_DataContainer):
                 LoadS11(os.path.join(path, load), run_num=run_nums.get(load, None)),
             )
 
+        self.simulators = {}
+        for name in self.get_simulator_names(path):
+            self.simulators[name] = AntSimS11(
+                os.path.join(path, name), run_num=run_nums.get(name, None)
+            )
+
     @classmethod
     def _get_highest_rep_num(cls, path, kind):
         fls = utils.get_active_files(os.path.join(path))
@@ -1012,7 +1139,7 @@ class S11Dir(_DataContainer):
         if not os.path.exists(path):
             logger.error("This path does not exist: {}".format(path))
 
-        if not os.path.basename(path) == "S11":
+        if os.path.basename(path) != "S11":
             logger.error("The S11 folder should be called S11")
 
         return path, True
@@ -1029,16 +1156,24 @@ class S11Dir(_DataContainer):
 
     @classmethod
     def _check_file_consistency(cls, path):
-        fls = utils.get_active_files(path)
-        logger.info(
-            "Found the following Antenna Simulators in S11: {}".format(
-                [
-                    os.path.basename(fl)
-                    for fl in fls
-                    if os.path.basename(fl).startswith("AntSim")
-                ]
+        simulators = cls.get_simulator_names(path)
+        if simulators:
+            logger.info(
+                "Found the following Antenna Simulators in S11: {}".format(
+                    ",".join(simulators)
+                )
             )
-        )
+        else:
+            logger.info("No Antenna Simulators in S11.")
+
+    @classmethod
+    def get_simulator_names(cls, path):
+        fls = utils.get_active_files(path)
+        return {
+            os.path.basename(fl)
+            for fl in fls
+            if any(os.path.basename(fl).startswith(k) for k in ANTENNA_SIMULATORS)
+        }
 
 
 class CalibrationObservation(_DataContainer):
@@ -1056,7 +1191,7 @@ class CalibrationObservation(_DataContainer):
         if ambient_temp not in [15, 25, 35]:
             raise ValueError("ambient temp must be one of 15, 25, 35!")
 
-        path = os.path.join(path, "{}C".format(ambient_temp))
+        path = os.path.join(os.path.abspath(path), "{}C".format(ambient_temp))
 
         super().__init__(path, fix)
 
@@ -1090,6 +1225,8 @@ class CalibrationObservation(_DataContainer):
             repeat_num=repeat_num,
             fix=fix,
         )
+
+        self.simulator_names = self.get_simulator_names(self.path)
 
     @classmethod
     def check_self(cls, path, fix=False):
@@ -1182,7 +1319,34 @@ class CalibrationObservation(_DataContainer):
 
     @classmethod
     def _check_file_consistency(cls, path):
-        pass
+        cls.get_simulator_names(
+            path
+        )  # checks whether simulators are the same between each.
+
+    @classmethod
+    def get_simulator_names(cls, path):
+        # Go through the subdirectories and check their simulators
+        dct = {
+            name: tuple(sorted(kls.get_simulator_names(os.path.join(path, name))))
+            for name, kls in cls._content_type.items()
+        }
+
+        # If any list of simulators is not the same as the others, make an error.
+        if len(set(dct.values())) != 1:
+            logger.warning(
+                "Antenna Simulators do not match in all subdirectories. Got {}".format(
+                    dct
+                )
+            )
+            names = [
+                name
+                for name in ANTENNA_SIMULATORS
+                if all(name in val for val in dct.values())
+            ]
+        else:
+            names = list(dct.values())[0]
+
+        return set(names)
 
     def read_all(self):
         """Read all spectra and resistance files."""

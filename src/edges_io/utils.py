@@ -8,18 +8,21 @@ def get_active_files(path):
     if not os.path.isdir(path):
         raise ValueError("{} is not a directory!".format(path))
     fls = glob.glob(os.path.join(path, "*"))
+    ok_extra_files = ["Notes.txt", "calibration_analysis.ipynb", "derived"]
+
     return [
         fl
         for fl in fls
         if not fl.endswith(".old")
-        and not os.path.basename(fl) == "Notes.txt"
+        and os.path.basename(fl) != "Notes.txt"
         and not fl.endswith(".ignore")
         and not fl.endswith(".invalid")
+        and os.path.basename(fl) not in ok_extra_files
     ]
 
 
 def get_parent_dir(path, n=1):
-    for i in range(n):
+    for _ in range(n):
         path = os.path.dirname(os.path.normpath(path))
     return path
 

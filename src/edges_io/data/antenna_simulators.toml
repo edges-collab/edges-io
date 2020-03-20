@@ -1,0 +1,39 @@
+[AntSim1]
+kind = "passive"
+misspells = [
+    'antsim1',
+    'AntSim01'
+]
+
+[AntSim2]
+kind = "passive"
+misspells = [
+    'antsim2',
+    'AntSim02'
+]
+
+[AntSim3]
+kind = "passive"
+misspells = [
+    'antsim3',
+    'AntSim03'
+]
+
+[AntSim4]
+kind = "passive"
+misspells = [
+    'antsim4',
+    'AntSim04'
+]
+
+[AlanNoiseSource_3db]
+kind = "active"
+misspells = [
+    'AllanNoiseSource_3db',
+]
+
+[AlanNoiseSource_6db]
+kind = "active"
+misspells = [
+    'AllanNoiseSource_6db',
+]
