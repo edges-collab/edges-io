@@ -579,10 +579,10 @@ class Spectrum(_SpectrumOrResistance):
         out = {}
         ancillary = {}
         with h5py.File(file_name, "r") as fl:
-            out["Qratio"] = fl["Qratio"][...].T
-            out["p0"] = fl["p0"][...].T
-            out["p1"] = fl["p1"][...].T
-            out["p2"] = fl["p2"][...].T
+            out["Qratio"] = fl["Qratio"][...]
+            out["p0"] = fl["p0"][...]
+            out["p1"] = fl["p1"][...]
+            out["p2"] = fl["p2"][...]
             ancillary["fastspec_version"] = fl["fastspec_version"][...]
             ancillary["size"] = fl["size"][...]
             ancillary["time_data"] = fl["time_data"][...]
@@ -654,7 +654,7 @@ class Resistance(_SpectrumOrResistance):
             )
 
             if self.store_data:
-                self._data = data[:, -3]
+                self._data = data
                 self._meta = data
 
             return self._data, self._meta
