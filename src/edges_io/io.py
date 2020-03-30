@@ -654,7 +654,7 @@ class Resistance(_SpectrumOrResistance):
             )
 
             if self.store_data:
-                self._data = data[:, -3]
+                self._data = data
                 self._meta = data
 
             return self._data, self._meta
@@ -780,7 +780,7 @@ class _SpectraOrResistanceFolder(_DataContainer):
         out = {}
         meta = {}
         for name in LOAD_ALIASES:
-            out[name], meta[name] = getattr(self, name).read(meta=True)
+            out[name], meta[name] = getattr(self, name).read()
         return out
 
 
