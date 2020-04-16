@@ -10,6 +10,7 @@ import re
 import shutil
 import warnings
 from abc import ABC, abstractmethod
+from pathlib import Path
 
 import h5py
 import numpy as np
@@ -631,33 +632,80 @@ class Resistance(_SpectrumOrResistance):
         try:
             return self._data, self._meta
         except AttributeError:
-            data = np.genfromtxt(
-                self.path,
-                skip_header=1,
-                delimiter=",",
-                dtype=np.dtype(
-                    [
-                        ("date", "S10"),
-                        ("time", "S8"),
-                        ("lna_voltage", np.float),
-                        ("lna_resistance", np.float),
-                        ("lna_temp", np.float),
-                        ("sp4t_voltage", np.float),
-                        ("sp4t_resistance", np.float),
-                        ("sp4t_temp", np.float),
-                        ("load_voltage", np.float),
-                        ("load_resistance", np.float),
-                        ("load_temp", np.float),
-                        ("room_temp", np.float),
-                    ]
-                ),
-            )
+            with open(self.path, "r") as fl:
+                if fl.readline().startswith("FLUKE"):
+                    data, meta = self.read_old_style_csv(self.path)
+                else:
+                    data, meta = self.read_new_style_csv(self.path)
 
             if self.store_data:
                 self._data = data
-                self._meta = data
+                self._meta = meta
 
             return self._data, self._meta
+
+    @classmethod
+    def read_new_style_csv(cls, path: [str, Path]):
+        data = np.genfromtxt(
+            path,
+            skip_header=1,
+            delimiter=",",
+            dtype=np.dtype(
+                [
+                    ("date", "S10"),
+                    ("time", "S8"),
+                    ("lna_voltage", np.float),
+                    ("lna_resistance", np.float),
+                    ("lna_temp", np.float),
+                    ("sp4t_voltage", np.float),
+                    ("sp4t_resistance", np.float),
+                    ("sp4t_temp", np.float),
+                    ("load_voltage", np.float),
+                    ("load_resistance", np.float),
+                    ("load_temp", np.float),
+                    ("room_temp", np.float),
+                ]
+            ),
+        )
+        return data, {}
+
+    @classmethod
+    def read_old_style_csv(cls, path):
+        # Get number of comment rows
+        comment_lines = 1
+        with open(path, "r") as fl:
+            while not fl.readline().startswith("Reading,"):
+                comment_lines += 1
+
+        def float_from_kohm(x):
+            return float(x.split(" ")[0])  # Remove KOhm
+
+        data = np.genfromtxt(
+            path,
+            skip_header=comment_lines,
+            delimiter=",",
+            dtype=np.dtype(
+                [
+                    ("reading_num", np.int),
+                    ("load_resistance", np.float),
+                    ("start_time", "S<20"),
+                    ("duration", "S9"),
+                    ("max_time", "S<20"),
+                    ("max_resistance", np.float),
+                    ("avg_resistance", np.float),
+                    ("min_time", "S<20"),
+                    ("description", "S<20"),
+                    ("end_time", "S<20"),
+                ]
+            ),
+            converters={
+                1: float_from_kohm,
+                5: float_from_kohm,
+                6: float_from_kohm,
+                8: float_from_kohm,
+            },
+        )
+        return data, {}
 
     @property
     def resistance(self):
