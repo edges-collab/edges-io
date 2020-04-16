@@ -10,6 +10,7 @@ import re
 import shutil
 import warnings
 from abc import ABC, abstractmethod
+from io import StringIO
 from pathlib import Path
 
 import h5py
@@ -672,39 +673,50 @@ class Resistance(_SpectrumOrResistance):
     @classmethod
     def read_old_style_csv(cls, path):
         # Get number of comment rows
-        comment_lines = 1
-        with open(path, "r") as fl:
-            while not fl.readline().startswith("Reading,"):
-                comment_lines += 1
-
         def float_from_kohm(x):
-            return float(x.split(" ")[0])  # Remove KOhm
+            return float(x.decode("utf-8").split(" ")[0])  # Remove KOhm
 
-        data = np.genfromtxt(
-            path,
-            skip_header=comment_lines,
-            delimiter=",",
-            dtype=np.dtype(
-                [
-                    ("reading_num", np.int),
-                    ("load_resistance", np.float),
-                    ("start_time", "S<20"),
-                    ("duration", "S9"),
-                    ("max_time", "S<20"),
-                    ("max_resistance", np.float),
-                    ("avg_resistance", np.float),
-                    ("min_time", "S<20"),
-                    ("description", "S<20"),
-                    ("end_time", "S<20"),
-                ]
-            ),
-            converters={
-                1: float_from_kohm,
-                5: float_from_kohm,
-                6: float_from_kohm,
-                8: float_from_kohm,
-            },
-        )
+        # These files have bad encoding, which we can ignore. This means we have to
+        # read in the whole thing as text first (while ignoring errors) and construct
+        # a StringIO object to pass to genfromtxt.
+        with open(path, "r", errors="ignore") as fl:
+            while not fl.readline().startswith("Start Time,"):
+                continue
+
+            # Get the total number of actual lines
+            nlines = int(fl.readline().split(",")[4])
+
+            while not fl.readline().startswith("Reading,"):
+                continue
+
+            s = StringIO("".join([next(fl) for i in range(nlines)]))
+
+            data = np.genfromtxt(
+                s,
+                delimiter=",",
+                dtype=np.dtype(
+                    [
+                        ("reading_num", np.int),
+                        ("load_resistance", np.float),
+                        ("start_time", "S20"),
+                        ("duration", "S9"),
+                        ("max_time", "S20"),
+                        ("max_resistance", np.float),
+                        ("avg_resistance", np.float),
+                        ("min_time", "S20"),
+                        ("min_resistance", np.float),
+                        ("description", "S20"),
+                        ("end_time", "S20"),
+                    ]
+                ),
+                converters={
+                    1: float_from_kohm,
+                    5: float_from_kohm,
+                    6: float_from_kohm,
+                    8: float_from_kohm,
+                    10: float_from_kohm,
+                },
+            )
         return data, {}
 
     @property
