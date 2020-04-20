@@ -47,10 +47,12 @@ ANTSIM_REVERSE = {
 
 
 class _DataFile(ABC):
-    def __init__(self, path, fix=False, log_level=40):
-        pre_level = logger.getEffectiveLevel()
-        logger.setLevel(log_level)
+    known_substitutions = []
+    known_patterns = []
+    file_pattern = ""
+    file_write_pattern = ""
 
+    def __init__(self, path, fix=False):
         self.path, match = self.check_self(path)
 
         logger.setLevel(pre_level)
@@ -87,6 +89,67 @@ class _DataFile(ABC):
         one of the main purposes of comparing files is to construct such a full observation.
         """
         return cls.__name__
+
+    def _get_filename_params_from_file(cls, path):
+        return {}
+
+    @classmethod
+    def _get_filename_parameters(cls, dct):
+        """This method should return a dictionary of filename parameters that will
+        be inserted into `file_write_pattern`. These should be defaults if appropriate.
+        If a particular parameter has no default and cannot be obtained, omit it."""
+        return {}
+
+    @classmethod
+    def _fix(cls, root, basename):
+        """Auto-fix a basename."""
+        root = Path(root)
+
+        # First try simple subsitutions
+        new_name = basename
+        for sub, correct in cls.known_substitutions:
+            if sub in new_name:
+                new_name = new_name.replace(sub, correct)
+
+        match = re.search(cls.file_pattern, new_name)
+
+        # If a simple substitution did the trick, return.
+        if match is not None:
+            shutil.move(root / basename, root / new_name)
+            logger.success(f"Successfully converted to {new_name}")
+            return root / new_name, match
+
+        # Otherwise, try various patterns.
+        for pattern in cls.known_patterns:
+            match = re.search(pattern, new_name)
+            if match:
+                break
+
+        if match is None:
+            logger.warning("\tCould not auto-fix it.")
+            fixed = utils._ask_to_rm(root / basename)
+            if fixed:
+                logger.success("Successfully removed.")
+            return None, None
+        else:
+            dct = match.groupdict()
+            default = {
+                **cls._get_filename_parameters(dct),
+                **cls._get_filename_params_from_file(root / new_name),
+            }
+            dct = {**default, **dct}
+
+            new_name = cls.file_write_pattern.format(**dct)
+            new_path = root / new_name
+
+            match = re.search(cls.file_pattern, new_name)
+
+            if match is not None:
+                logger.success("Successfully converted to {}".format(new_name))
+                shutil.move(root / basename, new_path)
+                return new_path, match
+            else:
+                return None, None
 
 
 class _DataContainer(ABC):
@@ -194,10 +257,10 @@ class _DataContainer(ABC):
                     logger.error(f"{fl.name} is an extraneous file/folder")
 
                     if fix:
-                        if fl.name == "Notes.odt":
-                            shutil.move(fl, fl.with_suffix(".txt"))
-                            fl = fl.with_suffix(".txt")
-                            logger.success(f"Successfully renamed to {fl}")
+                        if os.path.basename(fl) == "Notes.odt":
+                            shutil.move(fl, fl.replace("odt", "txt"))
+                            fl = fl.replace("odt", "txt")
+                            logger.success("Successfully renamed to {}".format(fl))
                         else:
                             fixed = utils._ask_to_rm(fl)
 
@@ -249,6 +312,65 @@ class _SpectrumOrResistance(_DataFile):
         r"?P<hour>\d{2})_(?P<minute>\d{2})_(?P<second>\d{2})_lab.(?P<file_format>\w{2,"
         r"3})$"
     )
+    file_write_pattern = (
+        "{load_name}_{run_num:0>2}_{year:0>4}_{jd:0>3}_{hour:0>2}_{minute:0>2}_"
+        "{second:0>2}_lab.{file_format}"
+    )
+
+    known_patterns = [
+        (
+            r"^(?P<load_name>%s|%s)" % (load_pattern, antsim_pattern)
+            + r"_25C_(?P<month>\d{1,2})_(?P<day>\d{1,2})_("
+            r"?P<year>\d\d\d\d)_(?P<hour>\d{1,2})_(?P<minute>\d{"
+            r"1,2})_(?P<second>\d{1,2}).(?P<file_format>\w{2,3})$"
+        ),
+        (
+            "^(?P<load_name>{})".format(load_pattern)
+            + r"(?P<run_num>\d{1,2})_25C_(?P<month>\d{1,"
+            r"2})_(?P<day>\d{1,2})_(?P<year>\d\d\d\d)_("
+            r"?P<hour>\d{1,2})_(?P<minute>\d{1,"
+            r"2})_(?P<second>\d{1,2}).(?P<file_format>\w{2,3})$"
+        ),
+        (
+            r"(?P<load_name>%s|%s)" % (load_pattern, antsim_pattern)
+            + r"_(?P<year>\d{4})_(?P<day>\d{3})_"
+            r"(?P<hour>\d{2})_(?P<minute>\d{2})_(?P<second>\d{2})_lab."
+            r"(?P<file_format>\w{2,3})$"
+        ),
+        (
+            r"(?P<load_name>%s|%s)" % (load_pattern, antsim_pattern)
+            + r"_(?P<year>\d{4})_(?P<day>\d{3})_(?P<hour>\d{2}).(?P<file_format>\w{2,3})$"
+        ),
+        (
+            r"(?P<load_name>%s|%s)" % (load_pattern, antsim_pattern)
+            + r"_(?P<year>\d{4})_(?P<day>\d{3})_(?P<hour>\d{2}).(?P<file_format>\w{2,3})$"
+        ),
+        (
+            r"(?P<load_name>%s|%s)" % (load_pattern, antsim_pattern)
+            + r"_(?P<year>\d{4})_(?P<day>\d{3})_lab.(?P<file_format>\w{2,3})$"
+        ),
+        (
+            r"(?P<load_name>%s|%s)" % (load_pattern, antsim_pattern)
+            + r"_(?P<run_num>\d)_(?P<year>\d{4})_(?P<day>\d{3})_lab.(?P<file_format>\w{2,"
+            r"3})$"
+        ),
+        (
+            r"(?P<load_name>%s|%s)" % (load_pattern, antsim_pattern)
+            + r"_\d{2}C_(?P<month>\d{1,2})_(?P<day>\d{1,2})_(?P<year>\d{4})_(?P<hour>\d{"
+            r"1,2})_(?P<minute>\d{1,2})_(?P<second>\d{1,2}).(?P<file_format>\w{2,3})"
+        ),
+        (
+            r"(?P<load_name>%s)" % ("|".join(ANTSIM_REVERSE.keys()))
+            + r"_\d{2}C_(?P<month>\d{1,2})_(?P<day>\d{1,2})_(?P<year>\d{4})_(?P<hour>\d{"
+            r"1,2})_(?P<minute>\d{1,2})_(?P<second>\d{1,2}).(?P<file_format>\w{2,3})"
+        ),
+    ]
+
+    known_substitutions = [
+        ("AmbientLoad", "Ambient"),
+        ("LongCableShort", "LongCableShorted"),
+    ]
+
     supported_formats = []
 
     def __init__(self, path, fix=False):
@@ -261,75 +383,42 @@ class _SpectrumOrResistance(_DataFile):
     def typestr(cls, name: str):
         return cls.__name__ + re.match(cls.file_pattern, name).groupdict()["load_name"]
 
+    def _get_filename_parameters(cls, dct):
+        out = {"run_num": 1, "hour": 0, "minute": 0, "second": 0}
+
+        if "month" in dct:
+            out["jd"] = utils.ymd_to_jd(dct("year"), dct("month"), dct("day"))
+        else:
+            out["jd"] = dct["day"]
+
+        # Switch Antenna Simulator "misspells" to true form.
+        # TODO: BAD!
+        if dct["load_name"] in ANTSIM_REVERSE:
+            dct["load_name"] = ANTSIM_REVERSE[dct["load_name"]]
+
     @classmethod
     def _fix(cls, root, basename):
-        if "AmbientLoad" in basename:
-            newname = basename.replace("AmbientLoad", "Ambient")
-        elif "LongCableShort_" in basename:
-            newname = basename.replace("LongCableShort_", "LongCableShorted_")
-        else:
-            newname = basename
+        root = Path(root)
 
-        match = re.search(cls.file_pattern, newname)
+        # First try simple subsitutions
+        new_name = basename
+        for sub, correct in cls.known_substitutions:
+            if sub in new_name:
+                new_name = new_name.replace(sub, correct)
 
+        match = re.search(cls.file_pattern, new_name)
+
+        # If a simple substitution did the trick, return.
         if match is not None:
-            shutil.move(os.path.join(root, basename), os.path.join(root, newname))
-            logger.success("Successfully converted to {}".format(newname))
-            return os.path.join(root, newname), match
+            shutil.move(root / basename, root / new_name)
+            logger.success(f"Successfully converted to {new_name}")
+            return root / new_name, match
 
-        bad_patterns = [
-            (
-                r"^(?P<load_name>%s|%s)" % (cls.load_pattern, cls.antsim_pattern)
-                + r"_25C_(?P<month>\d{1,2})_(?P<day>\d{1,2})_("
-                r"?P<year>\d\d\d\d)_(?P<hour>\d{1,2})_(?P<minute>\d{"
-                r"1,2})_(?P<second>\d{1,2}).(?P<file_format>\w{2,3})$"
-            ),
-            (
-                "^(?P<load_name>{})".format(cls.load_pattern)
-                + r"(?P<run_num>\d{1,2})_25C_(?P<month>\d{1,"
-                r"2})_(?P<day>\d{1,2})_(?P<year>\d\d\d\d)_("
-                r"?P<hour>\d{1,2})_(?P<minute>\d{1,"
-                r"2})_(?P<second>\d{1,2}).(?P<file_format>\w{2,3})$"
-            ),
-            (
-                r"(?P<load_name>%s|%s)" % (cls.load_pattern, cls.antsim_pattern)
-                + r"_(?P<year>\d{4})_(?P<day>\d{3})_"
-                r"(?P<hour>\d{2})_(?P<minute>\d{2})_(?P<second>\d{2})_lab."
-                r"(?P<file_format>\w{2,3})$"
-            ),
-            (
-                r"(?P<load_name>%s|%s)" % (cls.load_pattern, cls.antsim_pattern)
-                + r"_(?P<year>\d{4})_(?P<day>\d{3})_(?P<hour>\d{2}).(?P<file_format>\w{2,3})$"
-            ),
-            (
-                r"(?P<load_name>%s|%s)" % (cls.load_pattern, cls.antsim_pattern)
-                + r"_(?P<year>\d{4})_(?P<day>\d{3})_(?P<hour>\d{2}).(?P<file_format>\w{2,3})$"
-            ),
-            (
-                r"(?P<load_name>%s|%s)" % (cls.load_pattern, cls.antsim_pattern)
-                + r"_(?P<year>\d{4})_(?P<day>\d{3})_lab.(?P<file_format>\w{2,3})$"
-            ),
-            (
-                r"(?P<load_name>%s|%s)" % (cls.load_pattern, cls.antsim_pattern)
-                + r"_(?P<run_num>\d)_(?P<year>\d{4})_(?P<day>\d{3})_lab.(?P<file_format>\w{2,"
-                r"3})$"
-            ),
-            (
-                r"(?P<load_name>%s|%s)" % (cls.load_pattern, cls.antsim_pattern)
-                + r"_\d{2}C_(?P<month>\d{1,2})_(?P<day>\d{1,2})_(?P<year>\d{4})_(?P<hour>\d{"
-                r"1,2})_(?P<minute>\d{1,2})_(?P<second>\d{1,2}).(?P<file_format>\w{2,3})"
-            ),
-            (
-                r"(?P<load_name>%s)" % ("|".join(ANTSIM_REVERSE.keys()))
-                + r"_\d{2}C_(?P<month>\d{1,2})_(?P<day>\d{1,2})_(?P<year>\d{4})_(?P<hour>\d{"
-                r"1,2})_(?P<minute>\d{1,2})_(?P<second>\d{1,2}).(?P<file_format>\w{2,3})"
-            ),
-        ]
-        i = 0
-        while match is None and i < len(bad_patterns):
-            pattern = bad_patterns[i]
-            match = re.search(pattern, newname)
-            i += 1
+        # Otherwise, try various patterns.
+        for pattern in cls.known_patterns:
+            match = re.search(pattern, new_name)
+            if match:
+                break
 
         if match is None:
             logger.warning("\tCould not auto-fix it.")
@@ -341,32 +430,9 @@ class _SpectrumOrResistance(_DataFile):
         else:
             dct = match.groupdict()
 
-            if "month" in dct:
-                jd = utils.ymd_to_jd(
-                    match.group("year"), match.group("month"), match.group("day")
-                )
-            else:
-                jd = dct["day"]
-
-            if "run_num" not in dct:
-                dct["run_num"] = "01"
-
-            if "hour" not in dct:
-                dct["hour"] = "00"
-
-            if "minute" not in dct:
-                dct["minute"] = "00"
-
-            if "second" not in dct:
-                dct["second"] = "00"
-
-            # Switch Antenna Simulator "misspells" to true form.
-            if dct["load_name"] in ANTSIM_REVERSE:
-                dct["load_name"] = ANTSIM_REVERSE[dct["load_name"]]
-
             newname = (
                 "{load_name}_{run_num:0>2}_{year:0>4}_{jd:0>3}_{hour:0>2}_{minute:0>2}_"
-                "{second:0>2}_lab.{file_format}".format(jd=jd, **dct)
+                "{second:0>2}_lab.{file_format}".format(**dct)
             )
             newpath = os.path.join(root, newname)
 
