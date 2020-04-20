@@ -930,8 +930,10 @@ class S1P(_DataFile):
     @staticmethod
     def _get_kind(path_filename):
         # identifying the format
+
         with open(path_filename, "r") as d:
             comment_rows = 0
+            flag = None
             for line in d.readlines():
                 # checking settings line
                 if line.startswith("#"):
@@ -947,6 +949,14 @@ class S1P(_DataFile):
                     comment_rows += 1
                 elif flag is not None:
                     break
+                else:
+                    warnings.warn(
+                        f"Non standard line in S11 file {path_filename}: '{line}'\n...Treating as a comment line."
+                    )
+                    comment_rows += 1
+
+        if flag is None:
+            raise IOError(f"The file {path_filename} has incorrect format.")
 
         #  loading data
         d = np.genfromtxt(path_filename, skip_header=comment_rows)
