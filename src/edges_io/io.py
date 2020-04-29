@@ -686,6 +686,9 @@ class Resistance(_SpectrumOrResistance):
             # Get the total number of actual lines
             nlines = int(fl.readline().split(",")[4])
 
+            # The last line can be only half there, so omit it
+            nlines -= 1
+
             while not fl.readline().startswith("Reading,"):
                 continue
 
@@ -706,7 +709,7 @@ class Resistance(_SpectrumOrResistance):
                         ("min_time", "S20"),
                         ("min_resistance", np.float),
                         ("description", "S20"),
-                        ("end_time", "S20"),
+                        ("end_time", "S22"),
                     ]
                 ),
                 converters={
