@@ -633,7 +633,7 @@ class Resistance(_SpectrumOrResistance):
         try:
             return self._data, self._meta
         except AttributeError:
-            with open(self.path, "r") as fl:
+            with open(self.path, "r", errors="ignore") as fl:
                 if fl.readline().startswith("FLUKE"):
                     data, meta = self.read_old_style_csv(self.path)
                 else:
