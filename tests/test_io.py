@@ -142,22 +142,80 @@ def untest_read_tmpdir(tmp_path_factory):
 
 
 ### directory testing
-def test_make_good_Obs(testDir, caplog):
+def test_make_good_Obs(create_test_env, caplog):
     # test that correct layouts pass (make an obs)
+    testDir = create_test_env
     try:
         new_testObs(testDir)
     except Exception:
         print("Test Observation failed to be created properly")
 
 
-def test_bad_dirname_Obs(testDir, caplog):
-    # test that incorrect directory fail
+def test_bad_dirname_Obs(create_test_env, caplog):
+    # test that incorrect directories fail
+    testDir = create_test_env
     base = testDir.parent
     wrongDir = base / "Receiver_2020_01_01_010_to_200MHz"
     testDir.rename(wrongDir)
     with pytest.raises(Exception):
         new_testObs(wrongDir)
     assert "directory name is in the wrong format" in caplog.text
+    # receiver number
+    testDir = wrongDir
+    wrongDir = base / "Receiver00_2020_01_01_010_to_200MHz"
+    testDir.rename(wrongDir)
+    with pytest.raises(Exception):
+        new_testObs(wrongDir)
+    assert "Unknown receiver number" in caplog.text
+    # year
+    testDir = wrongDir
+    wrongDir = base / "Receiver01_2009_01_01_010_to_200MHz"
+    testDir.rename(wrongDir)
+    with pytest.raises(Exception):
+        new_testObs(wrongDir)
+    assert "Unknown year" in caplog.text
+    testDir = wrongDir
+    wrongDir = base / "Receiver01_2045_01_01_010_to_200MHz"
+    testDir.rename(wrongDir)
+    with pytest.raises(Exception):
+        new_testObs(wrongDir)
+    assert "Unknown year" in caplog.text
+    # month
+    testDir = wrongDir
+    wrongDir = base / "Receiver01_2020_13_01_010_to_200MHz"
+    testDir.rename(wrongDir)
+    with pytest.raises(Exception):
+        new_testObs(wrongDir)
+    assert "Unknown month" in caplog.text
+    # day
+    testDir = wrongDir
+    wrongDir = base / "Receiver01_2020_01_32_010_to_200MHz"
+    testDir.rename(wrongDir)
+    with pytest.raises(Exception):
+        new_testObs(wrongDir)
+    assert "Unknown day" in caplog.text
+    # freqlow
+
+    testDir = wrongDir
+    wrongDir = base / "Receiver01_2020_01_01_000_to_200MHz"
+    testDir.rename(wrongDir)
+    with pytest.raises(Exception):
+        new_testObs(wrongDir)
+    assert "Low frequency is weird" in caplog.text
+    # freqhigh
+    testDir = wrongDir
+    wrongDir = base / "Receiver01_2020_01_01_010_to_900MHz"
+    testDir.rename(wrongDir)
+    with pytest.raises(Exception):
+        new_testObs(wrongDir)
+    assert "High frequency is weird" in caplog.text
+    # freqrange
+    testDir = wrongDir
+    wrongDir = base / "Receiver01_2020_01_01_200_to_010MHz"
+    testDir.rename(wrongDir)
+    with pytest.raises(Exception):
+        new_testObs(wrongDir)
+    assert "Low frequency > High Frequency" in caplog.text
 
 
 ### read testing
@@ -167,6 +225,8 @@ def test_bad_dirname_Obs(testDir, caplog):
 
 ### spectra testing
 # test to see if frequency range matches spectra shape
+
+
 def untest_freqRange(testObs):
     for name in LOAD_ALIASES:
         testshape = getattr(testObs.spectra, name).spectra.shape
