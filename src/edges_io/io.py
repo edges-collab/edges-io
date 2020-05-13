@@ -672,9 +672,7 @@ class Resistance(_SpectrumOrResistance):
 
     @classmethod
     def read_old_style_csv(cls, path):
-        # Get number of comment rows
-        def float_from_kohm(x):
-            return float(x.decode("utf-8").split(" ")[0]) * 1000  # Remove KOhm
+        # Weirdly, some old-style files use KOhm, and some just use Ohm.
 
         # These files have bad encoding, which we can ignore. This means we have to
         # read in the whole thing as text first (while ignoring errors) and construct
@@ -693,6 +691,14 @@ class Resistance(_SpectrumOrResistance):
                 continue
 
             s = StringIO("".join([next(fl) for i in range(nlines)]))
+
+            # Determine whether the file is in KOhm
+            kohm = "KOhm" in s.readline()
+            s.seek(0)
+
+            def float_from_kohm(x):
+                y = float(x.decode("utf-8").split(" ")[0])
+                return y * 1000 if kohm else y
 
             data = np.genfromtxt(
                 s,
