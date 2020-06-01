@@ -19,10 +19,10 @@ import read_acq
 import toml
 from bidict import bidict
 from cached_property import cached_property
-from scipy import io as sio
 
 from . import utils
 from .data import DATA_PATH
+from .h5 import HDF5RawSpectrum
 from .logging import logger
 
 LOAD_ALIASES = bidict(
@@ -508,104 +508,108 @@ class Spectrum(_SpectrumOrResistance):
             raise ValueError("not all file formats are the same!")
         return formats[0]
 
-    def read(self):
-        """
-        Read the files of the object, and concatenate their data.
+    @cached_property
+    def data(self) -> HDF5RawSpectrum:
+        """A view of the data in the file as a HDF5Object.
 
-        Adds the attributes 'p0', 'p1', 'p2' and 'uncalibrated_spectrum'.
+        If the file is an ACQ file, it will be read completely into memory and cast
+        into the same format as a :class:`~h5.HDF5Object` so that the API is the same.
+
+        If the number of files is more than one, `data` will be a list of objects.
         """
-        out = {}
-        meta = {}
-        keys = ["p0", "p1", "p2", "Qratio"]
+        objs = []
         for fl in self.path:
-            this_spec, meta = getattr(self, "_read_" + self.file_format)(fl)
+            if self.file_format == "h5":
+                objs.append(HDF5RawSpectrum(fl))
+            elif self.file_format == "acq":
+                spec, freq, time, meta = self._read_acq(fl)
+                objs.append(
+                    HDF5RawSpectrum.from_data(
+                        {
+                            "spectra": spec,
+                            "time_ancillary": time,
+                            "freq_ancillary": freq,
+                            "meta": meta,
+                        }
+                    )
+                )
 
-            for key in keys:
-                if key not in out:
-                    out[key] = this_spec[key]
-                else:
-                    out[key] = np.concatenate((out[key], this_spec[key]), axis=1)
-        setattr(self, "spectra", out)
-        setattr(self, "metadata", meta)
-        return out, meta
+        if len(objs) == 1:
+            return objs[0]
+        else:
+            return objs
 
-    @staticmethod
-    def _read_mat(file_name):
-        """
-        This function loads the antenna temperature and date/time from MAT files.
-
-        Parameters
-        ----------
-        file_name: str
-            The file path to the MAT file.
-
-        Returns
-        -------
-        2D Uncalibrated Temperature array, or dict of such.
-        """
-        # loading data and extracting main array
-        d = sio.loadmat(file_name)
-        meta = {}
-        # Return dict of all things
-        if "Qratio" not in d:
-            raise IOError(
-                "The file {} is in an old format, and does not have the key Qratio. "
-                "Please re-convert it."
-            )
-
-        return d, meta
+    #
+    # def read(self):
+    #     """
+    #     Read the files of the object, and concatenate their data.
+    #
+    #     .. warning:: Deprecated.
+    #
+    #     Adds the attributes 'p0', 'p1', 'p2' and 'Qratio'.
+    #     """
+    #     warnings.warn(
+    #         "Do not use this function, it will soon be removed. "
+    #         "Instead access data through the 'data' attribute",
+    #         category=DeprecationWarning
+    #     )
+    #
+    #     out = {}
+    #     keys = ["p0", "p1", "p2", "Qratio"]
+    #     for fl in self.path:
+    #         spectra, freq, tm, meta = getattr(self, "_read_" + self.file_format)(fl)
+    #
+    #         for key in keys:
+    #             if key not in out:
+    #                 out[key] = spectra[key]
+    #             else:
+    #                 out[key] = np.concatenate((out[key], spectra[key]), axis=1)
+    #     setattr(self, "spectra", out)
+    #     setattr(self, "metadata", meta)
+    #     setattr(self, 'time_ancillary', tm)
+    #     setattr(self, 'freq_ancillary', freq)
+    #     return out, freq, tm, meta
 
     @staticmethod
     def _read_acq(file_name):
         Q, px, anc = read_acq.decode_file(
             file_name, progress=False, write_formats=[], meta=True
         )
-        ancillary = {
-            "fastspec_version": anc.fastspec_version,
-            "size": anc.size,
-            "time_data": anc.data,
-            "frequencies": anc.frequencies,
-            "temperature": anc.meta["temperature"],
-            "nblk": anc.meta["nblk"],
-            "freq_min": anc.meta["freq_min"],
-            "freq_max": anc.meta["freq_max"],
+
+        freq_anc = {"frequencies": anc.frequencies}
+        time_anc = {
+            name: anc["time_data"][name] for name in anc["time_data"].dtype.names
         }
-        if "data_drops" in anc.meta:
-            ancillary["data_drops"] = anc.meta["data_drops"]
-        else:
-            ancillary["resolution"] = anc.meta["resolution"]
-        return {"Qratio": Q.T, "p0": px[0].T, "p1": px[1].T, "p2": px[2].T}, ancillary
+        spectra = {"Qratio": Q.T, "p0": px[0].T, "p1": px[1].T, "p2": px[2].T}
 
-    @staticmethod
-    def _read_h5(file_name):
-        out = {}
-        ancillary = {}
-        with h5py.File(file_name, "r") as fl:
-            out["Qratio"] = fl["Qratio"][...]
-            out["p0"] = fl["p0"][...]
-            out["p1"] = fl["p1"][...]
-            out["p2"] = fl["p2"][...]
-            ancillary["fastspec_version"] = fl["fastspec_version"][...]
-            ancillary["size"] = fl["size"][...]
-            ancillary["time_data"] = fl["time_data"][...]
-            ancillary["frequencies"] = fl["freqs"][...]
-            if "data_drops" in fl.attrs:
-                ancillary["data_drops"] = fl.attrs["data_drops"][...]
-            else:
-                ancillary["resolution"] = fl.attrs["resolution"][...]
-            ancillary["resolution"] = fl.attrs["resolution"][...]
-            ancillary["temperature"] = fl.attrs["temperature"][...]
-            ancillary["nblk"] = fl.attrs["nblk"][...]
-            ancillary["freq_min"] = fl.attrs["freq_min"][...]
-            ancillary["freq_max"] = fl.attrs["freq_max"][...]
+        meta = anc.meta
+        return spectra, freq_anc, time_anc, meta
 
-        return out, ancillary
+    # @staticmethod
+    # def _read_h5(file_name):
+    #     spectra = {}
+    #     freq_anc = {}
+    #     time_anc = {}
+    #
+    #     with h5py.File(file_name, "r") as fl:
+    #         spectra["Qratio"] = fl["Qratio"][...]
+    #         spectra["p0"] = fl["p0"][...]
+    #         spectra["p1"] = fl["p1"][...]
+    #         spectra["p2"] = fl["p2"][...]
+    #
+    #         meta = dict(fl.attrs)
+    #
+    #         for k, v in fl['freq_ancillary'].items():
+    #             freq_anc[k] = v[...]
+    #
+    #         for k, v in fl['time_ancillary'].items():
+    #             time_anc[k] = v[...]
+    #
+    #     return spectra, freq_anc, time_anc, meta
 
 
 class Resistance(_SpectrumOrResistance):
-    """
-    An object representing a resistance measurement (and its structure).
-    """
+    """An object representing a resistance measurement (and its structure)."""
 
     supported_formats = ("csv",)
 
