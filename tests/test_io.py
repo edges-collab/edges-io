@@ -9,9 +9,6 @@ import py
 from bidict import bidict
 from edges_io import io
 
-### testing setup
-# function to make observation object
-
 LOAD_ALIASES = bidict(
     {
         "ambient": "Ambient",
@@ -119,26 +116,14 @@ def create_test_env(tmp_path_factory):
                     file2.write_text(
                         "# Hz S RI R 50\n40000000        0.239144887761343       0.934085904901478\n40000000        0.239144887761343       0.934085904901478"
                     )
-                    # file2.write_text('40000000        0.239144887761343       0.934085904901478')
-                    # print(file2.read_text())
-                    # file1.touch()
-                    # file2.touch()
+
     return b
 
 
+# function to make observation object
 def new_testObs(testdir):
     testObs = io.CalibrationObservation(testdir)
     return testObs
-
-
-def untest_read_tmpdir(tmp_path_factory):
-    # checking to see that the test directory is made correctly, not a real test.
-    testdir = create_test_env(tmp_path_factory)
-
-    for dirName, subdirList, fileList in os.walk(testdir):
-        print(dirName)
-        print(subdirList)
-        print(fileList)
 
 
 ### directory testing
@@ -148,6 +133,7 @@ def test_make_good_Obs(create_test_env, caplog):
     try:
         new_testObs(testDir)
     except Exception:
+        # expand to say why?
         print("Test Observation failed to be created properly")
 
 
@@ -225,16 +211,6 @@ def test_bad_dirname_Obs(create_test_env, caplog):
 
 ### spectra testing
 # test to see if frequency range matches spectra shape
-
-
-def untest_freqRange(testObs):
-    for name in LOAD_ALIASES:
-        testshape = getattr(testObs.spectra, name).spectra.shape
-        testfreq = getattr(testObs.spectra, name).metadata["frequencies"].shape[0]
-    assert testshape == testfreq, (
-        "%r frequency range not same shape as %r spectra" % name
-    )
-
 
 # test to see if flow, fhigh match file
 
