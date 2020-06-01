@@ -9,3 +9,6 @@ finally:
     del get_distribution, DistributionNotFound
 
 from . import io
+from .io import Spectrum, S1P
+from . import h5
+from .h5 import HDF5Object, HDF5RawSpectrum, HDF5StructureError
