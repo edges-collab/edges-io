@@ -2,6 +2,7 @@ import datetime
 import glob
 import os
 import shutil
+from pathlib import Path
 
 
 def get_active_files(path):
@@ -87,3 +88,19 @@ def _ask_to_rm(fl):
 
 class FileStructureError(Exception):
     pass
+
+
+def get_file_list(top_level: Path, filter=None, ignore=None):
+    ignore = ignore or []
+
+    out = []
+    for pth in top_level.iterdir():
+        if (
+            pth.is_file()
+            and str(pth) not in ignore
+            and (filter(pth) if filter is not None else True)
+        ):
+            out.append(pth.absolute())
+        elif pth.is_dir():
+            out.extend(get_file_list(pth, filter=filter, ignore=ignore))
+    return out

@@ -8,15 +8,17 @@ import glob
 import os
 import re
 import shutil
+import tempfile
 import warnings
 from abc import ABC, abstractmethod
 from io import StringIO
 from pathlib import Path
-from typing import List
+from typing import List, Set, Tuple
 
 import numpy as np
 import read_acq
 import toml
+import yaml
 from bidict import bidict
 from cached_property import cached_property
 
@@ -88,18 +90,36 @@ class _DataContainer(ABC):
 
     @classmethod
     @abstractmethod
-    def check_self(cls, path, fix=False):
-        """Abstract method for checking whether the path is the correct format for
-        the DB"""
+    def check_self(cls, path: Path, definition: [None, dict] = None, fix: bool = False):
+        """
+        Check whether the path itself is formatted correctly.
+
+        Parameters
+        ----------
+        path : Path
+            Path to the file/folder.
+        definition : dict, optional
+            Dictionary specifying the definition of the overall observation, which
+            may affect any particular component.
+        fix : bool, optional
+            Whether to apply straight-forward fixes to the filename format.
+
+        Returns
+        -------
+        path : Path
+            The path to the file, possibly updated by any fix.
+        match : dict or None
+            If the path was found to be correct, this contains meta information
+            contained in the filename.
+        """
         pass
 
     @classmethod
     def check_contents(cls, path, fix=False):
         """Abstract method for checking whether the contents of this container are in
          the correct format for the DB"""
-        cls._check_contents_selves(
-            path, fix=fix
-        )  # Check that everything that *is* there has correct format.
+        # Check that everything that *is* there has correct format.
+        cls._check_contents_selves(path, fix=fix)
         cls._check_all_files_there(path)  # Check that all necessary files are there.
         # Check that the files that are there have consistent properties, and are also
         # consistent with outside parameters (eg. if year appears on them, they should
@@ -134,8 +154,7 @@ class _DataContainer(ABC):
                         if os.path.basename(fl) == "Notes.odt":
                             shutil.move(fl, fl.replace("odt", "txt"))
                             fl = fl.replace("odt", "txt")
-                            logger.success("Successfully renamed to {}".format(fl))
-                            logger.success("Successfully renamed to {}".format(fl))
+                            logger.success(f"Successfully renamed to {fl}")
                         else:
                             fixed = utils._ask_to_rm(fl)
 
@@ -149,7 +168,6 @@ class _DataContainer(ABC):
             fl, _ = content_type.check_self(fl, fix=fix)
 
             # Recursively check the contents of the contents.
-
             try:
                 content_type.check_contents(fl, fix=fix)
             except AttributeError:
@@ -476,6 +494,12 @@ class _SpectrumOrResistance(_DataFile):
     def seconds(self):
         """List of integer seconds (one per file) at which data acquisition was begun"""
         return [int(group["second"]) for group in self._groups]
+
+    def __eq__(self, other):
+        return (
+            other.__class__.__name__ == self.__class__.__name__
+            and self.load_name == other.load_name
+        )
 
 
 class Spectrum(_SpectrumOrResistance):
@@ -857,6 +881,9 @@ class _SpectraOrResistanceFolder(_DataContainer):
             out[name], meta[name] = getattr(self, name).read()
         return out
 
+    def __eq__(self, other):
+        return self.__class__.__name__ == other.__class__.__name__
+
 
 class Spectra(_SpectraOrResistanceFolder):
     folder_pattern = "Spectra"
@@ -977,6 +1004,12 @@ class S1P(_DataFile):
 
         return d, flag
 
+    def __eq__(self, other):
+        return (
+            self.__class__.__name__ == other.__class__.__name__
+            and self.kind == other.kind
+        )
+
 
 class _S11SubDir(_DataContainer):
     STANDARD_NAMES = S1P.POSSIBLE_KINDS
@@ -1076,6 +1109,12 @@ class LoadS11(_S11SubDir):
             self._match_dict["load_name"], self._match_dict["load_name"]
         )
 
+    def __eq__(self, other):
+        return (
+            self.__class__.__name__ == other.__class__.__name__
+            and self.load_name == other.load_name
+        )
+
 
 class AntSimS11(LoadS11):
     folder_pattern = r"(?P<load_name>%s)$" % ("|".join(ANTENNA_SIMULATORS.keys()))
@@ -1109,6 +1148,9 @@ class _RepeatNumberableS11SubDir(_S11SubDir):
     def __init__(self, direc, run_num=None, fix=False):
         super().__init__(direc, run_num, fix)
         self.repeat_num = int(self._match_dict["repeat_num"])
+
+    def __eq__(self, other):
+        return self.__class__.__name__ == other.__class__.__name__
 
 
 class SwitchingState(_RepeatNumberableS11SubDir):
@@ -1259,15 +1301,25 @@ class S11Dir(_DataContainer):
             if any(os.path.basename(fl).startswith(k) for k in ANTENNA_SIMULATORS)
         }
 
+    def __eq__(self, other):
+        return self.__class__.__name__ == other.__class__.__name__
+
 
 class CalibrationObservation(_DataContainer):
-    file_pattern = (
+    file_pattern = re.compile(
         r"^Receiver(?P<rcv_num>\d{2})_(?P<year>\d{4})_(?P<month>\d{2})_(?P<day>\d{2})_("
         r"?P<freq_low>\d{3})_to_(?P<freq_hi>\d{3})MHz/(?P<temp>\d{2})C$"
     )
     _content_type = {"S11": S11Dir, "Spectra": Spectra, "Resistance": Resistances}
 
-    def __init__(self, path, ambient_temp=25, run_num=None, repeat_num=None, fix=False):
+    def __init__(
+        self,
+        path: [str, Path],
+        ambient_temp=25,
+        run_num=None,
+        repeat_num=None,
+        fix=False,
+    ):
         """
         A class defining a full calibration observation, with all Spectra, Resistance
         and S11 files necessary to do a single analysis.
@@ -1275,7 +1327,8 @@ class CalibrationObservation(_DataContainer):
         if ambient_temp not in [15, 25, 35]:
             raise ValueError("ambient temp must be one of 15, 25, 35!")
 
-        path = os.path.join(os.path.abspath(path), "{}C".format(ambient_temp))
+        path = Path(path).absolute() / f"{ambient_temp}C"
+        self.definition = self.check_definition(path)
 
         super().__init__(path, fix)
 
@@ -1313,19 +1366,75 @@ class CalibrationObservation(_DataContainer):
         self.simulator_names = self.get_simulator_names(self.path)
 
     @classmethod
-    def check_self(cls, path, fix=False):
-        logger.structure("Checking root folder: {}".format(path))
+    def check_definition(cls, path: Path) -> dict:
+        """Check the associated definition.yaml file within an observation."""
 
-        if not os.path.exists(path):
-            raise IOError("The path {} does not exist!".format(path))
+        definition_file = path / "definition.yaml"
 
-        path = os.path.normpath(path)
-        base = os.path.dirname(os.path.dirname(path))
-        name = os.path.join(
-            os.path.basename(os.path.dirname(path)), os.path.basename(path)
-        )
+        # Read in the definition file (if it exists)
+        if not definition_file.exists():
+            return {}
 
-        match = re.search(cls.file_pattern, name)
+        with open(definition_file, "r") as fl:
+            definition = yaml.load(fl, Loader=yaml.FullLoader)
+
+        allowed_keys = {
+            "root_obs_dir": str,
+            "entirely_invalid": str,
+            "include": list,
+            "prefer": list,
+            "invalid": list,
+            "measurements": {"resistance_m": float, "resistance_f": float},
+            "defaults": {"resistance": dict, "spectra": dict, "s11": dict},
+        }
+
+        def _check_grp(defn, allowed):
+            for k, v in defn.items():
+                if k not in allowed:
+                    logger.warning(
+                        f"Key {k} found in definitions.yaml, but is not a known keyword."
+                    )
+                elif isinstance(allowed[k], dict):
+                    # Recurse into sub-dictionaries.
+                    _check_grp(v, allowed[k])
+                elif not isinstance(v, allowed[k]):
+                    logger.error(
+                        f"Key {k} has wrong type in definitions.yaml. Should be {allowed[k]}, got {type(v)}."
+                    )
+
+        _check_grp(definition, allowed_keys)
+        return definition
+
+    @classmethod
+    def check_self(cls, path: Path, definition: dict = None, fix: bool = False):
+        logger.structure(f"Checking root folder: {path}")
+
+        definition = definition or {}
+
+        if not path.exists():
+            raise IOError(f"The path {path} does not exist!")
+
+        base = path.parents[1]  # Gets root obs dir.
+        name = str(Path(path.parent.name) / Path(path.name))
+
+        # Warn if this is an invalid observation entirely. Also, we don't check the
+        # observation then, as it's annoyingly difficult.
+        if path.parent.suffix in [".invalid", ".old"]:
+            logger.warning(
+                f"Observation {path.parent.name} is marked as invalid -- "
+                f"proceed with caution!"
+            )
+            return path, None
+
+        # If it was specified as entirely valid in the yaml, we can continue to check
+        # other aspects, but we'll still emit a warning
+        if definition.get("entirely_invalid", False):
+            logger.warning(
+                f"Observation {path.parent.name} is marked as invalid -- "
+                f"proceed with caution! Reason: '{definition['entirely_invalid']}'"
+            )
+
+        match = cls.file_pattern.search(name)
 
         if match is None:
             logger.error(
@@ -1334,71 +1443,73 @@ class CalibrationObservation(_DataContainer):
 
             if fix:
 
-                bad_pattern = (
+                bad_pattern = re.compile(
                     r"^Receiver(\d{1,2})_(\d{4})_(\d{1,2})_(\d{1,2})_(\d{2,3})_to_(\d{"
                     r"2,3})MHz/(?P<temp>\d{2})C$"
                 )
 
-                match = re.search(bad_pattern, name)
+                match = bad_pattern.search(name)
 
                 if match is None:
-                    bad_pattern = (
-                        r"Receiver(?P<rcv_num>\d{2})_(?P<year>\d{4})_(?P<month>\d{2})_(?P<day>\d{2})_("
-                        r"?P<freq_low>\d{3})_to_(?P<freq_hi>\d{3})_MHz/(?P<temp>\d{2})C$"
+                    bad_pattern = re.compile(
+                        r"Receiver(?P<rcv_num>\d{2})_(?P<year>\d{4})_(?P<month>\d{2})_"
+                        r"(?P<day>\d{2})_(?P<freq_low>\d{3})"
+                        r"_to_(?P<freq_hi>\d{3})_MHz/(?P<temp>\d{2})C$"
                     )
-                    match = re.search(bad_pattern, name)
+                    match = bad_pattern.search(name)
 
                 if match is not None:
-                    newname = "Receiver{:0>2}_{}_{:0>2}_{:0>2}_{:0>3}_to_{:0>3}MHz/{}C".format(
+                    new_name = "Receiver{:0>2}_{}_{:0>2}_{:0>2}_{:0>3}_to_{:0>3}MHz/{}C".format(
                         *match.groups()
                     )
                     shutil.move(
                         os.path.normpath(os.path.dirname(path)),
-                        os.path.join(base, os.path.dirname(newname)),
+                        os.path.join(base, os.path.dirname(new_name)),
                     )
 
                     # # If top-level directory is now empty, remove it.
                     # if not glob.glob(os.path.join(os.path.dirname(os.path.normpath(path))), "*"):
                     #     os.rmdir(os.path.dirname(os.path.normpath(path)))
 
-                    name = newname
-                    path = os.path.join(base, name)
-                    logger.success("Successfully renamed to {}".format(newname))
+                    name = new_name
+                    path = base / name
+                    logger.success(f"Successfully renamed to {new_name}")
                 else:
                     logger.warning("Failed to fix the name scheme")
 
         if match is not None:
             groups = match.groupdict()
             if int(groups["rcv_num"]) < 1:
-                logger.error("Unknown receiver number: {}".format(groups["rcv_num"]))
+                logger.error(f"Unknown receiver number: {groups['rcv_num']}")
             if not (2010 <= int(groups["year"]) <= 2030):
-                logger.error("Unknown year: {}".format(groups["year"]))
+                logger.error(f"Unknown year: {groups['year']}")
             if not (1 <= int(groups["month"]) <= 12):
-                logger.error("Unknown month: {}".format(groups["month"]))
+                logger.error(f"Unknown month: {groups['month']}")
             if not (1 <= int(groups["day"]) <= 31):
-                logger.error("Unknown day: {}".format(groups["day"]))
+                logger.error(f"Unknown day: {groups['day']}")
             if not (1 <= int(groups["freq_low"]) <= 300):
-                logger.error("Low frequency is weird: {}".format(groups["freq_low"]))
+                logger.error(f"Low frequency is weird: {groups['freq_low']}")
             if not (1 <= int(groups["freq_hi"]) <= 300):
-                logger.error("High frequency is weird: {}".format(groups["freq_hi"]))
-            if not (int(groups["freq_low"]) < int(groups["freq_hi"])):
+                logger.error(f"High frequency is weird: {groups['freq_hi']}")
+            if not int(groups["freq_low"]) < int(groups["freq_hi"]):
                 logger.error(
-                    "Low frequency > High Frequency: {} > {}".format(
-                        groups["freq_low"], groups["freq_hi"]
-                    )
+                    f"Low frequency > High Frequency: {groups['freq_low']} > {groups['freq_hi']}"
                 )
 
-            logger.info("Calibration Observation Metadata: {}".format(groups))
+            logger.info("Calibration Observation Metadata:")
+            for k, v in groups.items():
+                logger.info(f"\t{k}: {v}")
 
-        logger.debug("\tReturning path={}".format(path))
+        logger.debug(f"\tReturning path={path}")
 
         return path, match
 
     @classmethod
-    def _check_all_files_there(cls, path):
+    def _check_all_files_there(cls, path: Path, definition: [None, dict] = None):
+        definition = definition or {}
         for folder in ["S11", "Spectra", "Resistance"]:
-            if not os.path.exists(os.path.join(path, folder)):
-                logger.error("No {} folder in observation!".format(folder))
+            if not (path / folder).exists():
+                logger.error(f"No {folder} folder in observation!")
 
     @classmethod
     def _check_file_consistency(cls, path):
@@ -1432,6 +1543,106 @@ class CalibrationObservation(_DataContainer):
         return set(names)
 
     def read_all(self):
-        """Read all spectra and resistance files."""
+        """Read all spectra and resistance files. Usually a bad idea."""
         self.spectra.read_all()
         self.resistance.read_all()
+
+    @classmethod
+    def get_base_files(cls, path: Path) -> List[Path]:
+        """Get a list of valid files in this observation.
+
+        Takes into account the definition.yaml if it exists.
+        """
+        definition = cls.check_definition(path)
+
+        invalid = []
+        for pattern in definition.get("invalid", []):
+            invalid.extend(path.glob(pattern))
+
+        # We'll get everything in this subtree, except those marked invalid.
+        files = utils.get_file_list(
+            path, filter=lambda x: x.suffix not in [".invalid", ".old"], ignore=invalid
+        )
+
+        return files
+
+    @classmethod
+    def compile_obs_from_def(cls, path: Path) -> Path:
+        """Makes a temporary symlink folder containing pointers to relevant files built
+        from a definition.yaml"""
+        definition = cls.check_definition(path)
+
+        files = cls.get_base_files(path)
+        file_parts = {fl: cls.match_path(fl.relative_to(path)) for fl in files}
+
+        # Now include files from other observations if they don't already exist.
+        root_obs = Path(definition.get("root_obs_dir", path.parents[1]))
+
+        def _include_extra(roots, prefer):
+            for inc_path in roots:
+                # Get all non-invalid files in the other observation.
+                inc_path = inc_path if inc_path.is_absolute() else root_obs / inc_path
+                inc_files = cls.get_base_files(inc_path)
+
+                # Get the defining classes for each file
+                inc_file_parts = {
+                    fl: cls.match_path(fl.relative_to(path)) for fl in inc_files
+                }
+
+                # Check if the defining classes are the same as any already in there.
+                for inc_fl, kinds in inc_file_parts.items():
+                    if prefer or (
+                        not prefer and not any(kinds == k for k in file_parts.values())
+                    ):
+                        if prefer:
+                            # First delete the thing that's already there
+                            for k, v in file_parts.items():
+                                if v == kinds:
+                                    del file_parts[k]
+                                    files.remove(k)
+
+                        files.append(inc_fl)
+                        file_parts[inc_fl] = kinds
+
+        include = [Path(x) for x in definition.get("include", [])]
+        prefer = [Path(x) for x in definition.get("prefer", [])]
+        _include_extra(include, prefer=False)
+        _include_extra(prefer, prefer=True)
+
+        # Now make a full symlink directory with these files.
+        symdir = tempfile.TemporaryDirectory()
+
+        for fl in files:
+            (Path(symdir.name) / fl.relative_to(path)).symlink_to(fl)
+
+        return Path(symdir.name)
+
+    @classmethod
+    def match_path(cls, path: Path) -> Set:
+        """Give a path relative to the root, determine its describing class."""
+        things_to_check = (
+            Spectrum,
+            Resistance,
+            Spectra,
+            Resistances,
+            S1P,
+            LoadS11,
+            AntSimS11,
+            SwitchingState,
+            ReceiverReading,
+            S11Dir,
+            CalibrationObservation,
+        )
+
+        parts = set()
+        for part in path.parts:
+            for thing in things_to_check:
+                pth, match = thing.check_self(part, fix=False)
+                if match:
+                    parts.add(thing(pth))
+            else:
+                raise ValueError(
+                    f"path {path} does not seem to point to a known kind of object."
+                )
+
+        return parts
