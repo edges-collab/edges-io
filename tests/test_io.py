@@ -22,13 +22,13 @@ LOGGING = logging.getLogger("edges-io")
 
 
 @pytest.fixture("module")
-def create_testdir(tmp_path_factory):
-    testDir = create_test_env(tmp_path_factory)
+def test_dir(tmp_path_factory):
+    testDir = test_env(tmp_path_factory)
     return testDir
 
 
 @pytest.fixture("module")
-def create_test_env(tmp_path_factory):
+def test_env(tmp_path_factory):
     # Create an ideal observation file using tmp_path_factory
     pthList = ["Spectra", "Resistance", "S11"]
     s11List = [
@@ -42,17 +42,17 @@ def create_test_env(tmp_path_factory):
         "SwitchingState01",
         "SwitchingState02",
     ]
-    a = tmp_path_factory.mktemp("Test_Obs")
-    b = a / "Receiver01_2020_01_01_010_to_200MHz"
-    b.mkdir()
-    d = b / "25C"
-    d.mkdir()
-    note = d / "Notes.txt"
+    root_dir = tmp_path_factory.mktemp("Test_Obs")
+    obs_dir = root_dir / "Receiver01_2020_01_01_010_to_200MHz"
+    obs_dir.mkdir()
+    temp_dir = obs_dir / "25C"
+    temp_dir.mkdir()
+    note = temp_dir / "Notes.txt"
     note.touch()
     dlist = []
     slist = []
     for i, p in enumerate(pthList):
-        dlist.append(d / p)
+        dlist.append(temp_dir / p)
         dlist[i].mkdir()
         if p == "Spectra":
             print("Making Spectra files")
@@ -117,7 +117,7 @@ def create_test_env(tmp_path_factory):
                         "# Hz S RI R 50\n40000000        0.239144887761343       0.934085904901478\n40000000        0.239144887761343       0.934085904901478"
                     )
 
-    return b
+    return obs_dir
 
 
 # function to make observation object
@@ -127,19 +127,15 @@ def new_testObs(testdir):
 
 
 ### directory testing
-def test_make_good_Obs(create_test_env, caplog):
+def test_make_good_Obs(test_env, caplog):
     # test that correct layouts pass (make an obs)
-    testDir = create_test_env
-    try:
-        new_testObs(testDir)
-    except Exception:
-        # expand to say why?
-        print("Test Observation failed to be created properly")
+    testDir = test_env
+    new_testObs(testDir)
 
 
-def test_bad_dirname_Obs(create_test_env, caplog):
+def test_bad_dirname_Obs(test_env, caplog):
     # test that incorrect directories fail
-    testDir = create_test_env
+    testDir = test_env
     base = testDir.parent
     wrongDir = base / "Receiver_2020_01_01_010_to_200MHz"
     testDir.rename(wrongDir)
