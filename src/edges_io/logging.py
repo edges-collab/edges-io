@@ -74,15 +74,18 @@ class ColoredLogger(logging.Logger):
         return
 
     def structure(self, msg, *args, **kwargs):
-        self._log(logging.STRUCTURE, msg, args, **kwargs)
+        if self.isEnabledFor(logging.STRUCTURE):
+            self._log(logging.STRUCTURE, msg, args, **kwargs)
 
     def success(self, msg, *args, **kwargs):
         self.errored -= 1
-        self._log(logging.SUCCESS, msg, args, **kwargs)
+        if self.isEnabledFor(logging.SUCCESS):
+            self._log(logging.SUCCESS, msg, args, **kwargs)
 
     def error(self, msg, *args, **kwargs):
         self.errored += 1
-        self._log(logging.ERROR, msg, args, **kwargs)
+        if self.isEnabledFor(logging.ERROR):
+            self._log(logging.ERROR, msg, args, **kwargs)
 
 
 logging.setLoggerClass(ColoredLogger)
