@@ -1,24 +1,22 @@
 import datetime
-import glob
 import os
 import shutil
 from pathlib import Path
+from typing import List
 
 
-def get_active_files(path):
-    if not os.path.isdir(path):
-        raise ValueError("{} is not a directory!".format(path))
-    fls = glob.glob(os.path.join(path, "*"))
+def get_active_files(path: [str, Path]) -> List[Path]:
+    path = Path(path)
+    if not path.is_dir():
+        raise ValueError(f"{path} is not a directory!")
+    fls = path.glob("*")
     ok_extra_files = ["Notes.txt", "calibration_analysis.ipynb", "derived"]
 
     return [
         fl
         for fl in fls
-        if not fl.endswith(".old")
-        and os.path.basename(fl) != "Notes.txt"
-        and not fl.endswith(".ignore")
-        and not fl.endswith(".invalid")
-        and os.path.basename(fl) not in ok_extra_files
+        if fl.suffix not in (".old", ".ignore", ".invalid")
+        and fl.name not in ok_extra_files
     ]
 
 

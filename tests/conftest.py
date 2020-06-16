@@ -1,11 +1,5 @@
 # -*- coding: utf-8 -*-
-"""
-    Dummy conftest.py for edges_io.
-
-    If you don't know what this is for, just leave it empty.
-    Read more about conftest.py under:
-    https://pytest.org/latest/plugins.html
-"""
+from pathlib import Path
 
 import pytest
 
@@ -76,3 +70,8 @@ def fastspec_spectrum_fl(tmpdir):
 
     spectrum.write(flname)
     return flname
+
+
+@pytest.fixture(scope="session")
+def datadir() -> Path:
+    return Path(__file__).parent / "test_data"
