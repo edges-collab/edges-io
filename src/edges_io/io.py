@@ -672,9 +672,7 @@ class Resistance(_SpectrumOrResistance):
 
     @classmethod
     def read_old_style_csv(cls, path):
-        # Get number of comment rows
-        def float_from_kohm(x):
-            return float(x.decode("utf-8").split(" ")[0])  # Remove KOhm
+        # Weirdly, some old-style files use KOhm, and some just use Ohm.
 
         # These files have bad encoding, which we can ignore. This means we have to
         # read in the whole thing as text first (while ignoring errors) and construct
@@ -686,10 +684,21 @@ class Resistance(_SpectrumOrResistance):
             # Get the total number of actual lines
             nlines = int(fl.readline().split(",")[4])
 
+            # The last line can be only half there, so omit it
+            nlines -= 1
+
             while not fl.readline().startswith("Reading,"):
                 continue
 
             s = StringIO("".join([next(fl) for i in range(nlines)]))
+
+            # Determine whether the file is in KOhm
+            kohm = "KOhm" in s.readline()
+            s.seek(0)
+
+            def float_from_kohm(x):
+                y = float(x.decode("utf-8").split(" ")[0])
+                return y * 1000 if kohm else y
 
             data = np.genfromtxt(
                 s,
@@ -697,16 +706,16 @@ class Resistance(_SpectrumOrResistance):
                 dtype=np.dtype(
                     [
                         ("reading_num", np.int),
-                        ("load_resistance", np.float),
+                        ("sample_resistance", np.float),
                         ("start_time", "S20"),
                         ("duration", "S9"),
                         ("max_time", "S20"),
                         ("max_resistance", np.float),
-                        ("avg_resistance", np.float),
+                        ("load_resistance", np.float),
                         ("min_time", "S20"),
                         ("min_resistance", np.float),
                         ("description", "S20"),
-                        ("end_time", "S20"),
+                        ("end_time", "S22"),
                     ]
                 ),
                 converters={
