@@ -1700,7 +1700,10 @@ class CalibrationObservation(_DataContainer):
 
         files = {fl.relative_to(path.parents[1]): fl for fl in cls.get_base_files(path)}
 
-        file_parts = {fl: cls.match_path(fl, root=path.parents[1]) for fl in files}
+        file_parts = {
+            fl.relative_to(obs_name): cls.match_path(fl, root=path.parents[1])
+            for fl in files
+        }
         # Actually need files to *not* have the top-level name
         files = {fl.relative_to(obs_name): fl_abs for fl, fl_abs in files.items()}
 
@@ -1716,7 +1719,7 @@ class CalibrationObservation(_DataContainer):
                     this_root_obs = root_obs
                     inc_path = this_root_obs / inc_path
 
-                obs_name = inc_path.relative_to(this_root_obs).parts[0]
+                this_obs_name = inc_path.relative_to(this_root_obs).parts[0]
 
                 # Get all non-invalid files in the other observation.
                 inc_files = cls.get_base_files(inc_path)
@@ -1735,15 +1738,15 @@ class CalibrationObservation(_DataContainer):
                     if prefer or not any(kinds == k for k in file_parts.values()):
                         if prefer:
                             # First delete the thing that's already there
-                            for k, v in file_parts.items():
+                            for k, v in list(file_parts.items()):
                                 if v == kinds:
                                     del file_parts[k]
                                     del files[k]
 
                         files[
-                            inc_fl.relative_to(this_root_obs).relative_to(obs_name)
+                            inc_fl.relative_to(this_root_obs / this_obs_name)
                         ] = inc_fl
-                        new_file_parts[inc_fl] = kinds
+                        new_file_parts[inc_fl.relative_to(this_root_obs)] = kinds
 
                 # Updating the file parts after the full loop means that we can add
                 # multiple files of the same kind (eg. with different run_num) from a
