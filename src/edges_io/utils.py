@@ -88,6 +88,14 @@ class FileStructureError(Exception):
     pass
 
 
+class IncompleteObservation(FileStructureError):
+    pass
+
+
+class InconsistentObservation(FileStructureError):
+    pass
+
+
 def get_file_list(top_level: Path, filter=None, ignore=None):
     ignore = ignore or []
 

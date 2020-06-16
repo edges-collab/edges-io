@@ -12,9 +12,10 @@ import shutil
 import tempfile
 import warnings
 from abc import ABC, abstractmethod
+from datetime import datetime
 from io import StringIO
 from pathlib import Path
-from typing import Iterable, List, Set, Tuple, Union
+from typing import Iterable, List, Tuple, Union
 
 import numpy as np
 import read_acq
@@ -90,8 +91,14 @@ class _DataContainer(ABC):
     def __init__(self, path, fix=False):
         logger.errored = 0
         self.path, match = self.check_self(path, fix)
+        self.path = Path(self.path)
 
-        contents_ok = self.check_contents(self.path, fix)
+        if not self._check_contents_selves(self.path, fix):
+            raise utils.FileStructureError()
+        if not self._check_all_files_there(self.path):
+            raise utils.IncompleteObservation()
+        if not self._check_file_consistency(self.path):
+            raise utils.InconsistentObservation()
 
         try:
             self._match_dict = match.groupdict()
@@ -102,10 +109,6 @@ class _DataContainer(ABC):
                 self._match_dict = match
         except Exception:
             raise
-
-        # For a container, if the checks failed, then we ought to bow out now
-        if not contents_ok:
-            raise utils.FileStructureError()
 
     @classmethod
     @abstractmethod
@@ -143,16 +146,14 @@ class _DataContainer(ABC):
          the correct format for the DB"""
         # Check that everything that *is* there has correct format.
         path = Path(path)
-        ok = cls._check_contents_selves(path, fix=fix)
-        ok &= cls._check_all_files_there(
-            path
-        )  # Check that all necessary files are there.
+        ok_selves = cls._check_contents_selves(path, fix=fix)
+        ok_complete = cls._check_all_files_there(path)
         # Check that the files that are there have consistent properties, and are also
         # consistent with outside parameters (eg. if year appears on them, they should
         # be consistent with outer years).
-        ok &= cls._check_file_consistency(path)
+        ok_consistent = cls._check_file_consistency(path)
 
-        return ok
+        return ok_selves and ok_complete and ok_consistent
 
     @classmethod
     @abstractmethod
@@ -1392,6 +1393,7 @@ class CalibrationObservation(_DataContainer):
         run_num=None,
         repeat_num=None,
         fix=False,
+        include_previous=True,
     ):
         """
         A class defining a full calibration observation, with all Spectra, Resistance
@@ -1412,7 +1414,9 @@ class CalibrationObservation(_DataContainer):
                 f"proceed with caution! Reason: '{self.definition['entirely_invalid']}'"
             )
 
-        self._tmpdir, name = self.compile_obs_from_def(path, f"{ambient_temp}C")
+        self._tmpdir, name = self.compile_obs_from_def(
+            path, f"{ambient_temp}C", include_previous
+        )
 
         path = Path(self._tmpdir.name) / name / f"{ambient_temp}C"
 
@@ -1582,6 +1586,23 @@ class CalibrationObservation(_DataContainer):
         return path, match
 
     @classmethod
+    def path_to_datetime(cls, path: [str, Path]):
+        pre_level = logger.getEffectiveLevel()
+        logger.setLevel(39)
+        try:
+            path, match = cls.check_self(path, fix=False)
+        except Exception as e:
+            raise (e)
+        finally:
+            logger.setLevel(pre_level)
+
+        if match:
+            grp = match.groupdict()
+            return datetime(int(grp["year"]), int(grp["month"]), int(grp["day"]))
+        else:
+            raise utils.FileStructureError("The path is not valid for an Observation.")
+
+    @classmethod
     def _check_all_files_there(cls, path: Path) -> bool:
         ok = True
         for folder in ["S11", "Spectra", "Resistance"]:
@@ -1652,7 +1673,7 @@ class CalibrationObservation(_DataContainer):
 
     @classmethod
     def compile_obs_from_def(
-        cls, path: Path, ambient_temp="25C"
+        cls, path: Path, ambient_temp="25C", include_previous=True
     ) -> [tempfile.TemporaryDirectory, str]:
         """Make a tempdir containing pointers to relevant files built from a definition.
 
@@ -1666,9 +1687,13 @@ class CalibrationObservation(_DataContainer):
         path : Path
             The path (absolute or relative to current directory) to the observation (not
             the definition file).
-        ambient_temp : str
+        ambient_temp : str, optional
             Either '15C', '25C' or '35C'. Actual measurements will be found in a folder
             of this name under ``path``.
+        include_previous : bool, optional
+            Whether to by default "include" the previous observation (if any can be
+            found). This means that observation will be used to supplement this one if
+            this is incomplete.
 
         Returns
         -------
@@ -1753,7 +1778,19 @@ class CalibrationObservation(_DataContainer):
                 # single observation, but only if they didn't exist in a previous obs.
                 file_parts.update(new_file_parts)
 
-        include = [Path(x) for x in definition.get("include", [])]
+        default_includes = []
+        if include_previous:
+            # Look for a previous definition in the root observation directory.
+            potential_obs = root_obs.glob(obs_name.split("_")[0] + "_*")
+            potential_obs = sorted(
+                str(p.name) for p in list(potential_obs) + [path.parent]
+            )
+            if len(potential_obs) > 1:
+                indx = potential_obs.index(obs_name) - 1
+                if indx >= 0:
+                    default_includes.append(potential_obs[indx])
+
+        include = [Path(x) for x in definition.get("include", default_includes)]
         prefer = [Path(x) for x in definition.get("prefer", [])]
         _include_extra(include, prefer=False)
         _include_extra(prefer, prefer=True)
