@@ -93,6 +93,26 @@ See how ``edges-io`` is used in
 `edges-cal <https://github.com/edges-collab/cal_coefficients/tree/master/src/edges_cal/cal_coefficients.py>`_
 for a more involved example.
 
+As of v0.4.0, ``CalibrationObservation`` objects no longer need to be defined fully by
+one directory containing all measurements. While that is still an option (and the easiest
+way to define a calibration observation), they can also be defined in a more sophisticated
+way internally or externally.
+
+Internally, a ``definition.yaml`` file is allowed which defines properties of the
+observation, and also has ``include`` and ``prefer`` keywords which are used to supplement
+or override any particular parts of the observation. For example ``include`` could point
+to the top-level of any other observation, which could then be used whenever the
+main observation lacks data. If this file exists, by default it is used to construct
+the full observation virtually. See an incomplete example of such a definition file can
+be found `here <example-obs-definition.yaml>`_.
+
+
+Externally, a different file format is used to explicitly define every single measurement
+file in an observation. This is supposed to be exhaustive and complete to make it
+unambiguous. An example can be found in the `test-suite <tests/test_data/observation.yaml>`_.
+One can use such a file to create a ``CalibrationObservation`` by using the
+``CalibrationObservation.from_observation_yaml()`` function.
+
 Using the ``HDF5Object``
 ------------------------
 ``edges-io`` contains a convenient ``HDF5Object`` class whose purpose is to make working
