@@ -68,7 +68,7 @@ class _DataFile(ABC):
 
     @staticmethod
     @abstractmethod
-    def check_self(path, fix=False) -> Tuple[Path, Union[re.Match, dict, Iterable]]:
+    def check_self(path, fix=False) -> Tuple[Path, Union[dict, Iterable]]:
         pass
 
     @classmethod
