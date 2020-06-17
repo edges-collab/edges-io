@@ -123,7 +123,7 @@ class _DataContainer(ABC):
     @abstractmethod
     def check_self(
         cls, path: Path, fix: bool = False
-    ) -> Tuple[Path, Union[re.Match, dict, Iterable]]:
+    ) -> Tuple[Path, Union[dict, Iterable]]:
         """
         Check whether the path itself is formatted correctly.
 
