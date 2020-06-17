@@ -110,3 +110,7 @@ def get_file_list(top_level: Path, filter=None, ignore=None):
         elif pth.is_dir():
             out.extend(get_file_list(pth, filter=filter, ignore=ignore))
     return out
+
+
+def snake_to_camel(word: str):
+    return "".join(w.capitalize() for w in word.split("_"))

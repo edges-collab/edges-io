@@ -48,8 +48,13 @@ ANTSIM_REVERSE = {
 
 
 class _DataFile(ABC):
-    def __init__(self, path, fix=False):
+    def __init__(self, path, fix=False, log_level=40):
+        pre_level = logger.getEffectiveLevel()
+        logger.setLevel(log_level)
+
         self.path, match = self.check_self(path)
+
+        logger.setLevel(pre_level)
 
         try:
             self._match_dict = match.groupdict()
@@ -88,8 +93,10 @@ class _DataFile(ABC):
 class _DataContainer(ABC):
     _content_type = None
 
-    def __init__(self, path, fix=False):
-        logger.errored = 0
+    def __init__(self, path, fix=False, log_level=40):
+        pre_level = logger.getEffectiveLevel()
+        logger.setLevel(log_level)
+
         self.path, match = self.check_self(path, fix)
         self.path = Path(self.path)
 
@@ -99,6 +106,8 @@ class _DataContainer(ABC):
             raise utils.IncompleteObservation()
         if not self._check_file_consistency(self.path):
             raise utils.InconsistentObservation()
+
+        logger.setLevel(pre_level)
 
         try:
             self._match_dict = match.groupdict()
@@ -1389,15 +1398,53 @@ class CalibrationObservation(_DataContainer):
     def __init__(
         self,
         path: [str, Path],
-        ambient_temp=25,
-        run_num=None,
-        repeat_num=None,
-        fix=False,
-        include_previous=True,
+        ambient_temp: int = 25,
+        run_num: [int, dict, None] = None,
+        repeat_num: [int, None] = None,
+        fix: bool = False,
+        include_previous: bool = True,
+        compile_from_def: bool = True,
+        log_level=40,
     ):
         """
-        A class defining a full calibration observation, with all Spectra, Resistance
-        and S11 files necessary to do a single analysis.
+        A full set of data required to calibrate field observations.
+
+        Incorporates several lower-level objects, such as :class:`Spectrum`,
+        :class:`Resistance` and :class:`S1P` in a seamless way.
+
+        Parameters
+        ----------
+        path : str or Path
+            The path (absolute or relative to current directory) to the top level
+            directory of the observation. This should look something like
+            ``Receiver01_2020_01_01_040_to_200MHz/``.
+        ambient_temp : int, {15, 25, 35}
+            The ambient temperature of the lab measurements.
+        run_num : int or dict, optional
+            If an integer, the run number to use for all measurements. If None, by default
+            uses the last run for each measurement. If a dict, it should specify the
+            run number for each applicable measurement.
+        repeat_num : int or dict, optional
+            If an integer, the repeat number to use for all measurements. If None, by default
+            uses the last run for each measurement. If a dict, it should specify the
+            repeat number for each applicable measurement.
+        fix : bool, optional
+            Whether to attempt fixing filenames and the file structure in the observation
+            for simple known error cases. Typically it is better to explicitly call
+            :method:`check_self` and :method:`check_contents` if you want to perform
+            fixes.
+        include_previous : bool, optional
+            Whether to by default include the previous observation in the same directory
+            to supplement the current one if parts are missing.
+        compile_from_def : bool, optional
+            Whether to attempt compiling a virtual observation from a ``definition.yaml``
+            inside the observation directory. This is the default behaviour, but can
+            be turned off to enforce that the current directory should be used directly.
+        log_level : int, optional
+            The file-structure checks can print out a lot of information, which is useful
+            when explicitly performing such checks, but typically not desired when one
+            simply wants to instantiate the object. Default is to only print errors. Set
+            it lower to also print other information.
         """
         if ambient_temp not in [15, 25, 35]:
             raise ValueError("ambient temp must be one of 15, 25, 35!")
@@ -1414,11 +1461,14 @@ class CalibrationObservation(_DataContainer):
                 f"proceed with caution! Reason: '{self.definition['entirely_invalid']}'"
             )
 
-        self._tmpdir, name = self.compile_obs_from_def(
-            path, f"{ambient_temp}C", include_previous
-        )
+        if compile_from_def:
+            self._tmpdir, name = self.compile_obs_from_def(
+                path, f"{ambient_temp}C", include_previous
+            )
 
-        path = Path(self._tmpdir.name) / name / f"{ambient_temp}C"
+            path = Path(self._tmpdir.name) / name / f"{ambient_temp}C"
+        else:
+            path = Path(path) / f"{ambient_temp}C"
 
         super().__init__(path, fix)
 
@@ -1450,6 +1500,138 @@ class CalibrationObservation(_DataContainer):
         )
 
         self.simulator_names = self.get_simulator_names(self.path)
+
+    @classmethod
+    def from_observation_yaml(cls, obs_yaml: [str, Path]):
+        """Create a CalibrationObservation from a specific YAML format."""
+        obs_yaml = Path(obs_yaml)
+        assert obs_yaml.exists(), f"{obs_yaml} does not exist!"
+
+        with open(obs_yaml, "r") as fl:
+            obs_yaml_data = yaml.load(fl, Loader=yaml.FullLoader)
+
+        root = obs_yaml_data["root"]
+        root = obs_yaml.parent.absolute() if not root else Path(root).absolute()
+        assert (
+            root.exists()
+        ), f"The root {root} specified in the observation does not exist."
+
+        files = obs_yaml_data["files"]
+        meta = obs_yaml_data["meta"]
+        cls._check_yaml_files(files, root)
+
+        tmpdir = tempfile.TemporaryDirectory()
+
+        sympath = (
+            Path(tmpdir.name)
+            / f"Receiver{meta['receiver']:02d}_{meta['year']}_{meta['month']:02d}_{meta['day']:02d}_040_to_200MHz/25C"
+        )
+        sympath.mkdir(parents=True)
+
+        # Make top-level directories
+        spec = sympath / "Spectra"
+        s11 = sympath / "S11"
+        res = sympath / "Resistance"
+        spec.mkdir()
+        s11.mkdir()
+        res.mkdir()
+
+        # Link all Spectra and Resistance files.
+        for key, thing in zip(["spectra", "resistance"], [spec, res]):
+            for kind, kind_files in files[key].items():
+                these_files = sum((list(root.glob(fl)) for fl in kind_files), [])
+                for fl in these_files:
+                    (thing / fl.name).symlink_to(root / fl)
+
+        kind_map = {
+            "ambient": "Ambient",
+            "hot_load": "HotLoad",
+            "open": "LongCableOpen",
+            "short": "LongCableShorted",
+            "receiver": "ReceiverReading01",
+            "switch": "SwitchingState01",
+        }
+
+        # Symlink the S11 files.
+        for key, val in files["s11"].items():
+            direc = s11 / kind_map.get(key, utils.snake_to_camel(key))
+            direc.mkdir()
+
+            for key2, val2 in val.items():
+                if key2 == "receiver":
+                    key2 = "receiver_reading"
+
+                filename = utils.snake_to_camel(key2) + "01.s1p"
+                (direc / filename).symlink_to(root / val2)
+
+        # To keep the temporary directory from being cleaned up, store it on the class.
+        cls._tmpdir = tmpdir
+
+        return cls(
+            sympath.parent,
+            ambient_temp=25,
+            run_num=1,
+            repeat_num=1,
+            fix=False,
+            include_previous=False,
+            compile_from_def=False,
+        )
+
+    @classmethod
+    def _check_yaml_files(cls, files: dict, root: Path):
+        """Check goodness of 'files' key in an observation yaml."""
+        for key in ["spectra", "resistance", "s11"]:
+            assert key in files, f"{key} must be in observation YAML 'files'"
+            for key2 in ["open", "short", "hot_load", "ambient"]:
+                assert (
+                    key2 in files[key]
+                ), f"{key2} must be in observation YAML 'files.{key}'"
+
+                if key == "s11":
+                    for key3 in ["open", "short", "match", "external"]:
+                        assert (
+                            key3 in files[key][key2]
+                        ), f"{key3} must be in observation YAML 'files.{key}.{key2}'"
+                else:
+                    for fl in files[key][key2]:
+                        assert (
+                            len(list(root.glob(fl))) > 0
+                        ), f"File '{fl}' included at files.{key}.{key2} does not exist or match any glob patterns."
+
+            if key == "s11":
+                for key2 in ["receiver", "switch"]:
+                    assert (
+                        key2 in files[key]
+                    ), f"{key2} must be in observation YAML 'files.{key}'. Available: {list(files[key].keys())}"
+
+                    for key3 in ["match", "open", "short"]:
+                        assert (
+                            key3 in files[key][key2]
+                        ), f"{key3} must be in observation YAML 'files.{key}.{key2}'"
+                        assert (
+                            root / files[key][key2][key3]
+                        ).exists(), f"File '{files[key][key2][key3]}' included at files.{key}.{key2}.{key3} does not exist."
+
+                    if key2 == "receiver":
+                        assert (
+                            "receiver" in files[key][key2]
+                        ), f"'receiver' must be in observation YAML 'files.{key}.{key2}'"
+                        assert (
+                            root / files[key][key2]["receiver"]
+                        ).exists(), f"File {files[key][key2]['receiver']} included at files.{key}.{key2}.receiver does not exist."
+                    elif key2 == "switch":
+                        for key3 in [
+                            "external_match",
+                            "external_open",
+                            "external_short",
+                        ]:
+                            assert (
+                                key3 in files[key][key2]
+                            ), f"{key3} must be in observation YAML 'files.{key}.{key2}'"
+                            assert (root / files[key][key2][key3]).exists(), (
+                                f"File '{files[key][key2][key3]}' included at "
+                                f"files.{key}.{key2}.{key3} does not exist."
+                            )
 
     @classmethod
     def check_definition(cls, path: Path) -> dict:
@@ -1519,7 +1701,7 @@ class CalibrationObservation(_DataContainer):
 
         if match is None:
             logger.error(
-                "Calibration Observation directory name is in the wrong format!"
+                f"Calibration Observation directory name is in the wrong format! Got {name}"
             )
 
             if fix:

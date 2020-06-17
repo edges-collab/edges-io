@@ -2,6 +2,19 @@
 Changelog
 =========
 
+v0.4.0
+======
+Added
+-----
+* ``observation.yaml`` file for explicitly defining a full calibration observation.
+* ``definition.yaml`` file for internally defining metadata of an observation, with the
+  ability to include other observations to supplement/override it.
+
+Changed
+-------
+* Default behaviour when instantiating ``CalibrationObservation`` is now to not print
+  out structure and info logs, only errors.
+
 v0.3.0
 ======
 Added

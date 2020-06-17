@@ -77,3 +77,15 @@ def test_default_include(datadir: Path):
     assert "Receiver01_2019_11_26_040_to_200MHz" in str(
         (calobs.path / "S11/AntSim3/External01.s1p").resolve()
     )
+
+
+def test_external_observation(datadir: Path):
+    calobs = CalibrationObservation.from_observation_yaml(datadir / "observation.yaml")
+
+    assert "Receiver01_2019_11_26_040_to_200MHz" in str(
+        (calobs.path / "S11/HotLoad/External01.s1p").resolve()
+    )
+
+    assert "Receiver01_2020_11_26_040_to_200MHz" in str(
+        (calobs.path / "S11/SwitchingState01/ExternalMatch01.s1p").resolve()
+    )
