@@ -92,11 +92,16 @@ class HDF5Object:
             if k not in grp and k != "attrs" and v != "optional":
                 raise TypeError(f"Non-optional key '{k}' not in {grp}")
             elif k == "attrs":
-                cls._checkgrp(grp.attrs, v)
+                if isinstance(grp, (h5py.Group, h5py.File)):
+                    cls._checkgrp(grp.attrs, v)
+                else:
+                    cls._checkgrp(grp[k], v)
             elif isinstance(v, dict):
                 cls._checkgrp(grp[k], v)
             elif v is not None and not v(grp[k]):
-                raise HDF5StructureError(f"key {k} in {grp} failed its validation")
+                raise HDF5StructureError(
+                    f"key {k} in {grp} failed its validation. Type: {type(grp[k])}"
+                )
 
         # Ensure there's no extra keys in the group
         if len(strc) < len(grp.keys()):
@@ -354,22 +359,22 @@ class HDF5RawSpectrum(HDF5Object):
     _structure = {
         "meta": {
             "fastspec_version": lambda x: isinstance(x, str),
-            "start": lambda x: isinstance(x, np.int64),
-            "stop": lambda x: isinstance(x, np.int64),
+            "start": lambda x: isinstance(x, (int, np.int64)),
+            "stop": lambda x: isinstance(x, (int, np.int64)),
             "site": lambda x: isinstance(x, str),
             "instrument": lambda x: isinstance(x, str),
-            "switch_io_port": lambda x: isinstance(x, np.int64),
+            "switch_io_port": lambda x: isinstance(x, (int, np.int64)),
             "switch_delay": lambda x: isinstance(x, np.float),
-            "input_channel": lambda x: isinstance(x, np.int64),
-            "voltage_range": lambda x: isinstance(x, np.int64),
-            "samples_per_accumulation": lambda x: isinstance(x, np.int64),
-            "acquisition_rate": lambda x: isinstance(x, np.int64),
-            "num_channels": lambda x: isinstance(x, np.int64),
-            "num_taps": lambda x: isinstance(x, np.int64),
-            "window_function_id": lambda x: isinstance(x, np.int64),
-            "num_fft_threads": lambda x: isinstance(x, np.int64),
-            "num_fft_buffers": lambda x: isinstance(x, np.int64),
-            "stop_cycles": lambda x: isinstance(x, np.int64),
+            "input_channel": lambda x: isinstance(x, (int, np.int64)),
+            "voltage_range": lambda x: isinstance(x, (int, np.int64)),
+            "samples_per_accumulation": lambda x: isinstance(x, (int, np.int64)),
+            "acquisition_rate": lambda x: isinstance(x, (int, np.int64)),
+            "num_channels": lambda x: isinstance(x, (int, np.int64)),
+            "num_taps": lambda x: isinstance(x, (int, np.int64)),
+            "window_function_id": lambda x: isinstance(x, (int, np.int64)),
+            "num_fft_threads": lambda x: isinstance(x, (int, np.int64)),
+            "num_fft_buffers": lambda x: isinstance(x, (int, np.int64)),
+            "stop_cycles": lambda x: isinstance(x, (int, np.int64)),
             "stop_seconds": lambda x: isinstance(x, np.float),
             "stop_time": lambda x: isinstance(x, str),
         },
