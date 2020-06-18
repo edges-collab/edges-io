@@ -93,6 +93,47 @@ See how ``edges-io`` is used in
 `edges-cal <https://github.com/edges-collab/cal_coefficients/tree/master/src/edges_cal/cal_coefficients.py>`_
 for a more involved example.
 
+Using the ``HDF5Object``
+------------------------
+``edges-io`` contains a convenient ``HDF5Object`` class whose purpose is to make working
+with HDF5 files a bit more formal (and arguably more simple). By subclassing it, you
+can specify an exact file layout that can be verified on read, to ensure a file is
+in the correct format (not just HDF5, but that it has the correct data structures and
+groups and metadata).
+
+Using such a class is meant to provide a very thin wrapper over the file. So, for instance
+if you have a file ``my_hdf5_format_file.h5``, whose structure is defined by the class
+``CustomH5Format``, you can create an object like this::
+
+    >>> fl = CustomH5Format("my_hdf5_format_file.h5")
+
+Directly on creation, the file will be checked for compatibility and return an error
+if it contains extraneous keys, or lacks keys that it requires.
+
+Once created, the ``fl`` variable now has operations which can "look into" the file
+and load its data. It supports lazy-loading, so doing::
+
+    >>> print(fl['dataset'].max())
+
+will load the 'dataset' data, and get the maximum, but it will not keep the data in
+memory, and will not load any other datasets. If you have data in groups, you can
+easily do::
+
+    >>> print(fl['group']['dataset'].min())
+
+To load the data into the object permanently use the ``.load`` method::
+
+    >>> fl.load('group')
+
+In fact, doing this will load all data under 'group'. If you just wanted to load
+"dataset" out of "group"::
+
+    >>> fl['group'].load('dataset')
+
+An example of how to define a subclass of ``HDF5Object`` can be seen in the
+``HDF5RawSpectrum`` class, which is used to define fastspec output files.
+
+
 Note
 ====
 

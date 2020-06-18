@@ -1,32 +1,35 @@
 from os import path
+from pathlib import Path
 
 import py
 from edges_io import utils
 
 
-def test_active_files(tmpdir: py.path.local):
-    direc = tmpdir.mkdir("test_active_files")
+def test_active_files(tmpdir: Path):
+    direc = tmpdir / "test_active_files"
+    direc.mkdir()
 
-    file1 = direc.join("this.txt")
-    file2 = direc.join("that.txt")
-    file3 = direc.join("ignored.old")
-    file4 = direc.join("Notes.txt")
+    file1 = direc / "this.txt"
+    file2 = direc / "that.txt"
+    file3 = direc / "ignored.old"
+    file4 = direc / "Notes.txt"
 
-    file1.write("hey")
-    file2.write("hey")
-    file3.write("hey")
-    file4.write("hey")
+    file1.touch()
+    file2.touch()
+    file3.touch()
+    file4.touch()
 
-    fls = utils.get_active_files(direc.strpath)
+    fls = utils.get_active_files(direc)
     assert len(fls) == 2
 
 
-def test_get_parent(tmpdir: py.path.local):
-    direc = tmpdir.mkdir("test_get_parent").join("child").join("double_child")
+def test_get_parent(tmpdir: Path):
+    direc = tmpdir / "test_get_parent/child/double_child"
+    direc.mkdir(parents=True)
 
-    parent = utils.get_parent_dir(direc.strpath)
+    parent = utils.get_parent_dir(str(direc))
     assert path.basename(parent) == "child"
-    root = utils.get_parent_dir(direc.strpath, 2)
+    root = utils.get_parent_dir(str(direc), 2)
     assert path.basename(root) == "test_get_parent"
 
 
