@@ -1,13 +1,9 @@
-import configparser
 import logging
-import os
-import shutil
 
 import pytest
 
-import py
 from bidict import bidict
-from edges_io import io
+from edges_io import io, utils
 
 LOAD_ALIASES = bidict(
     {
@@ -23,8 +19,7 @@ LOGGING = logging.getLogger("edges-io")
 
 @pytest.fixture("module")
 def test_dir(tmp_path_factory):
-    testDir = test_env(tmp_path_factory)
-    return testDir
+    return test_env(tmp_path_factory)
 
 
 @pytest.fixture("module")
@@ -54,21 +49,6 @@ def test_env(tmp_path_factory):
     for i, p in enumerate(pthList):
         dlist.append(temp_dir / p)
         dlist[i].mkdir()
-        if p == "Spectra":
-            print("Making Spectra files")
-            fileList = [
-                "Ambient",
-                "AntSim3",
-                "HotLoad",
-                "LongCableOpen",
-                "LongCableShorted",
-            ]
-            for filename in fileList:
-                # print(filename)
-                name1 = filename + "_01_2020_001_01_01_01_lab.acq"
-                file1 = dlist[i] / name1
-                # print(file1)
-                file1.touch()
         if p == "Resistance":
             print("Making Resistance files")
             fileList = [
@@ -84,7 +64,7 @@ def test_env(tmp_path_factory):
                 file1 = dlist[i] / name1
                 # print(file1)
                 file1.touch()
-        if p == "S11":
+        elif p == "S11":
             print("Making S11 files")
             fileList = ["External", "Match", "Open", "Short"]
             for k, s in enumerate(s11List):
@@ -117,16 +97,30 @@ def test_env(tmp_path_factory):
                         "# Hz S RI R 50\n40000000        0.239144887761343       0.934085904901478\n40000000        0.239144887761343       0.934085904901478"
                     )
 
+        elif p == "Spectra":
+            print("Making Spectra files")
+            fileList = [
+                "Ambient",
+                "AntSim3",
+                "HotLoad",
+                "LongCableOpen",
+                "LongCableShorted",
+            ]
+            for filename in fileList:
+                # print(filename)
+                name1 = filename + "_01_2020_001_01_01_01_lab.acq"
+                file1 = dlist[i] / name1
+                # print(file1)
+                file1.touch()
     return obs_dir
 
 
 # function to make observation object
 def new_testObs(testdir):
-    testObs = io.CalibrationObservation(testdir)
-    return testObs
+    return io.CalibrationObservation(testdir)
 
 
-### directory testing
+# directory testing
 def test_make_good_Obs(test_env, caplog):
     # test that correct layouts pass (make an obs)
     testDir = test_env
@@ -139,64 +133,61 @@ def test_bad_dirname_Obs(test_env, caplog):
     base = testDir.parent
     wrongDir = base / "Receiver_2020_01_01_010_to_200MHz"
     testDir.rename(wrongDir)
-    with pytest.raises(Exception):
+    with pytest.raises(ValueError):
         new_testObs(wrongDir)
     assert "directory name is in the wrong format" in caplog.text
     # receiver number
     testDir = wrongDir
     wrongDir = base / "Receiver00_2020_01_01_010_to_200MHz"
     testDir.rename(wrongDir)
-    with pytest.raises(Exception):
-        new_testObs(wrongDir)
+    new_testObs(wrongDir)
     assert "Unknown receiver number" in caplog.text
     # year
     testDir = wrongDir
     wrongDir = base / "Receiver01_2009_01_01_010_to_200MHz"
     testDir.rename(wrongDir)
-    with pytest.raises(Exception):
-        new_testObs(wrongDir)
+    new_testObs(wrongDir)
     assert "Unknown year" in caplog.text
+
     testDir = wrongDir
     wrongDir = base / "Receiver01_2045_01_01_010_to_200MHz"
     testDir.rename(wrongDir)
-    with pytest.raises(Exception):
-        new_testObs(wrongDir)
+    new_testObs(wrongDir)
     assert "Unknown year" in caplog.text
+
     # month
     testDir = wrongDir
     wrongDir = base / "Receiver01_2020_13_01_010_to_200MHz"
     testDir.rename(wrongDir)
-    with pytest.raises(Exception):
-        new_testObs(wrongDir)
+    new_testObs(wrongDir)
     assert "Unknown month" in caplog.text
+
     # day
     testDir = wrongDir
     wrongDir = base / "Receiver01_2020_01_32_010_to_200MHz"
     testDir.rename(wrongDir)
-    with pytest.raises(Exception):
-        new_testObs(wrongDir)
+    new_testObs(wrongDir)
     assert "Unknown day" in caplog.text
-    # freqlow
 
+    # freqlow
     testDir = wrongDir
     wrongDir = base / "Receiver01_2020_01_01_000_to_200MHz"
     testDir.rename(wrongDir)
-    with pytest.raises(Exception):
-        new_testObs(wrongDir)
+    new_testObs(wrongDir)
     assert "Low frequency is weird" in caplog.text
+
     # freqhigh
     testDir = wrongDir
     wrongDir = base / "Receiver01_2020_01_01_010_to_900MHz"
     testDir.rename(wrongDir)
-    with pytest.raises(Exception):
-        new_testObs(wrongDir)
+    new_testObs(wrongDir)
     assert "High frequency is weird" in caplog.text
+
     # freqrange
     testDir = wrongDir
     wrongDir = base / "Receiver01_2020_01_01_200_to_010MHz"
     testDir.rename(wrongDir)
-    with pytest.raises(Exception):
-        new_testObs(wrongDir)
+    new_testObs(wrongDir)
     assert "Low frequency > High Frequency" in caplog.text
 
 

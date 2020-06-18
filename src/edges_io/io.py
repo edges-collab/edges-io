@@ -98,6 +98,12 @@ class _DataContainer(ABC):
         logger.setLevel(log_level)
 
         self.path, match = self.check_self(path, fix)
+
+        if not match:
+            raise utils.FileStructureError(
+                f"Directory {self.path.name} is in the wrong format."
+            )
+
         self.path = Path(self.path)
 
         if not self._check_contents_selves(self.path, fix):
