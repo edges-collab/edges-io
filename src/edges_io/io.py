@@ -67,6 +67,7 @@ class _DataContainer(ABC):
     _content_type = None
 
     def __init__(self, path, fix=False):
+        logger.errored = 0
         self.path, match = self.check_self(path, fix)
         self.check_contents(self.path, fix)
 
@@ -82,7 +83,7 @@ class _DataContainer(ABC):
 
         # For a container, if the checks failed, then we ought to bow out now
         if logger.errored:
-            logger.errored = False
+            logger.errored = 0
             raise utils.FileStructureError()
 
     @classmethod
