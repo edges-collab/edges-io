@@ -12,8 +12,8 @@ import warnings
 from abc import ABC, abstractmethod
 from io import StringIO
 from pathlib import Path
+from typing import List
 
-import h5py
 import numpy as np
 import read_acq
 import toml
@@ -292,8 +292,8 @@ class _SpectrumOrResistance(_DataFile):
                 return None, None
 
     @classmethod
-    def check_self(cls, path, fix=False):
-        if type(path) == str:
+    def check_self(cls, path: [str, Path], fix=False):
+        if isinstance(path, (str, Path)):
             path = [path]
 
         base_fnames = [os.path.basename(fname) for fname in path]
@@ -509,7 +509,7 @@ class Spectrum(_SpectrumOrResistance):
         return formats[0]
 
     @cached_property
-    def data(self) -> HDF5RawSpectrum:
+    def data(self) -> [HDF5RawSpectrum, List[HDF5RawSpectrum]]:
         """A view of the data in the file as a HDF5Object.
 
         If the file is an ACQ file, it will be read completely into memory and cast
@@ -1383,7 +1383,7 @@ class CalibrationObservation(_DataContainer):
             if not (int(groups["freq_low"]) < int(groups["freq_hi"])):
                 logger.error(
                     "Low frequency > High Frequency: {} > {}".format(
-                        groups["freq_low"], groups["freq_hi"],
+                        groups["freq_low"], groups["freq_hi"]
                     )
                 )
 
