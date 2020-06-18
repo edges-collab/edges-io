@@ -1379,13 +1379,12 @@ class CalibrationObservation(_DataContainer):
             if not (1 <= int(groups["freq_low"]) <= 300):
                 logger.error("Low frequency is weird: {}".format(groups["freq_low"]))
             if not (1 <= int(groups["freq_hi"]) <= 300):
-                logger.error("High frequency is weird: {}".format(groups["high_hi"]))
-            if not int(groups["freq_low"]) < int(groups["freq_hi"]):
+                logger.error("High frequency is weird: {}".format(groups["freq_hi"]))
+            if not (int(groups["freq_low"]) < int(groups["freq_hi"])):
                 logger.error(
                     "Low frequency > High Frequency: {} > {}".format(
-                        groups["freq_low"]
-                    ),
-                    groups["freq_hi"],
+                        groups["freq_low"], groups["freq_hi"],
+                    )
                 )
 
             logger.info("Calibration Observation Metadata: {}".format(groups))
