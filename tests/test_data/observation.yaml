@@ -1,0 +1,83 @@
+# This file is an example file for _externally_ "defining" an observation. \
+# It should not be included inside an observation directory, but rather it sets out
+# various files that should be included to form a full virtual observation.
+
+# This is supposed to be exact and exhaustive, and it will likely contain a lot of
+# repetition. However, you can use use the "write_observation_yaml" method in the
+# CalibrationObservation to do most of the work for you.
+
+# A root observation directory from which all paths in this definition are relative
+# (unless specified as absolute).
+root: ''
+
+meta:
+  year: 2020
+  month: 01
+  day: 01
+  receiver: 1
+
+files:
+  # Files (absolute, or relative to 'root') defining the observation.
+  # This list *must* be complete. Categories that can take more than one file can
+  # take glob patterns, or specific lists.
+  spectra:
+    ambient:
+      - Receiver01_2019_11_26_040_to_200MHz/25C/Spectra/Ambient*
+    short:
+      - Receiver01_2019_11_26_040_to_200MHz/25C/Spectra/LongCableShorted*
+    open:
+      - Receiver01_2019_11_26_040_to_200MHz/25C/Spectra/LongCableOpen*
+    hot_load:
+      - Receiver01_2019_11_26_040_to_200MHz/25C/Spectra/HotLoad*
+    ant_sim4:
+      - Receiver01_2020_11_26_040_to_200MHz/25C/Spectra/AntSim4*
+  resistance:
+    ambient:
+      - Receiver01_2019_11_26_040_to_200MHz/25C/Resistance/Ambient*
+    short:
+      - Receiver01_2019_11_26_040_to_200MHz/25C/Resistance/LongCableShorted*
+    open:
+      - Receiver01_2019_11_26_040_to_200MHz/25C/Resistance/LongCableOpen*
+    hot_load:
+      - Receiver01_2019_11_26_040_to_200MHz/25C/Resistance/HotLoad*
+    ant_sim4:
+      - Receiver01_2020_11_26_040_to_200MHz/25C/Resistance/AntSim4*
+  s11:
+    ambient:
+      external: Receiver01_2019_11_26_040_to_200MHz/25C/S11/Ambient/External01.s1p
+      match: Receiver01_2019_11_26_040_to_200MHz/25C/S11/Ambient/Match02.s1p
+      open: Receiver01_2019_11_26_040_to_200MHz/25C/S11/Ambient/Open01.s1p
+      short: Receiver01_2019_11_26_040_to_200MHz/25C/S11/Ambient/Short02.s1p
+    hot_load:
+      external: Receiver01_2019_11_26_040_to_200MHz/25C/S11/HotLoad/External01.s1p
+      match: Receiver01_2019_11_26_040_to_200MHz/25C/S11/HotLoad/Match02.s1p
+      open: Receiver01_2019_11_26_040_to_200MHz/25C/S11/HotLoad/Open01.s1p
+      short: Receiver01_2019_11_26_040_to_200MHz/25C/S11/HotLoad/Short02.s1p
+    open:
+      external: Receiver01_2019_11_26_040_to_200MHz/25C/S11/LongCableOpen/External01.s1p
+      match: Receiver01_2019_11_26_040_to_200MHz/25C/S11/LongCableOpen/Match02.s1p
+      open: Receiver01_2019_11_26_040_to_200MHz/25C/S11/LongCableOpen/Open01.s1p
+      short: Receiver01_2019_11_26_040_to_200MHz/25C/S11/LongCableOpen/Short02.s1p
+    short:
+      external: Receiver01_2019_11_26_040_to_200MHz/25C/S11/LongCableShorted/External01.s1p
+      match: Receiver01_2019_11_26_040_to_200MHz/25C/S11/LongCableShorted/Match02.s1p
+      open: Receiver01_2019_11_26_040_to_200MHz/25C/S11/LongCableShorted/Open01.s1p
+      short: Receiver01_2019_11_26_040_to_200MHz/25C/S11/LongCableShorted/Short02.s1p
+    receiver:
+      receiver: Receiver01_2019_11_26_040_to_200MHz/25C/S11/ReceiverReading01/ReceiverReading02.s1p
+      match: Receiver01_2019_11_26_040_to_200MHz/25C/S11/ReceiverReading01/Match02.s1p
+      open: Receiver01_2019_11_26_040_to_200MHz/25C/S11/ReceiverReading02/Open01.s1p
+      short: Receiver01_2019_11_26_040_to_200MHz/25C/S11/ReceiverReading02/Short02.s1p
+    switch:
+      external_match: Receiver01_2020_11_26_040_to_200MHz/25C/S11/SwitchingState01/ExternalMatch02.s1p
+      external_open: Receiver01_2020_11_26_040_to_200MHz/25C/S11/SwitchingState01/ExternalOpen02.s1p
+      external_short: Receiver01_2020_11_26_040_to_200MHz/25C/S11/SwitchingState01/ExternalShort02.s1p
+      match: Receiver01_2020_11_26_040_to_200MHz/25C/S11/SwitchingState01/Match02.s1p
+      open: Receiver01_2020_11_26_040_to_200MHz/25C/S11/SwitchingState02/Open01.s1p
+      short: Receiver01_2021_11_26_040_to_200MHz/25C/S11/SwitchingState02/Short02.s1p
+
+
+measurements:
+  # Use this section to define any parameters of the run(s).
+  resistance_m: 50.0
+  resistance_f: 50.0

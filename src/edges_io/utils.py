@@ -1,23 +1,22 @@
 import datetime
-import glob
 import os
 import shutil
+from pathlib import Path
+from typing import List
 
 
-def get_active_files(path):
-    if not os.path.isdir(path):
-        raise ValueError("{} is not a directory!".format(path))
-    fls = glob.glob(os.path.join(path, "*"))
+def get_active_files(path: [str, Path]) -> List[Path]:
+    path = Path(path)
+    if not path.is_dir():
+        raise ValueError(f"{path} is not a directory!")
+    fls = path.glob("*")
     ok_extra_files = ["Notes.txt", "calibration_analysis.ipynb", "derived"]
 
     return [
         fl
         for fl in fls
-        if not fl.endswith(".old")
-        and os.path.basename(fl) != "Notes.txt"
-        and not fl.endswith(".ignore")
-        and not fl.endswith(".invalid")
-        and os.path.basename(fl) not in ok_extra_files
+        if fl.suffix not in (".old", ".ignore", ".invalid")
+        and fl.name not in ok_extra_files
     ]
 
 
@@ -87,3 +86,31 @@ def _ask_to_rm(fl):
 
 class FileStructureError(Exception):
     pass
+
+
+class IncompleteObservation(FileStructureError):
+    pass
+
+
+class InconsistentObservation(FileStructureError):
+    pass
+
+
+def get_file_list(top_level: Path, filter=None, ignore=None):
+    ignore = ignore or []
+
+    out = []
+    for pth in top_level.iterdir():
+        if (
+            pth.is_file()
+            and str(pth) not in ignore
+            and (filter(pth) if filter is not None else True)
+        ):
+            out.append(pth.absolute())
+        elif pth.is_dir():
+            out.extend(get_file_list(pth, filter=filter, ignore=ignore))
+    return out
+
+
+def snake_to_camel(word: str):
+    return "".join(w.capitalize() for w in word.split("_"))
