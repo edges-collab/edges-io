@@ -98,7 +98,7 @@ class HDF5Object:
                     cls._checkgrp(grp[k], v)
             elif isinstance(v, dict):
                 cls._checkgrp(grp[k], v)
-            elif v is not None and not v(grp[k]):
+            elif not (v is None or v == "optional" or v(grp[k])):
                 raise HDF5StructureError(
                     f"key {k} in {grp} failed its validation. Type: {type(grp[k])}"
                 )
@@ -387,8 +387,12 @@ class HDF5RawSpectrum(HDF5Object):
         "freq_ancillary": {"frequencies": lambda x: (x.ndim == 1 and x.dtype == float)},
         "time_ancillary": {
             "times": lambda x: (x.ndim == 1 and x.dtype == "|S17"),
-            "adcmax": lambda x: (x.ndim == 2 and x.shape[1] == 3 and x.dtype == float),
-            "adcmin": lambda x: (x.ndim == 2 and x.shape[1] == 3 and x.dtype == float),
+            "adcmax": lambda x: (
+                x.ndim == 2 and x.shape[1] == 3 and x.dtype in (float, np.float32)
+            ),
+            "adcmin": lambda x: (
+                x.ndim == 2 and x.shape[1] == 3 and x.dtype in (float, np.float32)
+            ),
             "data_drops": lambda x: (
                 x.ndim == 2 and x.shape[1] == 3 and x.dtype == int
             ),

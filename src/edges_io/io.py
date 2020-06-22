@@ -668,10 +668,8 @@ class Spectrum(_SpectrumOrResistance):
         )
 
         freq_anc = {"frequencies": anc.frequencies}
-        time_anc = {
-            name: anc["time_data"][name] for name in anc["time_data"].dtype.names
-        }
-        spectra = {"Qratio": Q.T, "p0": px[0].T, "p1": px[1].T, "p2": px[2].T}
+        time_anc = anc.data
+        spectra = {"Q": Q.T, "p0": px[0].T, "p1": px[1].T, "p2": px[2].T}
 
         meta = anc.meta
         return spectra, freq_anc, time_anc, meta
