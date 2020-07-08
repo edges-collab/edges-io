@@ -98,13 +98,12 @@ class _DataContainer(ABC):
         logger.setLevel(log_level)
 
         self.path, match = self.check_self(path, fix)
+        self.path = Path(self.path)
 
         if not match:
             raise utils.FileStructureError(
                 f"Directory {self.path.name} is in the wrong format."
             )
-
-        self.path = Path(self.path)
 
         if not self._check_contents_selves(self.path, fix):
             raise utils.FileStructureError()
@@ -668,10 +667,8 @@ class Spectrum(_SpectrumOrResistance):
         )
 
         freq_anc = {"frequencies": anc.frequencies}
-        time_anc = {
-            name: anc["time_data"][name] for name in anc["time_data"].dtype.names
-        }
-        spectra = {"Qratio": Q.T, "p0": px[0].T, "p1": px[1].T, "p2": px[2].T}
+        time_anc = anc.data
+        spectra = {"Q": Q.T, "p0": px[0].T, "p1": px[1].T, "p2": px[2].T}
 
         meta = anc.meta
         return spectra, freq_anc, time_anc, meta
@@ -879,6 +876,11 @@ class _SpectraOrResistanceFolder(_DataContainer):
             self.simulators[name] = self._content_type.from_load(
                 name, self.path, run_nums.get(name, None), filetype
             )
+
+    @property
+    def run_num(self):
+        """Dictionary of run numbers for each load"""
+        return {k: getattr(self, k).run_num for k in LOAD_ALIASES}
 
     @classmethod
     def check_self(cls, path, fix=False):
@@ -1101,7 +1103,9 @@ class _S11SubDir(_DataContainer):
         self.run_num = run_num or self._get_max_run_num()
 
         for name in self.STANDARD_NAMES:
-            setattr(self, name.lower(), S1P(path / f"{name}{self.run_num:>02}.s1p"))
+            setattr(
+                self, name.lower(), S1P(self.path / f"{name}{self.run_num:>02}.s1p")
+            )
 
         # All frequencies should be the same.
         self.freq = getattr(self, self.STANDARD_NAMES[0].lower()).freq
@@ -1172,6 +1176,10 @@ class _S11SubDir(_DataContainer):
             for fl in self.active_contents
         )
 
+    @property
+    def max_run_num(self):
+        return self._get_max_run_num()
+
     @classmethod
     def _check_file_consistency(cls, path: Path) -> bool:
         return True
@@ -1198,14 +1206,14 @@ class AntSimS11(LoadS11):
     folder_pattern = r"(?P<load_name>%s)$" % ("|".join(ANTENNA_SIMULATORS.keys()))
 
     @classmethod
-    def check_self(cls, path, fix=False):
+    def check_self(cls, path: Path, fix=False):
         path, match = super().check_self(path, fix)
 
         if match is None and fix:
             bad_patterns = [r"(?P<load_name>%s)$" % ("|".join(ANTSIM_REVERSE.keys()))]
 
             for pattern in bad_patterns:
-                match = re.search(pattern, os.path.basename(path))
+                match = re.search(pattern, path.name)
 
             if match is not None:
                 loadname = match.groupdict()["load_name"]
@@ -1213,11 +1221,11 @@ class AntSimS11(LoadS11):
                 if loadname in ANTSIM_REVERSE:
                     loadname = ANTSIM_REVERSE[loadname]
 
-                newpath = os.path.join(os.path.dirname(path), loadname)
+                newpath = path.parent / loadname
 
                 shutil.move(path, newpath)
                 path = newpath
-                logger.success("Successfully converted to {}".format(path))
+                logger.success(f"Successfully converted to {path}")
 
         return path, match
 
@@ -1297,49 +1305,57 @@ class S11Dir(_DataContainer):
             sw_rep_num = repeat_num
             rr_rep_num = repeat_num
         elif repeat_num is None:
-            sw_rep_num = self._get_highest_rep_num(path, "SwitchingState")
-            rr_rep_num = self._get_highest_rep_num(path, "ReceiverReading")
+            sw_rep_num = self._get_highest_rep_num(self.path, "SwitchingState")
+            rr_rep_num = self._get_highest_rep_num(self.path, "ReceiverReading")
         else:
             sw_rep_num = repeat_num.get(
-                "SwitchingState", self._get_highest_rep_num(path, "SwitchingState")
+                "switching_state",
+                self._get_highest_rep_num(self.path, "SwitchingState"),
             )
             rr_rep_num = repeat_num.get(
-                "ReceiverReading", self._get_highest_rep_num(path, "ReceiverReading")
+                "receiver_reading",
+                self._get_highest_rep_num(self.path, "ReceiverReading"),
             )
 
         if type(run_num) == int or run_num is None:
             run_nums = {
-                **{"SwitchingState": run_num, "ReceiverReading": run_num},
+                **{"switching_state": run_num, "receiver_reading": run_num},
                 **{name: run_num for name in LOAD_ALIASES.values()},
             }
         else:
-            run_nums = run_num
+            run_nums = dict(run_num)
 
         logger.debug(
-            f"Highest rep_num for switching state: {self._get_highest_rep_num(path, 'SwitchingState')}"
+            f"Highest rep_num for switching state: {self._get_highest_rep_num(self.path, 'SwitchingState')}"
         )
 
         self.switching_state = SwitchingState(
-            path / f"SwitchingState{sw_rep_num:>02}",
-            run_num=run_nums.get("SwitchingState", None),
+            self.path / f"SwitchingState{sw_rep_num:>02}",
+            run_num=run_nums.get("switching_state", None),
         )
         self.receiver_reading = ReceiverReading(
-            path / f"ReceiverReading{rr_rep_num:>02}",
-            run_num=run_nums.get("ReceiverReading", None),
+            self.path / f"ReceiverReading{rr_rep_num:>02}",
+            run_num=run_nums.get("receiver_reading", None),
         )
 
         for name, load in LOAD_ALIASES.items():
             setattr(
-                self,
-                name,
-                LoadS11(os.path.join(path, load), run_num=run_nums.get(load, None)),
+                self, name, LoadS11(self.path / load, run_num=run_nums.get(load, None))
             )
 
         self.simulators = {}
         for name in self.get_simulator_names(path):
             self.simulators[name] = AntSimS11(
-                os.path.join(path, name), run_num=run_nums.get(name, None)
+                self.path / name, run_num=run_nums.get(name, None)
             )
+
+    @property
+    def run_num(self):
+        """Dictionary specifying run numbers for each load."""
+        return {
+            k: getattr(self, k).run_num
+            for k in list(LOAD_ALIASES.keys()) + ["switching_state", "receiver_reading"]
+        }
 
     @classmethod
     def _get_highest_rep_num(cls, path, kind):
@@ -1347,6 +1363,10 @@ class S11Dir(_DataContainer):
         fls = [fl for fl in fls if kind in str(fl)]
         rep_nums = [int(str(fl)[-2:]) for fl in fls]
         return max(rep_nums)
+
+    def get_highest_rep_num(self, kind: str):
+        """Get the highest repeat number for this kind."""
+        return self._get_highest_rep_num(self.path, kind)
 
     @classmethod
     def check_self(cls, path, fix=False):
@@ -1494,7 +1514,7 @@ class CalibrationObservation(_DataContainer):
         if type(run_num) == int or run_num is None:
             run_nums = {"Spectra": run_num, "Resistance": run_num, "S11": run_num}
         else:
-            run_nums = run_num
+            run_nums = dict(run_num)
 
         self.spectra = Spectra(
             self.path / "Spectra", run_num=run_nums.get("Spectra", None), fix=fix
@@ -2067,3 +2087,12 @@ class CalibrationObservation(_DataContainer):
             logger.handlers[0].setLevel(pre_level)
 
         return parts
+
+    @property
+    def run_num(self):
+        """Dictionary specifying run numbers for each component"""
+        return {
+            "S11": self.s11.run_num,
+            "Spectra": self.spectra.run_num,
+            "Resistance": self.resistance.run_num,
+        }
