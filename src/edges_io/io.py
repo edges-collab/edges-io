@@ -1101,11 +1101,7 @@ class _S11SubDir(_DataContainer):
         self.run_num = run_num or self._get_max_run_num()
 
         for name in self.STANDARD_NAMES:
-            setattr(
-                self,
-                name.lower(),
-                S1P(os.path.join(path, name + "{:>02}.s1p".format(self.run_num))),
-            )
+            setattr(self, name.lower(), S1P(path / f"{name}{self.run_num:>02}.s1p"))
 
         # All frequencies should be the same.
         self.freq = getattr(self, self.STANDARD_NAMES[0].lower()).freq
@@ -1269,7 +1265,13 @@ class S11Dir(_DataContainer):
         **{key: AntSimS11 for key in ANTSIM_REVERSE.keys()},
     }
 
-    def __init__(self, path: [str, Path], repeat_num=None, run_num=None, fix=False):
+    def __init__(
+        self,
+        path: [str, Path],
+        repeat_num: [None, int, dict] = None,
+        run_num: [None, int, dict] = None,
+        fix=False,
+    ):
         """Class representing the entire S11 subdirectory of an observation
 
         Parameters
@@ -1298,8 +1300,12 @@ class S11Dir(_DataContainer):
             sw_rep_num = self._get_highest_rep_num(path, "SwitchingState")
             rr_rep_num = self._get_highest_rep_num(path, "ReceiverReading")
         else:
-            sw_rep_num = repeat_num["SwitchingState"]
-            rr_rep_num = repeat_num["ReceiverReading"]
+            sw_rep_num = repeat_num.get(
+                "SwitchingState", self._get_highest_rep_num(path, "SwitchingState")
+            )
+            rr_rep_num = repeat_num.get(
+                "ReceiverReading", self._get_highest_rep_num(path, "ReceiverReading")
+            )
 
         if type(run_num) == int or run_num is None:
             run_nums = {
@@ -1310,17 +1316,15 @@ class S11Dir(_DataContainer):
             run_nums = run_num
 
         logger.debug(
-            "Highest rep_num for switching state: {}".format(
-                self._get_highest_rep_num(path, "SwitchingState")
-            )
+            f"Highest rep_num for switching state: {self._get_highest_rep_num(path, 'SwitchingState')}"
         )
 
         self.switching_state = SwitchingState(
-            os.path.join(path, "SwitchingState{:>02}".format(sw_rep_num)),
+            path / f"SwitchingState{sw_rep_num:>02}",
             run_num=run_nums.get("SwitchingState", None),
         )
         self.receiver_reading = ReceiverReading(
-            os.path.join(path, "ReceiverReading{:>02}".format(rr_rep_num)),
+            path / f"ReceiverReading{rr_rep_num:>02}",
             run_num=run_nums.get("ReceiverReading", None),
         )
 
