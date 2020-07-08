@@ -629,37 +629,6 @@ class Spectrum(_SpectrumOrResistance):
         else:
             return objs
 
-    #
-    # def read(self):
-    #     """
-    #     Read the files of the object, and concatenate their data.
-    #
-    #     .. warning:: Deprecated.
-    #
-    #     Adds the attributes 'p0', 'p1', 'p2' and 'Qratio'.
-    #     """
-    #     warnings.warn(
-    #         "Do not use this function, it will soon be removed. "
-    #         "Instead access data through the 'data' attribute",
-    #         category=DeprecationWarning
-    #     )
-    #
-    #     out = {}
-    #     keys = ["p0", "p1", "p2", "Qratio"]
-    #     for fl in self.path:
-    #         spectra, freq, tm, meta = getattr(self, "_read_" + self.file_format)(fl)
-    #
-    #         for key in keys:
-    #             if key not in out:
-    #                 out[key] = spectra[key]
-    #             else:
-    #                 out[key] = np.concatenate((out[key], spectra[key]), axis=1)
-    #     setattr(self, "spectra", out)
-    #     setattr(self, "metadata", meta)
-    #     setattr(self, 'time_ancillary', tm)
-    #     setattr(self, 'freq_ancillary', freq)
-    #     return out, freq, tm, meta
-
     @staticmethod
     def _read_acq(file_name):
         Q, px, anc = read_acq.decode_file(
@@ -672,28 +641,6 @@ class Spectrum(_SpectrumOrResistance):
 
         meta = anc.meta
         return spectra, freq_anc, time_anc, meta
-
-    # @staticmethod
-    # def _read_h5(file_name):
-    #     spectra = {}
-    #     freq_anc = {}
-    #     time_anc = {}
-    #
-    #     with h5py.File(file_name, "r") as fl:
-    #         spectra["Qratio"] = fl["Qratio"][...]
-    #         spectra["p0"] = fl["p0"][...]
-    #         spectra["p1"] = fl["p1"][...]
-    #         spectra["p2"] = fl["p2"][...]
-    #
-    #         meta = dict(fl.attrs)
-    #
-    #         for k, v in fl['freq_ancillary'].items():
-    #             freq_anc[k] = v[...]
-    #
-    #         for k, v in fl['time_ancillary'].items():
-    #             time_anc[k] = v[...]
-    #
-    #     return spectra, freq_anc, time_anc, meta
 
 
 class Resistance(_SpectrumOrResistance):
@@ -1573,26 +1520,24 @@ class CalibrationObservation(_DataContainer):
                 for fl in these_files:
                     (thing / fl.name).symlink_to(root / fl)
 
-        kind_map = {
-            "ambient": "Ambient",
-            "hot_load": "HotLoad",
-            "open": "LongCableOpen",
-            "short": "LongCableShorted",
-            "receiver": "ReceiverReading01",
-            "switch": "SwitchingState01",
-        }
-
         # Symlink the S11 files.
-        for key, val in files["s11"].items():
-            direc = s11 / kind_map.get(key, utils.snake_to_camel(key))
-            direc.mkdir()
+        s11_run_nums = {}
+        rep_nums = {}
+        for key, (direc, run_num) in files["s11"].items():
+            direc = Path(root / direc)
+            syms11 = s11 / direc.name
+            syms11.mkdir()
 
-            for key2, val2 in val.items():
-                if key2 == "receiver":
-                    key2 = "receiver_reading"
+            if key == "receiver":
+                rep_nums["receiver_reading"] = int(str(direc)[-2:])
+            elif key == "switch":
+                rep_nums["switching_state"] = int(str(direc)[-2:])
 
-                filename = utils.snake_to_camel(key2) + "01.s1p"
-                (direc / filename).symlink_to(root / val2)
+            these_files = direc.glob(f"*{run_num:>02}.?1?")
+            for fl in these_files:
+                (syms11 / fl.name).symlink_to(direc / fl.name)
+
+            s11_run_nums[key] = run_num
 
         # To keep the temporary directory from being cleaned up, store it on the class.
         cls._tmpdir = tmpdir
@@ -1600,8 +1545,8 @@ class CalibrationObservation(_DataContainer):
         return cls(
             sympath.parent,
             ambient_temp=25,
-            run_num=1,
-            repeat_num=1,
+            run_num={"S11": s11_run_nums},
+            repeat_num=rep_nums,
             fix=False,
             include_previous=False,
             compile_from_def=False,
@@ -1617,16 +1562,16 @@ class CalibrationObservation(_DataContainer):
                     key2 in files[key]
                 ), f"{key2} must be in observation YAML 'files.{key}'"
 
-                if key == "s11":
-                    for key3 in ["open", "short", "match", "external"]:
-                        assert (
-                            key3 in files[key][key2]
-                        ), f"{key3} must be in observation YAML 'files.{key}.{key2}'"
-                else:
+                if key != "s11":
                     for fl in files[key][key2]:
                         assert (
                             len(list(root.glob(fl))) > 0
-                        ), f"File '{fl}' included at files.{key}.{key2} does not exist or match any glob patterns."
+                        ), f"File '{root / fl}' included at files.{key}.{key2} does not exist or match any glob patterns."
+                else:
+                    fl = files[key][key2][0]
+                    assert (
+                        root / fl
+                    ).exists(), f"Directory '{root / fl}' included at files.{key}.{key2} does not exist."
 
             if key == "s11":
                 for key2 in ["receiver", "switch"]:
@@ -1634,34 +1579,9 @@ class CalibrationObservation(_DataContainer):
                         key2 in files[key]
                     ), f"{key2} must be in observation YAML 'files.{key}'. Available: {list(files[key].keys())}"
 
-                    for key3 in ["match", "open", "short"]:
-                        assert (
-                            key3 in files[key][key2]
-                        ), f"{key3} must be in observation YAML 'files.{key}.{key2}'"
-                        assert (
-                            root / files[key][key2][key3]
-                        ).exists(), f"File '{files[key][key2][key3]}' included at files.{key}.{key2}.{key3} does not exist."
-
-                    if key2 == "receiver":
-                        assert (
-                            "receiver" in files[key][key2]
-                        ), f"'receiver' must be in observation YAML 'files.{key}.{key2}'"
-                        assert (
-                            root / files[key][key2]["receiver"]
-                        ).exists(), f"File {files[key][key2]['receiver']} included at files.{key}.{key2}.receiver does not exist."
-                    elif key2 == "switch":
-                        for key3 in [
-                            "external_match",
-                            "external_open",
-                            "external_short",
-                        ]:
-                            assert (
-                                key3 in files[key][key2]
-                            ), f"{key3} must be in observation YAML 'files.{key}.{key2}'"
-                            assert (root / files[key][key2][key3]).exists(), (
-                                f"File '{files[key][key2][key3]}' included at "
-                                f"files.{key}.{key2}.{key3} does not exist."
-                            )
+                    assert (
+                        root / files[key][key2][0]
+                    ).exists(), f"Directory '{root /files[key][key2][0]}' included at files.{key}.{key2} does not exist."
 
     @classmethod
     def check_definition(cls, path: Path) -> dict:
