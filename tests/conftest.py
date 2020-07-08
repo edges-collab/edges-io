@@ -1,10 +1,10 @@
 # -*- coding: utf-8 -*-
-from pathlib import Path
-
 import pytest
 
 import h5py
 import numpy as np
+from pathlib import Path
+
 from edges_io.h5 import HDF5RawSpectrum
 
 

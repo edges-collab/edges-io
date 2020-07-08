@@ -1,8 +1,8 @@
-from pathlib import Path
-
 import pytest
 
 import numpy as np
+from pathlib import Path
+
 from edges_io.h5 import HDF5RawSpectrum
 from edges_io.io import Spectrum
 
