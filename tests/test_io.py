@@ -1,8 +1,8 @@
-import logging
-
 import pytest
 
+import logging
 from bidict import bidict
+
 from edges_io import io, utils
 
 LOAD_ALIASES = bidict(
@@ -59,14 +59,11 @@ def test_env(tmp_path_factory):
                 "LongCableShorted",
             ]
             for filename in fileList:
-                # print(filename)
                 name1 = filename + "_01_2020_001_01_01_01_lab.csv"
                 file1 = dlist[i] / name1
-                # print(file1)
                 file1.touch()
         elif p == "S11":
             print("Making S11 files")
-            fileList = ["External", "Match", "Open", "Short"]
             for k, s in enumerate(s11List):
                 slist.append(dlist[i] / s)
                 slist[k].mkdir()
@@ -84,17 +81,19 @@ def test_env(tmp_path_factory):
                 else:
                     fileList = ["External", "Match", "Open", "Short"]
                 for filename in fileList:
-                    # print(filename)
                     name1 = filename + "01.s1p"
                     name2 = filename + "02.s1p"
                     file1 = slist[k] / name1
                     file1.write_text(
-                        "# Hz S RI R 50\n40000000        0.239144887761343       0.934085904901478\n40000000        0.239144887761343       0.934085904901478"
+                        "# Hz S RI R 50\n"
+                        "40000000        0.239144887761343       0.934085904901478\n"
+                        "40000000        0.239144887761343       0.934085904901478"
                     )
-                    # print(file1.read_text())
                     file2 = slist[k] / name2
                     file2.write_text(
-                        "# Hz S RI R 50\n40000000        0.239144887761343       0.934085904901478\n40000000        0.239144887761343       0.934085904901478"
+                        "# Hz S RI R 50\n"
+                        "40000000        0.239144887761343       0.934085904901478\n"
+                        "40000000        0.239144887761343       0.934085904901478"
                     )
 
         elif p == "Spectra":
@@ -107,10 +106,8 @@ def test_env(tmp_path_factory):
                 "LongCableShorted",
             ]
             for filename in fileList:
-                # print(filename)
                 name1 = filename + "_01_2020_001_01_01_01_lab.acq"
                 file1 = dlist[i] / name1
-                # print(file1)
                 file1.touch()
     return obs_dir
 

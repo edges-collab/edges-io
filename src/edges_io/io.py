@@ -6,23 +6,22 @@ making it easier to separate the algorithms from the data checking/reading.
 
 import glob
 import logging
+import numpy as np
 import os
 import re
+import read_acq
 import shutil
 import tempfile
+import toml
 import warnings
+import yaml
 from abc import ABC, abstractmethod
+from bidict import bidict
+from cached_property import cached_property
 from datetime import datetime
 from io import StringIO
 from pathlib import Path
 from typing import Iterable, List, Tuple, Union
-
-import numpy as np
-import read_acq
-import toml
-import yaml
-from bidict import bidict
-from cached_property import cached_property
 
 from . import utils
 from .data import DATA_PATH
@@ -1680,10 +1679,6 @@ class CalibrationObservation(_DataContainer):
                         os.path.join(base, os.path.dirname(new_name)),
                     )
 
-                    # # If top-level directory is now empty, remove it.
-                    # if not glob.glob(os.path.join(os.path.dirname(os.path.normpath(path))), "*"):
-                    #     os.rmdir(os.path.dirname(os.path.normpath(path)))
-
                     name = new_name
                     path = base / name
                     logger.success(f"Successfully renamed to {new_name}")
@@ -1794,14 +1789,12 @@ class CalibrationObservation(_DataContainer):
             other_ignores.append("Notes.txt")
 
         # We'll get everything in this subtree, except those marked invalid.
-        files = utils.get_file_list(
+        return utils.get_file_list(
             path,
             filter=lambda x: x.suffix not in [".invalid", ".old"]
             and x.name not in other_ignores,
             ignore=invalid,
         )
-
-        return files
 
     @classmethod
     def compile_obs_from_def(
@@ -1978,7 +1971,7 @@ class CalibrationObservation(_DataContainer):
         del path_parts[1]
 
         try:
-            parts = tuple()
+            parts = ()
             full_part = root
             for part in path_parts:
                 full_part = Path(full_part) / Path(part)

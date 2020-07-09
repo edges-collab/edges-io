@@ -1,11 +1,10 @@
 """
 Module defining EDGES-specific reading functions for weather and auxiliary data.
 """
+import numpy as np
 import re
 import warnings
 from datetime import datetime, timedelta
-
-import numpy as np
 
 _WEATHER_PATTERN = re.compile(
     r"(?P<year>\d{4}):(?P<day>\d{3}):(?P<hour>\d{2}):(?P<minute>\d{2}):(?P<second>\d{2})  "

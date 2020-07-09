@@ -1,7 +1,6 @@
+import click
 from os import path
 from os.path import join
-
-import click
 
 from . import io
 from .logging import logging

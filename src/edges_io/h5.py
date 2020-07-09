@@ -1,11 +1,10 @@
+import attr
 import contextlib
+import h5py
+import numpy as np
 import warnings
 from datetime import datetime
 from pathlib import Path
-
-import attr
-import h5py
-import numpy as np
 
 from . import __version__
 
@@ -98,7 +97,7 @@ class HDF5Object:
                     cls._checkgrp(grp[k], v)
             elif isinstance(v, dict):
                 cls._checkgrp(grp[k], v)
-            elif v is not None and not v(grp[k]):
+            elif not (v is None or v == "optional" or v(grp[k])):
                 raise HDF5StructureError(
                     f"key {k} in {grp} failed its validation. Type: {type(grp[k])}"
                 )
