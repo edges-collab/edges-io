@@ -1789,14 +1789,12 @@ class CalibrationObservation(_DataContainer):
             other_ignores.append("Notes.txt")
 
         # We'll get everything in this subtree, except those marked invalid.
-        files = utils.get_file_list(
+        return utils.get_file_list(
             path,
             filter=lambda x: x.suffix not in [".invalid", ".old"]
             and x.name not in other_ignores,
             ignore=invalid,
         )
-
-        return files
 
     @classmethod
     def compile_obs_from_def(
