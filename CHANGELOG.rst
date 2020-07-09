@@ -20,7 +20,7 @@ v0.3.0
 Added
 -----
 * TOML file for antenna simulators
-* Access to all Resistance metadata via a structured numpy array `raw_data`.
+* Access to all Resistance metadata via a structured numpy array ``raw_data``.
 * Antenna simulators are now able to be identified and read in more easily from each component.
 
 Changed

@@ -1,7 +1,7 @@
+import py
 from os import path
 from pathlib import Path
 
-import py
 from edges_io import utils
 
 

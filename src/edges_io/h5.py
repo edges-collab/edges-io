@@ -1,11 +1,10 @@
+import attr
 import contextlib
+import h5py
+import numpy as np
 import warnings
 from datetime import datetime
 from pathlib import Path
-
-import attr
-import h5py
-import numpy as np
 
 from . import __version__
 
