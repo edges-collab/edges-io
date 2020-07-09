@@ -31,38 +31,13 @@ files:
     long:
     hot_load:
   s11:
-    ambient:
-      external:
-      match:
-      open:
-      short:
-    hot_load:
-      external:
-      match:
-      open:
-      short:
-    open:
-      external:
-      match:
-      open:
-      short:
-    short:
-      external:
-      match:
-      open:
-      short:
-    receiver:
-      receiver:
-      match:
-      open:
-      short:
-    switch:
-      external_match:
-      external_open:
-      external_short:
-      match:
-      open:
-      short:
+    # Each of these should point to a directory, and have a run number
+    ambient: ['/path/to/S11/Ambient', 1]
+    hot_load: ['/path/to/different/S11/HotLoad', 2]
+    open: ['/path/to/S11/Open', 1]
+    short: ['/path/to/S11/Short', 2]
+    receiver: ['/path/to/S11/ReceiverReading01', 1]
+    switch: ['/path/to/alternate/S11/SwitchingState02', 1]
 
 
 measurements:

@@ -98,13 +98,12 @@ class _DataContainer(ABC):
         logger.setLevel(log_level)
 
         self.path, match = self.check_self(path, fix)
+        self.path = Path(self.path)
 
         if not match:
             raise utils.FileStructureError(
                 f"Directory {self.path.name} is in the wrong format."
             )
-
-        self.path = Path(self.path)
 
         if not self._check_contents_selves(self.path, fix):
             raise utils.FileStructureError()
@@ -630,37 +629,6 @@ class Spectrum(_SpectrumOrResistance):
         else:
             return objs
 
-    #
-    # def read(self):
-    #     """
-    #     Read the files of the object, and concatenate their data.
-    #
-    #     .. warning:: Deprecated.
-    #
-    #     Adds the attributes 'p0', 'p1', 'p2' and 'Qratio'.
-    #     """
-    #     warnings.warn(
-    #         "Do not use this function, it will soon be removed. "
-    #         "Instead access data through the 'data' attribute",
-    #         category=DeprecationWarning
-    #     )
-    #
-    #     out = {}
-    #     keys = ["p0", "p1", "p2", "Qratio"]
-    #     for fl in self.path:
-    #         spectra, freq, tm, meta = getattr(self, "_read_" + self.file_format)(fl)
-    #
-    #         for key in keys:
-    #             if key not in out:
-    #                 out[key] = spectra[key]
-    #             else:
-    #                 out[key] = np.concatenate((out[key], spectra[key]), axis=1)
-    #     setattr(self, "spectra", out)
-    #     setattr(self, "metadata", meta)
-    #     setattr(self, 'time_ancillary', tm)
-    #     setattr(self, 'freq_ancillary', freq)
-    #     return out, freq, tm, meta
-
     @staticmethod
     def _read_acq(file_name):
         Q, px, anc = read_acq.decode_file(
@@ -668,35 +636,11 @@ class Spectrum(_SpectrumOrResistance):
         )
 
         freq_anc = {"frequencies": anc.frequencies}
-        time_anc = {
-            name: anc["time_data"][name] for name in anc["time_data"].dtype.names
-        }
-        spectra = {"Qratio": Q.T, "p0": px[0].T, "p1": px[1].T, "p2": px[2].T}
+        time_anc = anc.data
+        spectra = {"Q": Q.T, "p0": px[0].T, "p1": px[1].T, "p2": px[2].T}
 
         meta = anc.meta
         return spectra, freq_anc, time_anc, meta
-
-    # @staticmethod
-    # def _read_h5(file_name):
-    #     spectra = {}
-    #     freq_anc = {}
-    #     time_anc = {}
-    #
-    #     with h5py.File(file_name, "r") as fl:
-    #         spectra["Qratio"] = fl["Qratio"][...]
-    #         spectra["p0"] = fl["p0"][...]
-    #         spectra["p1"] = fl["p1"][...]
-    #         spectra["p2"] = fl["p2"][...]
-    #
-    #         meta = dict(fl.attrs)
-    #
-    #         for k, v in fl['freq_ancillary'].items():
-    #             freq_anc[k] = v[...]
-    #
-    #         for k, v in fl['time_ancillary'].items():
-    #             time_anc[k] = v[...]
-    #
-    #     return spectra, freq_anc, time_anc, meta
 
 
 class Resistance(_SpectrumOrResistance):
@@ -879,6 +823,11 @@ class _SpectraOrResistanceFolder(_DataContainer):
             self.simulators[name] = self._content_type.from_load(
                 name, self.path, run_nums.get(name, None), filetype
             )
+
+    @property
+    def run_num(self):
+        """Dictionary of run numbers for each load"""
+        return {k: getattr(self, k).run_num for k in LOAD_ALIASES}
 
     @classmethod
     def check_self(cls, path, fix=False):
@@ -1102,9 +1051,7 @@ class _S11SubDir(_DataContainer):
 
         for name in self.STANDARD_NAMES:
             setattr(
-                self,
-                name.lower(),
-                S1P(os.path.join(path, name + "{:>02}.s1p".format(self.run_num))),
+                self, name.lower(), S1P(self.path / f"{name}{self.run_num:>02}.s1p")
             )
 
         # All frequencies should be the same.
@@ -1176,6 +1123,10 @@ class _S11SubDir(_DataContainer):
             for fl in self.active_contents
         )
 
+    @property
+    def max_run_num(self):
+        return self._get_max_run_num()
+
     @classmethod
     def _check_file_consistency(cls, path: Path) -> bool:
         return True
@@ -1202,14 +1153,14 @@ class AntSimS11(LoadS11):
     folder_pattern = r"(?P<load_name>%s)$" % ("|".join(ANTENNA_SIMULATORS.keys()))
 
     @classmethod
-    def check_self(cls, path, fix=False):
+    def check_self(cls, path: Path, fix=False):
         path, match = super().check_self(path, fix)
 
         if match is None and fix:
             bad_patterns = [r"(?P<load_name>%s)$" % ("|".join(ANTSIM_REVERSE.keys()))]
 
             for pattern in bad_patterns:
-                match = re.search(pattern, os.path.basename(path))
+                match = re.search(pattern, path.name)
 
             if match is not None:
                 loadname = match.groupdict()["load_name"]
@@ -1217,11 +1168,11 @@ class AntSimS11(LoadS11):
                 if loadname in ANTSIM_REVERSE:
                     loadname = ANTSIM_REVERSE[loadname]
 
-                newpath = os.path.join(os.path.dirname(path), loadname)
+                newpath = path.parent / loadname
 
                 shutil.move(path, newpath)
                 path = newpath
-                logger.success("Successfully converted to {}".format(path))
+                logger.success(f"Successfully converted to {path}")
 
         return path, match
 
@@ -1269,7 +1220,13 @@ class S11Dir(_DataContainer):
         **{key: AntSimS11 for key in ANTSIM_REVERSE.keys()},
     }
 
-    def __init__(self, path: [str, Path], repeat_num=None, run_num=None, fix=False):
+    def __init__(
+        self,
+        path: [str, Path],
+        repeat_num: [None, int, dict] = None,
+        run_num: [None, int, dict] = None,
+        fix=False,
+    ):
         """Class representing the entire S11 subdirectory of an observation
 
         Parameters
@@ -1295,47 +1252,57 @@ class S11Dir(_DataContainer):
             sw_rep_num = repeat_num
             rr_rep_num = repeat_num
         elif repeat_num is None:
-            sw_rep_num = self._get_highest_rep_num(path, "SwitchingState")
-            rr_rep_num = self._get_highest_rep_num(path, "ReceiverReading")
+            sw_rep_num = self._get_highest_rep_num(self.path, "SwitchingState")
+            rr_rep_num = self._get_highest_rep_num(self.path, "ReceiverReading")
         else:
-            sw_rep_num = repeat_num["SwitchingState"]
-            rr_rep_num = repeat_num["ReceiverReading"]
+            sw_rep_num = repeat_num.get(
+                "switching_state",
+                self._get_highest_rep_num(self.path, "SwitchingState"),
+            )
+            rr_rep_num = repeat_num.get(
+                "receiver_reading",
+                self._get_highest_rep_num(self.path, "ReceiverReading"),
+            )
 
         if type(run_num) == int or run_num is None:
             run_nums = {
-                **{"SwitchingState": run_num, "ReceiverReading": run_num},
+                **{"switching_state": run_num, "receiver_reading": run_num},
                 **{name: run_num for name in LOAD_ALIASES.values()},
             }
         else:
-            run_nums = run_num
+            run_nums = dict(run_num)
 
         logger.debug(
-            "Highest rep_num for switching state: {}".format(
-                self._get_highest_rep_num(path, "SwitchingState")
-            )
+            f"Highest rep_num for switching state: {self._get_highest_rep_num(self.path, 'SwitchingState')}"
         )
 
         self.switching_state = SwitchingState(
-            os.path.join(path, "SwitchingState{:>02}".format(sw_rep_num)),
-            run_num=run_nums.get("SwitchingState", None),
+            self.path / f"SwitchingState{sw_rep_num:>02}",
+            run_num=run_nums.get("switching_state", None),
         )
         self.receiver_reading = ReceiverReading(
-            os.path.join(path, "ReceiverReading{:>02}".format(rr_rep_num)),
-            run_num=run_nums.get("ReceiverReading", None),
+            self.path / f"ReceiverReading{rr_rep_num:>02}",
+            run_num=run_nums.get("receiver_reading", None),
         )
 
         for name, load in LOAD_ALIASES.items():
             setattr(
-                self,
-                name,
-                LoadS11(os.path.join(path, load), run_num=run_nums.get(load, None)),
+                self, name, LoadS11(self.path / load, run_num=run_nums.get(load, None))
             )
 
         self.simulators = {}
         for name in self.get_simulator_names(path):
             self.simulators[name] = AntSimS11(
-                os.path.join(path, name), run_num=run_nums.get(name, None)
+                self.path / name, run_num=run_nums.get(name, None)
             )
+
+    @property
+    def run_num(self):
+        """Dictionary specifying run numbers for each load."""
+        return {
+            k: getattr(self, k).run_num
+            for k in list(LOAD_ALIASES.keys()) + ["switching_state", "receiver_reading"]
+        }
 
     @classmethod
     def _get_highest_rep_num(cls, path, kind):
@@ -1343,6 +1310,10 @@ class S11Dir(_DataContainer):
         fls = [fl for fl in fls if kind in str(fl)]
         rep_nums = [int(str(fl)[-2:]) for fl in fls]
         return max(rep_nums)
+
+    def get_highest_rep_num(self, kind: str):
+        """Get the highest repeat number for this kind."""
+        return self._get_highest_rep_num(self.path, kind)
 
     @classmethod
     def check_self(cls, path, fix=False):
@@ -1490,7 +1461,7 @@ class CalibrationObservation(_DataContainer):
         if type(run_num) == int or run_num is None:
             run_nums = {"Spectra": run_num, "Resistance": run_num, "S11": run_num}
         else:
-            run_nums = run_num
+            run_nums = dict(run_num)
 
         self.spectra = Spectra(
             self.path / "Spectra", run_num=run_nums.get("Spectra", None), fix=fix
@@ -1549,26 +1520,24 @@ class CalibrationObservation(_DataContainer):
                 for fl in these_files:
                     (thing / fl.name).symlink_to(root / fl)
 
-        kind_map = {
-            "ambient": "Ambient",
-            "hot_load": "HotLoad",
-            "open": "LongCableOpen",
-            "short": "LongCableShorted",
-            "receiver": "ReceiverReading01",
-            "switch": "SwitchingState01",
-        }
-
         # Symlink the S11 files.
-        for key, val in files["s11"].items():
-            direc = s11 / kind_map.get(key, utils.snake_to_camel(key))
-            direc.mkdir()
+        s11_run_nums = {}
+        rep_nums = {}
+        for key, (direc, run_num) in files["s11"].items():
+            direc = Path(root / direc)
+            syms11 = s11 / direc.name
+            syms11.mkdir()
 
-            for key2, val2 in val.items():
-                if key2 == "receiver":
-                    key2 = "receiver_reading"
+            if key == "receiver":
+                rep_nums["receiver_reading"] = int(str(direc)[-2:])
+            elif key == "switch":
+                rep_nums["switching_state"] = int(str(direc)[-2:])
 
-                filename = utils.snake_to_camel(key2) + "01.s1p"
-                (direc / filename).symlink_to(root / val2)
+            these_files = direc.glob(f"*{run_num:>02}.?1?")
+            for fl in these_files:
+                (syms11 / fl.name).symlink_to(direc / fl.name)
+
+            s11_run_nums[key] = run_num
 
         # To keep the temporary directory from being cleaned up, store it on the class.
         cls._tmpdir = tmpdir
@@ -1576,8 +1545,8 @@ class CalibrationObservation(_DataContainer):
         return cls(
             sympath.parent,
             ambient_temp=25,
-            run_num=1,
-            repeat_num=1,
+            run_num={"S11": s11_run_nums},
+            repeat_num=rep_nums,
             fix=False,
             include_previous=False,
             compile_from_def=False,
@@ -1593,16 +1562,16 @@ class CalibrationObservation(_DataContainer):
                     key2 in files[key]
                 ), f"{key2} must be in observation YAML 'files.{key}'"
 
-                if key == "s11":
-                    for key3 in ["open", "short", "match", "external"]:
-                        assert (
-                            key3 in files[key][key2]
-                        ), f"{key3} must be in observation YAML 'files.{key}.{key2}'"
-                else:
+                if key != "s11":
                     for fl in files[key][key2]:
                         assert (
                             len(list(root.glob(fl))) > 0
-                        ), f"File '{fl}' included at files.{key}.{key2} does not exist or match any glob patterns."
+                        ), f"File '{root / fl}' included at files.{key}.{key2} does not exist or match any glob patterns."
+                else:
+                    fl = files[key][key2][0]
+                    assert (
+                        root / fl
+                    ).exists(), f"Directory '{root / fl}' included at files.{key}.{key2} does not exist."
 
             if key == "s11":
                 for key2 in ["receiver", "switch"]:
@@ -1610,34 +1579,9 @@ class CalibrationObservation(_DataContainer):
                         key2 in files[key]
                     ), f"{key2} must be in observation YAML 'files.{key}'. Available: {list(files[key].keys())}"
 
-                    for key3 in ["match", "open", "short"]:
-                        assert (
-                            key3 in files[key][key2]
-                        ), f"{key3} must be in observation YAML 'files.{key}.{key2}'"
-                        assert (
-                            root / files[key][key2][key3]
-                        ).exists(), f"File '{files[key][key2][key3]}' included at files.{key}.{key2}.{key3} does not exist."
-
-                    if key2 == "receiver":
-                        assert (
-                            "receiver" in files[key][key2]
-                        ), f"'receiver' must be in observation YAML 'files.{key}.{key2}'"
-                        assert (
-                            root / files[key][key2]["receiver"]
-                        ).exists(), f"File {files[key][key2]['receiver']} included at files.{key}.{key2}.receiver does not exist."
-                    elif key2 == "switch":
-                        for key3 in [
-                            "external_match",
-                            "external_open",
-                            "external_short",
-                        ]:
-                            assert (
-                                key3 in files[key][key2]
-                            ), f"{key3} must be in observation YAML 'files.{key}.{key2}'"
-                            assert (root / files[key][key2][key3]).exists(), (
-                                f"File '{files[key][key2][key3]}' included at "
-                                f"files.{key}.{key2}.{key3} does not exist."
-                            )
+                    assert (
+                        root / files[key][key2][0]
+                    ).exists(), f"Directory '{root /files[key][key2][0]}' included at files.{key}.{key2} does not exist."
 
     @classmethod
     def check_definition(cls, path: Path) -> dict:
@@ -2063,3 +2007,12 @@ class CalibrationObservation(_DataContainer):
             logger.handlers[0].setLevel(pre_level)
 
         return parts
+
+    @property
+    def run_num(self):
+        """Dictionary specifying run numbers for each component"""
+        return {
+            "S11": self.s11.run_num,
+            "Spectra": self.spectra.run_num,
+            "Resistance": self.resistance.run_num,
+        }
