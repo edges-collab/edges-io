@@ -13,6 +13,14 @@ class HDF5StructureError(Exception):
     pass
 
 
+class HDF5StructureValidationError(HDF5StructureError):
+    pass
+
+
+class HDF5StructureExtraKey(HDF5StructureError):
+    pass
+
+
 @attr.s
 class HDF5Object:
     """
@@ -81,48 +89,36 @@ class HDF5Object:
         inst.__memcache__ = data
         return inst
 
-    @classmethod
-    def _checkgrp(cls, grp, strc, require_no_extra=False):
-        for k, v in strc.items():
-            # We treat 'meta' as synonymous with 'attrs'
-            if k == "meta" and k not in grp:
-                k = "attrs"
-
-            if k not in grp and k != "attrs" and v != "optional":
-                raise TypeError(f"Non-optional key '{k}' not in {grp}")
-            elif k == "attrs":
-                if isinstance(grp, (h5py.Group, h5py.File)):
-                    cls._checkgrp(grp.attrs, v)
-                else:
-                    cls._checkgrp(grp[k], v)
-            elif isinstance(v, dict):
-                cls._checkgrp(grp[k], v)
-            elif not (v is None or v == "optional" or v(grp[k])):
-                raise HDF5StructureError(
-                    f"key {k} in {grp} failed its validation. Type: {type(grp[k])}"
-                )
-
-        # Ensure there's no extra keys in the group
-        if len(strc) < len(grp.keys()):
-            if require_no_extra:
-                raise HDF5StructureError("Extra keys found in the file.")
-            else:
-                warnings.warn("Extra keys found in the file.")
-
     @contextlib.contextmanager
-    def open(self, mode="r"):
-        """Context manager to open the file."""
+    def open(self, mode: str = "r") -> h5py.File:
+        """Context manager to open the file.
+
+        Parameters
+        ----------
+        mode : str
+            The read/write mode to open the file in.
+
+        Yields
+        ------
+        fl : `h5py.File` instance
+            An instance of the open file.
+        """
         fl = h5py.File(self.filename, mode=mode)
         yield fl
         fl.close()
 
-    def load(self, key: str):
+    def load(self, key: str) -> [dict, h5py.Dataset, h5py.Group]:
         """Load key from file into memory and keep it cached in memory.
 
         Parameters
         ----------
         key : str
             The key to load in.
+
+        Returns
+        -------
+        out : dict, :class:`h5py.Group` or :class:`h5py.Dataset`
+            The dataset or group of such datasets that were loaded.
 
         Notes
         -----
@@ -243,6 +239,31 @@ class HDF5Object:
             _write(fl, self._structure, to_write)
 
     @classmethod
+    def _checkgrp(cls, grp, strc):
+        for k, v in strc.items():
+            # We treat 'meta' as synonymous with 'attrs'
+            if k == "meta" and k not in grp:
+                k = "attrs"
+
+            if k not in grp and k != "attrs" and v != "optional":
+                raise TypeError(f"Non-optional key '{k}' not in {grp}")
+            elif k == "attrs":
+                if isinstance(grp, (h5py.Group, h5py.File)):
+                    cls._checkgrp(grp.attrs, v)
+                else:
+                    cls._checkgrp(grp[k], v)
+            elif isinstance(v, dict):
+                cls._checkgrp(grp[k], v)
+            elif not (v is None or v == "optional" or v(grp[k])):
+                raise HDF5StructureValidationError(
+                    f"key {k} in {grp} failed its validation. Type: {type(grp[k])}"
+                )
+
+        # Ensure there's no extra keys in the group
+        if len(strc) < len(grp.keys()):
+            raise HDF5StructureExtraKey("Extra keys found in the file.")
+
+    @classmethod
     def check(cls, filename, false_if_extra=None):
         false_if_extra = false_if_extra or cls._require_no_extra
 
@@ -250,7 +271,13 @@ class HDF5Object:
             return True
 
         with h5py.File(filename, "r") as fl:
-            cls._checkgrp(fl, cls._structure, false_if_extra)
+            try:
+                cls._checkgrp(fl, cls._structure, false_if_extra)
+            except HDF5StructureExtraKey:
+                if false_if_extra:
+                    raise HDF5StructureExtraKey(f"Extra key found in {filename}")
+                else:
+                    warnings.warn(f"Extra key found in {filename}")
 
     def __contains__(self, item):
         return item in self.keys()
@@ -318,8 +345,14 @@ class _HDF5Group:
             self.load(k)
 
     @contextlib.contextmanager
-    def open(self):
-        """Context manager for opening up the file and getting this group."""
+    def open(self) -> h5py.Group:
+        """Context manager for opening up the file and getting this group.
+
+        Yields
+        ------
+        grp : :class:`h5py.Group`
+            The h5py Group corresponding to this instance.
+        """
         fl = h5py.File(self.filename, "r")
         grp = fl
 
