@@ -84,7 +84,15 @@ class HDF5Object:
 
         false_if_extra = kwargs.get("require_no_extra", cls._require_no_extra)
 
-        cls._checkgrp(data, cls._structure, false_if_extra)
+        try:
+            cls._checkgrp(data, cls._structure)
+        except HDF5StructureExtraKey as e:
+            if false_if_extra:
+                raise HDF5StructureExtraKey(
+                    f"Data had extra key(s)! Extras: {str(e).split(':')[-1]}"
+                )
+            else:
+                warnings.warn(f"Data had extra key! Extras: {str(e).split(':')[-1]}")
 
         inst.__memcache__ = data
         return inst
@@ -261,7 +269,8 @@ class HDF5Object:
 
         # Ensure there's no extra keys in the group
         if len(strc) < len(grp.keys()):
-            raise HDF5StructureExtraKey("Extra keys found in the file.")
+            extras = [k for k in grp.keys() if k not in strc]
+            raise HDF5StructureExtraKey(f"Extra keys found in the file: {extras}")
 
     @classmethod
     def check(cls, filename, false_if_extra=None):
@@ -388,6 +397,8 @@ class _HDF5Group:
 
 
 class HDF5RawSpectrum(HDF5Object):
+    _require_no_extra = False
+
     _structure = {
         "meta": {
             "fastspec_version": lambda x: isinstance(x, str),
