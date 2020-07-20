@@ -1,5 +1,6 @@
 import re
 import shutil
+import subprocess
 from abc import ABC, abstractmethod
 from pathlib import Path
 from typing import Iterable, Tuple, Union
@@ -209,9 +210,18 @@ class _DataContainer(_ObsNode):
 
                     if fix:
                         if fl.name == "Notes.odt":
-                            shutil.move(fl, fl.replace("odt", "txt"))
-                            fl = fl.replace("odt", "txt")
-                            logger.success("Successfully renamed to {}".format(fl))
+                            try:
+                                subprocess.run(
+                                    [f"pandoc -o {fl.with_suffix('.txt')} {fl}"],
+                                    check=True,
+                                )
+                                fl = fl.with_suffix(".txt")
+                                logger.success(f"Successfully renamed to {fl}")
+                            except subprocess.CalledProcessError as e:
+                                logger.warning(
+                                    f"Could not convert to .txt -- error: {e.message}"
+                                )
+
                         else:
                             fixed = utils._ask_to_rm(fl)
 
