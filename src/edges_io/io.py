@@ -15,15 +15,15 @@ import tempfile
 import toml
 import warnings
 import yaml
-from abc import ABC, abstractmethod
 from bidict import bidict
 from cached_property import cached_property
 from datetime import datetime
 from io import StringIO
 from pathlib import Path
-from typing import Iterable, List, Tuple, Union
+from typing import List, Tuple, Union
 
 from . import utils
+from ._structure import _DataContainer, _DataFile
 from .data import DATA_PATH
 from .h5 import HDF5RawSpectrum
 from .logging import logger
@@ -44,263 +44,6 @@ with open(os.path.join(DATA_PATH, "antenna_simulators.toml")) as fl:
 ANTSIM_REVERSE = {
     v: k for k, val in ANTENNA_SIMULATORS.items() for v in val.get("misspells", [])
 }
-
-
-class _DataFile(ABC):
-    known_substitutions = []
-    known_patterns = []
-    file_pattern = ""
-    file_write_pattern = ""
-
-    def __init__(self, path, fix=False):
-        self.path, match = self.check_self(path)
-
-        logger.setLevel(pre_level)
-
-        try:
-            self._match_dict = match.groupdict()
-        except AttributeError:
-            try:
-                self._match_dict = [m.groupdict() for m in match]
-            except TypeError:
-                self._match_dict = match
-        except Exception:
-            raise
-
-    @staticmethod
-    @abstractmethod
-    def check_self(path, fix=False) -> Tuple[Path, Union[dict, Iterable]]:
-        pass
-
-    @classmethod
-    def typestr(cls, name):
-        """Generate a string uniquely defining the 'kind of thing' path is.
-
-        The point of this method is to be able to compare two different file/folder
-        names to check whether they describe the same kind of thing. For example,
-        two Spectrum files from different observations which are both "Ambient" should
-        return the same string, even though their dates etc. might be different. However,
-        two Spectrum files of different Loads will be different.
-
-        The reason this has to exist (and as a classmethod) is because merely comparing
-        the type of the thing is not enough, since the class itself has no knowledge of
-        for example the kind of load. But comparing instances is not great either, since
-        instances are expected to have a full complement of files to be "valid", but
-        one of the main purposes of comparing files is to construct such a full observation.
-        """
-        return cls.__name__
-
-    def _get_filename_params_from_file(cls, path):
-        return {}
-
-    @classmethod
-    def _get_filename_parameters(cls, dct):
-        """This method should return a dictionary of filename parameters that will
-        be inserted into `file_write_pattern`. These should be defaults if appropriate.
-        If a particular parameter has no default and cannot be obtained, omit it."""
-        return {}
-
-    @classmethod
-    def _fix(cls, root, basename):
-        """Auto-fix a basename."""
-        root = Path(root)
-
-        # First try simple subsitutions
-        new_name = basename
-        for sub, correct in cls.known_substitutions:
-            if sub in new_name:
-                new_name = new_name.replace(sub, correct)
-
-        match = re.search(cls.file_pattern, new_name)
-
-        # If a simple substitution did the trick, return.
-        if match is not None:
-            shutil.move(root / basename, root / new_name)
-            logger.success(f"Successfully converted to {new_name}")
-            return root / new_name, match
-
-        # Otherwise, try various patterns.
-        for pattern in cls.known_patterns:
-            match = re.search(pattern, new_name)
-            if match:
-                break
-
-        if match is None:
-            logger.warning("\tCould not auto-fix it.")
-            fixed = utils._ask_to_rm(root / basename)
-            if fixed:
-                logger.success("Successfully removed.")
-            return None, None
-        else:
-            dct = match.groupdict()
-            default = {
-                **cls._get_filename_parameters(dct),
-                **cls._get_filename_params_from_file(root / new_name),
-            }
-            dct = {**default, **dct}
-
-            new_name = cls.file_write_pattern.format(**dct)
-            new_path = root / new_name
-
-            match = re.search(cls.file_pattern, new_name)
-
-            if match is not None:
-                logger.success("Successfully converted to {}".format(new_name))
-                shutil.move(root / basename, new_path)
-                return new_path, match
-            else:
-                return None, None
-
-
-class _DataContainer(ABC):
-    _content_type = None
-
-    def __init__(self, path, fix=False, log_level=40):
-        pre_level = logger.getEffectiveLevel()
-        logger.setLevel(log_level)
-
-        self.path, match = self.check_self(path, fix)
-        self.path = Path(self.path)
-
-        if not match:
-            raise utils.FileStructureError(
-                f"Directory {self.path.name} is in the wrong format."
-            )
-
-        if not self._check_contents_selves(self.path, fix):
-            raise utils.FileStructureError()
-        if not self._check_all_files_there(self.path):
-            raise utils.IncompleteObservation()
-        if not self._check_file_consistency(self.path):
-            raise utils.InconsistentObservation()
-
-        logger.setLevel(pre_level)
-
-        try:
-            self._match_dict = match.groupdict()
-        except AttributeError:
-            try:
-                self._match_dict = [m.groupdict() for m in match]
-            except TypeError:
-                self._match_dict = match
-        except Exception:
-            raise
-
-    @classmethod
-    @abstractmethod
-    def check_self(
-        cls, path: Path, fix: bool = False
-    ) -> Tuple[Path, Union[dict, Iterable]]:
-        """
-        Check whether the path itself is formatted correctly.
-
-        Parameters
-        ----------
-        path : Path
-            Path to the file/folder.
-        definition : dict, optional
-            Dictionary specifying the definition of the overall observation, which
-            may affect any particular component.
-        fix : bool, optional
-            Whether to apply straight-forward fixes to the filename format.
-        quiet : bool, optional
-            Whether to log anything.
-
-        Returns
-        -------
-        path : Path
-            The path to the file, possibly updated by any fix.
-        match : dict or None
-            If the path was found to be correct, this contains meta information
-            contained in the filename.
-        """
-        pass
-
-    @classmethod
-    def check_contents(cls, path: [str, Path], fix=False) -> bool:
-        """Abstract method for checking whether the contents of this container are in
-         the correct format for the DB"""
-        # Check that everything that *is* there has correct format.
-        path = Path(path)
-        ok_selves = cls._check_contents_selves(path, fix=fix)
-        ok_complete = cls._check_all_files_there(path)
-        # Check that the files that are there have consistent properties, and are also
-        # consistent with outside parameters (eg. if year appears on them, they should
-        # be consistent with outer years).
-        ok_consistent = cls._check_file_consistency(path)
-
-        return ok_selves and ok_complete and ok_consistent
-
-    @classmethod
-    @abstractmethod
-    def _check_all_files_there(cls, path: Path) -> bool:
-        return True
-
-    @classmethod
-    @abstractmethod
-    def _check_file_consistency(cls, path: Path) -> bool:
-        return True
-
-    @classmethod
-    def _check_contents_selves(cls, path: Path, fix=False) -> bool:
-        fls = utils.get_active_files(path)
-
-        # Start off with a clean slate for this function.
-        logger.errored = 0
-        for fl in fls:
-            if isinstance(cls._content_type, dict):
-                for key, ct in cls._content_type.items():
-                    if fl.name.startswith(key):
-                        content_type = ct
-                        break
-                else:
-                    logger.error(f"{fl.name} is an extraneous file/folder")
-
-                    if fix:
-                        if os.path.basename(fl) == "Notes.odt":
-                            shutil.move(fl, fl.replace("odt", "txt"))
-                            fl = fl.replace("odt", "txt")
-                            logger.success("Successfully renamed to {}".format(fl))
-                        else:
-                            fixed = utils._ask_to_rm(fl)
-
-                            if fixed:
-                                logger.success("Successfully removed.")
-
-                    continue
-            else:
-                content_type = cls._content_type
-
-            fl, _ = content_type.check_self(fl, fix=fix)
-
-            # Recursively check the contents of the contents.
-            try:
-                content_type.check_contents(fl, fix=fix)
-            except AttributeError:
-                # It's a DataFile, not a DataContainer
-                pass
-
-        ok = not bool(logger.errored)
-        logger.errored = 0
-        return ok
-
-    @classmethod
-    def typestr(cls, name: str) -> str:
-        """Generate a string uniquely defining the 'kind of thing' path is.
-
-        The point of this method is to be able to compare two different file/folder
-        names to check whether they describe the same kind of thing. For example,
-        two Spectrum files from different observations which are both "Ambient" should
-        return the same string, even though their dates etc. might be different. However,
-        two Spectrum files of different Loads will be different.
-
-        The reason this has to exist (and as a classmethod) is because merely comparing
-        the type of the thing is not enough, since the class itself has no knowledge of
-        for example the kind of load. But comparing instances is not great either, since
-        instances are expected to have a full complement of files to be "valid", but
-        one of the main purposes of comparing files is to construct such a full observation.
-        """
-        return cls.__name__
 
 
 class _SpectrumOrResistance(_DataFile):
@@ -400,7 +143,7 @@ class _SpectrumOrResistance(_DataFile):
     def _fix(cls, root, basename):
         root = Path(root)
 
-        # First try simple subsitutions
+        # First try simple substitutions
         new_name = basename
         for sub, correct in cls.known_substitutions:
             if sub in new_name:
@@ -1381,15 +1124,18 @@ class S11Dir(_DataContainer):
         return self._get_highest_rep_num(self.path, kind)
 
     @classmethod
-    def check_self(cls, path, fix=False):
-        logger.structure("Checking S11 folder contents at {}".format(path))
+    def check_self(cls, path: [str, Path], fix=False):
+        path = Path(path)
+        logger.structure(f"Checking S11 folder contents at {path}")
 
-        if not os.path.exists(path):
+        if not path.exists():
             logger.error(f"This path does not exist: {path}")
 
-        if os.path.basename(path) != "S11":
+        if path.name != "S11":
             logger.error("The S11 folder should be called S11")
 
+            if fix:
+                cls._fix(path)
         return path, os.path.basename(path) == "S11"
 
     @classmethod
