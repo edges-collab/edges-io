@@ -3,7 +3,7 @@ import shutil
 import subprocess
 from abc import ABC, abstractmethod
 from pathlib import Path
-from typing import Iterable, Tuple, Union
+from typing import Dict, Iterable, Optional, Tuple, Union
 
 from . import utils
 from .logging import logger
@@ -44,12 +44,33 @@ class _ObsNode(ABC):
     def _run_checks(cls, path, fix):
         return cls.check_self(path, fix)
 
-    @staticmethod
-    @abstractmethod
-    def check_self(
-        path, fix=False
-    ) -> Tuple[Path, Union[dict[str, str], Iterable[dict[str, str]]]]:
-        pass
+    @classmethod
+    def check_self(cls, path: [str, Path], fix: bool):
+        path = Path(path)
+        path, match = cls._check_self(path, fix=fix)
+        if match is not None:
+            cls._validate_match(match, path.name)
+        return path, match
+
+    @classmethod
+    def _check_self(
+        cls, path: Path, *, fix: bool = False
+    ) -> Tuple[Path, Optional[dict]]:
+
+        if not path.exists():
+            logger.error(f"The path {path} does not exist!")
+
+        match = re.search(cls.pattern, path.name)
+        if match is None:
+            logger.error(
+                f"The file {path.name} does not have the naming format for a {cls.__name__}. "
+                f"Correct format: {cls.pattern}."
+            )
+
+            if fix:
+                path, match = cls._fix(path.parent, path.name)
+
+        return path, match.groupdict() if match is not None else None
 
     @classmethod
     def typestr(cls, name: str):
@@ -82,7 +103,9 @@ class _ObsNode(ABC):
         return {}
 
     @classmethod
-    def _fix(cls, root: Path, basename: str):
+    def _fix(
+        cls, root: Path, basename: str
+    ) -> Tuple[Optional[Path], Optional[re.Match]]:
         """Auto-fix a basename."""
 
         # First try simple substitutions
@@ -101,6 +124,7 @@ class _ObsNode(ABC):
 
         # Otherwise, try various patterns.
         for pattern in cls.known_patterns:
+            print(pattern)
             match = re.search(pattern, new_name)
             if match:
                 break
@@ -131,6 +155,10 @@ class _ObsNode(ABC):
             else:
                 return None, None
 
+    @classmethod
+    def _validate_match(cls, match: Dict[str, str], filename: str):
+        pass
+
 
 class _DataFile(_ObsNode):
     """
@@ -145,9 +173,19 @@ class _DataFile(_ObsNode):
         format.
     """
 
+    @classmethod
+    def _check_self(cls, path: Path, **kwargs) -> Tuple[Path, Optional[dict]]:
+        logger.structure(f"Checking {cls.__name__} name format at {path}.")
+        return super()._check_self(path, **kwargs)
+
 
 class _DataContainer(_ObsNode):
     _content_type = None
+
+    @classmethod
+    def _check_self(cls, path: Path, **kwargs) -> Tuple[Path, Optional[dict]]:
+        logger.structure(f"Checking {cls.__name__} folder contents format at {path}.")
+        return super()._check_self(path, **kwargs)
 
     @classmethod
     def _run_checks(cls, path, fix):
@@ -198,6 +236,7 @@ class _DataContainer(_ObsNode):
         fls = utils.get_active_files(path)
 
         # Start off with a clean slate for this function.
+        n_errors = logger.errored
         logger.errored = 0
         for fl in fls:
             if isinstance(cls._content_type, dict):
@@ -242,27 +281,5 @@ class _DataContainer(_ObsNode):
                 pass
 
         ok = not bool(logger.errored)
-        logger.errored = 0
+        logger.errored = n_errors + logger.errored
         return ok
-
-    @classmethod
-    def typestr(cls, name: str) -> str:
-        """Generate a string uniquely defining the 'kind of thing' path is.
-
-        The point of this method is to be able to compare two different file/folder
-        names to check whether they describe the same kind of thing. For example,
-        two Spectrum files from different observations which are both "Ambient" should
-        return the same string, even though their dates etc. might be different. However,
-        two Spectrum files of different Loads will be different.
-
-        The reason this has to exist (and as a classmethod) is because merely comparing
-        the type of the thing is not enough, since the class itself has no knowledge of
-        for example the kind of load. But comparing instances is not great either, since
-        instances are expected to have a full complement of files to be "valid", but
-        one of the main purposes of comparing files is to construct such a full observation.
-        """
-        return cls.__name__
-
-    @classmethod
-    def _fix(cls, root, basename):
-        return
