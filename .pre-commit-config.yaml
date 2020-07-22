@@ -40,10 +40,10 @@ repos:
   hooks:
   - id: black
 
-- repo: https://github.com/terrencepreilly/darglint
-  rev: master
-  hooks:
-  - id: darglint
+#- repo: https://github.com/terrencepreilly/darglint
+#  rev: master
+#  hooks:
+#  - id: darglint
 
 - repo: https://github.com/timothycrosley/isort
   rev: 5.0.5
