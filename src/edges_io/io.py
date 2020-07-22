@@ -11,6 +11,7 @@ import os
 import re
 import read_acq
 import shutil
+import subprocess
 import tempfile
 import toml
 import warnings
@@ -195,9 +196,18 @@ class _DataContainer(ABC):
 
                     if fix:
                         if fl.name == "Notes.odt":
-                            shutil.move(fl, fl.with_suffix(".txt"))
-                            fl = fl.with_suffix(".txt")
-                            logger.success(f"Successfully renamed to {fl}")
+                            try:
+                                subprocess.run(
+                                    [f"pandoc -o {fl.with_suffix('.txt')} {fl}"],
+                                    check=True,
+                                )
+                                fl = fl.with_suffix(".txt")
+                                logger.success(f"Successfully renamed to {fl}")
+                            except subprocess.CalledProcessError as e:
+                                logger.warning(
+                                    f"Could not convert to .txt -- error: {e.message}"
+                                )
+
                         else:
                             fixed = utils._ask_to_rm(fl)
 
