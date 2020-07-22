@@ -64,7 +64,7 @@ class _ObsNode(ABC):
         if match is None:
             logger.error(
                 f"The file {path.name} does not have the naming format for a {cls.__name__}. "
-                f"Correct format: {cls.pattern}."
+                f"Correct format: {cls.write_pattern}."
             )
 
             if fix:
@@ -124,17 +124,16 @@ class _ObsNode(ABC):
 
         # Otherwise, try various patterns.
         for pattern in cls.known_patterns:
-            print(pattern)
             match = re.search(pattern, new_name)
             if match:
                 break
 
         if match is None:
-            logger.warning("\tCould not auto-fix it.")
+            logger.warning(f"\tCould not auto-fix {new_name}.")
             fixed = utils._ask_to_rm(root / basename)
             if fixed:
-                logger.success("Successfully removed.")
-            return None, None
+                logger.success("\tSuccessfully removed.")
+            return root / basename, None
         else:
             dct = match.groupdict()
             default = {
@@ -149,11 +148,11 @@ class _ObsNode(ABC):
             match = re.search(cls.pattern, new_name)
 
             if match is not None:
-                logger.success(f"Successfully converted to {new_name}")
+                logger.success(f"\tSuccessfully converted to {new_name}")
                 shutil.move(root / basename, new_path)
                 return new_path, match
             else:
-                return None, None
+                return root / basename, None
 
     @classmethod
     def _validate_match(cls, match: Dict[str, str], filename: str):
@@ -175,7 +174,6 @@ class _DataFile(_ObsNode):
 
     @classmethod
     def _check_self(cls, path: Path, **kwargs) -> Tuple[Path, Optional[dict]]:
-        logger.structure(f"Checking {cls.__name__} name format at {path}.")
         return super()._check_self(path, **kwargs)
 
 
@@ -251,7 +249,12 @@ class _DataContainer(_ObsNode):
                         if fl.name == "Notes.odt":
                             try:
                                 subprocess.run(
-                                    [f"pandoc -o {fl.with_suffix('.txt')} {fl}"],
+                                    [
+                                        "pandoc",
+                                        "-o",
+                                        str(fl.with_suffix(".txt")),
+                                        str(fl),
+                                    ],
                                     check=True,
                                 )
                                 fl = fl.with_suffix(".txt")

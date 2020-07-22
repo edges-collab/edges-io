@@ -26,14 +26,14 @@ from .data import DATA_PATH
 from .h5 import HDF5RawSpectrum
 from .logging import logger
 
-LOAD_ALIASES = bidict(
-    {
-        "ambient": "Ambient",
-        "hot_load": "HotLoad",
-        "open": "LongCableOpen",
-        "short": "LongCableShorted",
+with open(DATA_PATH / "calibration_loads.toml") as fl:
+    data = toml.load(fl)
+    LOAD_ALIASES = bidict({v["alias"]: k for k, v in data.items()})
+    LOAD_MAPPINGS = {
+        v: k
+        for k, val in data.items()
+        for v in val.get("misspells", []) + [val["alias"]]
     }
-)
 
 with open(DATA_PATH / "antenna_simulators.toml") as fl:
     ANTENNA_SIMULATORS = toml.load(fl)
@@ -47,6 +47,12 @@ ANTSIM_REVERSE = {
 class _SpectrumOrResistance(_DataFile):
     load_pattern = "|".join(LOAD_ALIASES.values())
     antsim_pattern = "|".join(ANTENNA_SIMULATORS.keys())
+    _antsim_rev_pattern = "|".join(ANTSIM_REVERSE.keys())
+    _load_rev_pattern = "|".join(LOAD_MAPPINGS.keys())
+    _loadname_pattern = (
+        f"{load_pattern}|{antsim_pattern}|{_antsim_rev_pattern}|{_load_rev_pattern}"
+    )
+
     pattern = (
         r"(?P<load_name>%s|%s)" % (load_pattern, antsim_pattern)
         + r"_(?P<run_num>\d{2})_(?P<year>\d{4})_(?P<day>\d{3})_("
@@ -58,58 +64,74 @@ class _SpectrumOrResistance(_DataFile):
         "{second:0>2}_lab.{file_format}"
     )
 
-    known_patterns = [
+    known_patterns = (
         (
-            r"^(?P<load_name>%s|%s)" % (load_pattern, antsim_pattern)
+            r"^(?P<load_name>%s)" % _loadname_pattern
             + r"_25C_(?P<month>\d{1,2})_(?P<day>\d{1,2})_("
             r"?P<year>\d\d\d\d)_(?P<hour>\d{1,2})_(?P<minute>\d{"
             r"1,2})_(?P<second>\d{1,2}).(?P<file_format>\w{2,3})$"
         ),
         (
-            "^(?P<load_name>{})".format(load_pattern)
+            "^(?P<load_name>{})".format(_loadname_pattern)
             + r"(?P<run_num>\d{1,2})_25C_(?P<month>\d{1,"
             r"2})_(?P<day>\d{1,2})_(?P<year>\d\d\d\d)_("
             r"?P<hour>\d{1,2})_(?P<minute>\d{1,"
             r"2})_(?P<second>\d{1,2}).(?P<file_format>\w{2,3})$"
         ),
         (
-            r"(?P<load_name>%s|%s)" % (load_pattern, antsim_pattern)
+            r"(?P<load_name>%s)" % _loadname_pattern
             + r"_(?P<year>\d{4})_(?P<day>\d{3})_"
             r"(?P<hour>\d{2})_(?P<minute>\d{2})_(?P<second>\d{2})_lab."
             r"(?P<file_format>\w{2,3})$"
         ),
         (
-            r"(?P<load_name>%s|%s)" % (load_pattern, antsim_pattern)
+            r"(?P<load_name>%s)" % _loadname_pattern
             + r"_(?P<year>\d{4})_(?P<day>\d{3})_(?P<hour>\d{2}).(?P<file_format>\w{2,3})$"
         ),
         (
-            r"(?P<load_name>%s|%s)" % (load_pattern, antsim_pattern)
+            r"(?P<load_name>%s)" % _loadname_pattern
             + r"_(?P<year>\d{4})_(?P<day>\d{3})_(?P<hour>\d{2}).(?P<file_format>\w{2,3})$"
         ),
         (
-            r"(?P<load_name>%s|%s)" % (load_pattern, antsim_pattern)
+            r"(?P<load_name>%s)" % _loadname_pattern
             + r"_(?P<year>\d{4})_(?P<day>\d{3})_lab.(?P<file_format>\w{2,3})$"
         ),
         (
-            r"(?P<load_name>%s|%s)" % (load_pattern, antsim_pattern)
+            r"(?P<load_name>%s)" % _loadname_pattern
             + r"_(?P<run_num>\d)_(?P<year>\d{4})_(?P<day>\d{3})_lab.(?P<file_format>\w{2,"
             r"3})$"
         ),
         (
-            r"(?P<load_name>%s|%s)" % (load_pattern, antsim_pattern)
+            r"(?P<load_name>%s)" % _loadname_pattern
             + r"_\d{2}C_(?P<month>\d{1,2})_(?P<day>\d{1,2})_(?P<year>\d{4})_(?P<hour>\d{"
             r"1,2})_(?P<minute>\d{1,2})_(?P<second>\d{1,2}).(?P<file_format>\w{2,3})"
         ),
         (
-            r"(?P<load_name>%s)" % ("|".join(ANTSIM_REVERSE.keys()))
-            + r"_\d{2}C_(?P<month>\d{1,2})_(?P<day>\d{1,2})_(?P<year>\d{4})_(?P<hour>\d{"
-            r"1,2})_(?P<minute>\d{1,2})_(?P<second>\d{1,2}).(?P<file_format>\w{2,3})"
+            r"(?P<load_name>%s)" % _loadname_pattern
+            + r"_(?P<run_num>\d{2})_(?P<year>\d{4})_(?P<day>\d{3})_("
+            r"?P<hour>\d{2})_(?P<minute>\d{2}).(?P<file_format>\w{2,3})$"
         ),
-    ]
+        (
+            r"(?P<load_name>%s)" % _loadname_pattern
+            + r"_(?P<run_num>\d{2})_(?P<year>\d{4})_(?P<day>\d{3})_("
+            r"?P<hour>\d{2}).(?P<file_format>\w{2,3})$"
+        ),
+        (
+            r"(?P<load_name>%s)" % _loadname_pattern
+            + r"_(?P<year>\d{4})_(?P<day>\d{3})_("
+            r"?P<hour>\d{2})_(?P<minute>\d{2}).(?P<file_format>\w{2,3})$"
+        ),
+        (
+            r"(?P<load_name>%s)" % _loadname_pattern
+            + r"_(?P<year>\d{4})_(?P<day>\d{3})_(?P<hour>\d{2}).(?P<file_format>\w{2,3})$"
+        ),
+    )
 
     known_substitutions = [
-        ("AmbientLoad", "Ambient"),
-        ("LongCableShort", "LongCableShorted"),
+        ("degC", "C"),
+        ("_25C", ""),
+        ("_15C", ""),
+        ("_35C", ""),
     ]
 
     supported_formats = []
@@ -123,14 +145,17 @@ class _SpectrumOrResistance(_DataFile):
         out = {"run_num": 1, "hour": 0, "minute": 0, "second": 0}
 
         if "month" in dct:
-            out["jd"] = utils.ymd_to_jd(dct("year"), dct("month"), dct("day"))
-        else:
+            out["jd"] = utils.ymd_to_jd(dct["year"], dct["month"], dct["day"])
+        elif "day" in dct:
             out["jd"] = dct["day"]
 
         # Switch Antenna Simulator "misspells" to true form.
-        # TODO: BAD!
         if dct["load_name"] in ANTSIM_REVERSE:
             dct["load_name"] = ANTSIM_REVERSE[dct["load_name"]]
+
+        elif dct["load_name"] in LOAD_MAPPINGS:
+            dct["load_name"] = LOAD_MAPPINGS[dct["load_name"]]
+
         return out
 
     @classmethod
@@ -188,9 +213,7 @@ class _SpectrumOrResistance(_DataFile):
 
         if load not in LOAD_ALIASES.values() and load not in ANTENNA_SIMULATORS:
             logger.error(
-                "The load specified {} is not one of the options available.".format(
-                    load
-                )
+                f"The load specified [{load}] is not one of the options available."
             )
 
         files = direc.glob(f"{load}_??_????_???_??_??_??_lab.*")
@@ -347,6 +370,11 @@ class Resistance(_SpectrumOrResistance):
 
     supported_formats = ("csv",)
 
+    known_patterns = _SpectrumOrResistance.known_patterns + (
+        r"^(?P<load_name>%s)" % _SpectrumOrResistance._loadname_pattern
+        + r".(?P<file_format>\w{2,3})$",
+    )
+
     def __init__(self, *args, store_data=True, **kwargs):
         super().__init__(*args, **kwargs)
         self.store_data = store_data
@@ -356,15 +384,19 @@ class Resistance(_SpectrumOrResistance):
         """The file format of the data to be read."""
         return "csv"
 
+    @classmethod
+    def read_csv(self) -> Tuple[np.ndarray, Dict]:
+        with open(self.path, "r", errors="ignore") as fl:
+            if fl.readline().startswith("FLUKE"):
+                return self.read_old_style_csv(self.path)
+            else:
+                return self.read_new_style_csv(self.path)
+
     def read(self):
         try:
             return self._data, self._meta
         except AttributeError:
-            with open(self.path, "r", errors="ignore") as fl:
-                if fl.readline().startswith("FLUKE"):
-                    data, meta = self.read_old_style_csv(self.path)
-                else:
-                    data, meta = self.read_new_style_csv(self.path)
+            data, meta = self.read_csv(self.path)
 
             if self.store_data:
                 self._data = data
@@ -373,7 +405,7 @@ class Resistance(_SpectrumOrResistance):
             return self._data, self._meta
 
     @classmethod
-    def read_new_style_csv(cls, path: [str, Path]):
+    def read_new_style_csv(cls, path: [str, Path]) -> Tuple[np.ndarray, Dict]:
         data = np.genfromtxt(
             path,
             skip_header=1,
@@ -398,25 +430,37 @@ class Resistance(_SpectrumOrResistance):
         return data, {}
 
     @classmethod
-    def read_old_style_csv(cls, path):
+    def read_old_style_csv_header(cls, path: Path):
+        with open(path, "r", errors="ignore") as fl:
+            done = False
+            out = {}
+            while not done:
+                line = fl.readline()
+
+                if line.startswith("Start Time,") or line.startswith("Max Time,"):
+                    names = line.split(",")
+
+                    next_line = fl.readline()
+                    values = next_line.split(",")
+
+                    out.update({name: value for name, value in zip(names, values)})
+
+                if "Scaling" in out:
+                    done = True
+
+        return out
+
+    @classmethod
+    def read_old_style_csv(cls, path) -> Tuple[np.ndarray, Dict]:
         # Weirdly, some old-style files use KOhm, and some just use Ohm.
 
         # These files have bad encoding, which we can ignore. This means we have to
         # read in the whole thing as text first (while ignoring errors) and construct
         # a StringIO object to pass to genfromtxt.
+        header = cls.read_old_style_csv_header(path)
+        nlines = int(header["Total readings"])
+
         with open(path, "r", errors="ignore") as fl:
-            while not fl.readline().startswith("Start Time,"):
-                continue
-
-            # Get the total number of actual lines
-            nlines = int(fl.readline().split(",")[4])
-
-            # The last line can be only half there, so omit it
-            nlines -= 1
-
-            while not fl.readline().startswith("Reading,"):
-                continue
-
             s = StringIO("".join([next(fl) for i in range(nlines)]))
 
             # Determine whether the file is in KOhm
@@ -482,6 +526,22 @@ class Resistance(_SpectrumOrResistance):
             )
 
         return self.read()[1]
+
+    @classmethod
+    def _get_filename_params_from_contents(cls, path: Path) -> Dict:
+        meta = cls.read_old_style_csv_header(path)
+
+        start_time = datetime.strptime(meta["Start Time"], "%m/%d/%Y %I:%M:%S %p")
+
+        jd = utils.ymd_to_jd(start_time.year, start_time.month, start_time.day)
+
+        return {
+            "hour": start_time.hour,
+            "minute": start_time.minute,
+            "second": start_time.second,
+            "jd": jd,
+            "year": start_time.year,
+        }
 
 
 class _SpectraOrResistanceFolder(_DataContainer):
@@ -586,12 +646,14 @@ class Spectra(_SpectraOrResistanceFolder):
     pattern = "Spectra"
     known_patterns = ("spectra",)
     _content_type = Spectrum
+    write_pattern = "Spectra"
 
 
 class Resistances(_SpectraOrResistanceFolder):
     pattern = "Resistance"
     known_patterns = ("resistance",)
     _content_type = Resistance
+    write_pattern = "Resistance"
 
 
 class S1P(_DataFile):
@@ -606,11 +668,16 @@ class S1P(_DataFile):
         "ReceiverReading",
         "ExternalLoad",
     ]
-    pattern = fr"^(?P<kind>{'|'.join(POSSIBLE_KINDS)})(?P<run_num>\d{2}).s1p$"
+    pattern = r"^(?P<kind>%s)(?P<run_num>\d{2}).s1p$" % ("|".join(POSSIBLE_KINDS))
     write_pattern = "{kind}{run_num:>02}.s1p"
     known_patterns = (
+        r"^(?P<kind>%s)(?P<run_num>\d{1}).s1p$" % ("|".join(POSSIBLE_KINDS)),
         fr"^(?P<kind>{'|'.join(k.lower() for k in POSSIBLE_KINDS)})(?P<run_num>\d{2}).s1p$",
+        fr"^(?P<kind>{'|'.join(k.lower() for k in POSSIBLE_KINDS)})(?P<run_num>\d{1}).s1p$",
+        r"^(?P<kind>%s).s1p$" % ("|".join(POSSIBLE_KINDS)),
+        fr"^(?P<kind>{'|'.join(k.lower() for k in POSSIBLE_KINDS)}).s1p$",
     )
+    known_substitutions = (("Ext_", "External"), ("Int_", ""))  # "Internal"
 
     @classmethod
     def typestr(cls, name: str) -> str:
@@ -652,9 +719,9 @@ class S1P(_DataFile):
     @classmethod
     def _get_filename_parameters(cls, dct: dict):
         # If a lower-case kind is passed, use the upper-case version
-        out = {}
+        out = {"run_num": 1}
         if dct.get("kind", None) in (k.lower() for k in cls.POSSIBLE_KINDS):
-            out["kind"] = cls.POSSIBLE_KINDS[
+            dct["kind"] = cls.POSSIBLE_KINDS[
                 [k.lower() for k in cls.POSSIBLE_KINDS].index(dct["kind"])
             ]
         return out
@@ -790,12 +857,8 @@ class _S11SubDir(_DataContainer):
 class LoadS11(_S11SubDir):
     STANDARD_NAMES = ["Open", "Short", "Match", "External"]
     pattern = "(?P<load_name>{})$".format("|".join(LOAD_ALIASES.values()))
-
-    known_patterns = (
-        "(?P<load_name>{})$".format(
-            "|".join(val.lower() for val in LOAD_ALIASES.values())
-        ),
-    )
+    known_patterns = (f"(?P<load_name>{'|'.join(LOAD_MAPPINGS.keys())})$",)
+    write_pattern = "{load_name}"
 
     def __init__(self, direc, run_num=None, fix=False):
         super().__init__(direc, run_num, fix)
@@ -811,9 +874,9 @@ class LoadS11(_S11SubDir):
 
     @classmethod
     def _get_filename_parameters(cls, dct: dict):
-        out = []
-        if dct["load_name"].capitalize() in LOAD_ALIASES:
-            out["load_name"] = dct["load_name"].capitalize()
+        out = {}
+        if dct["load_name"] in LOAD_MAPPINGS:
+            dct["load_name"] = LOAD_MAPPINGS[dct["load_name"]]
         return out
 
 
@@ -826,12 +889,13 @@ class AntSimS11(LoadS11):
     def _get_filename_parameters(cls, dct: dict) -> dict:
         out = {}
         if dct["load_name"] in ANTSIM_REVERSE:
-            out["load_name"] = ANTSIM_REVERSE[dct["load_name"]]
+            dct["load_name"] = ANTSIM_REVERSE[dct["load_name"]]
         return out
 
 
 class _RepeatNumberableS11SubDir(_S11SubDir):
     known_patterns = ("(?P<load_name>SwitchingState|ReceiverReading)",)
+    write_pattern = "{load_name}{repeat_num:0>2}"
 
     def __init__(self, direc, run_num=None, fix=False):
         super().__init__(direc, run_num, fix)
@@ -862,21 +926,23 @@ class SwitchingState(_RepeatNumberableS11SubDir):
         "ExternalShort",
         "ExternalMatch",
     ]
+    known_substitutions = (("InternalSwitch", "SwitchingState"),)
 
 
 class ReceiverReading(_RepeatNumberableS11SubDir):
     pattern = r"ReceiverReading(?P<repeat_num>\d{2})$"
     STANDARD_NAMES = ["Open", "Short", "Match", "ReceiverReading"]
+    known_substitutions = (("ReceiverReadings", "ReceiverReading"),)
 
 
 class S11Dir(_DataContainer):
     _content_type = {
         **{load: LoadS11 for load in LOAD_ALIASES.values()},
+        **{load: LoadS11 for load in LOAD_MAPPINGS.keys()},
         **{
             "SwitchingState": SwitchingState,
             "ReceiverReading": ReceiverReading,
             "InternalSwitch": SwitchingState,  # To catch the old way so it can be fixed.
-            "LongCableShort": LoadS11,
         },
         **{key: AntSimS11 for key in ANTENNA_SIMULATORS.keys()},
         **{key: AntSimS11 for key in ANTSIM_REVERSE.keys()},
@@ -1026,14 +1092,25 @@ class CalibrationObservation(_DataContainer):
     )
 
     known_patterns = (
-        r"^Receiver(\d{1,2})_(?P<temp>\d{2})C_(\d{4})_(\d{1,2})_(\d{1,2})_(\d{2,3})_to_(\d{"
-        r"2,3})MHz$",
-        r"Receiver(?P<rcv_num>\d{2})_(?P<temp>\d{2})C_(?P<year>\d{4})_(?P<month>\d{2})_"
-        r"(?P<day>\d{2})_(?P<freq_low>\d{3})"
-        r"_to_(?P<freq_hi>\d{3})_MHz$",
+        (
+            r"^Receiver(\d{1,2})_(?P<temp>\d{2})C_(\d{4})_(\d{1,2})_(\d{1,2})_(\d{2,3})_"
+            r"to_(\d{2,3})MHz$"
+        ),
+        (
+            r"Receiver(?P<rcv_num>\d{2})_(?P<temp>\d{2})C_(?P<year>\d{4})_(?P<month>\d{2})_"
+            r"(?P<day>\d{2})_(?P<freq_low>\d{3})"
+            r"_to_(?P<freq_hi>\d{3})_MHz$"
+        ),
     )
     write_pattern = "Receiver{rcv_num:0>2}_{temp:>02}C_{year:>04}_{month:0>2}_{day:0>2}_{freq_low:0>3}_to_{freq_hi:0>3}MHz"
-    _content_type = {"S11": S11Dir, "Spectra": Spectra, "Resistance": Resistances}
+    _content_type = {
+        "S11": S11Dir,
+        "Spectra": Spectra,
+        "Resistance": Resistances,
+        "spectra": Spectra,
+        "resistance": Resistances,
+        "s11": S11Dir,
+    }
 
     def __init__(
         self,
@@ -1338,7 +1415,7 @@ class CalibrationObservation(_DataContainer):
         ok = True
         for folder in ["S11", "Spectra", "Resistance"]:
             if not (path / folder).exists():
-                logger.error(f"No {folder} folder in observation!")
+                logger.warning(f"No {folder} folder in observation!")
                 ok = False
         return ok
 
@@ -1353,8 +1430,11 @@ class CalibrationObservation(_DataContainer):
         # Go through the subdirectories and check their simulators
         path = Path(path)
         dct = {
-            name: tuple(sorted(kls.get_simulator_names(path / name)))
-            for name, kls in cls._content_type.items()
+            name: tuple(
+                sorted(cls._content_type[name].get_simulator_names(path / name))
+            )
+            for name in ["Spectra", "S11", "Resistance"]
+            if (path / name).exists()
         }
 
         # If any list of simulators is not the same as the others, make an error.

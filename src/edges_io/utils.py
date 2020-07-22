@@ -15,7 +15,7 @@ def get_active_files(path: [str, Path]) -> List[Path]:
     return [
         fl
         for fl in fls
-        if fl.suffix not in (".old", ".ignore", ".invalid")
+        if fl.suffix not in (".old", ".ignore", ".invalid", ".output")
         and fl.name not in ok_extra_files
     ]
 
@@ -32,14 +32,12 @@ def ymd_to_jd(y, m, d):
     ).days + 1
 
 
-def _ask_to_rm(fl):
+def _ask_to_rm(fl: Path):
     while True:
         reply = (
             str(
                 input(
-                    "Would you like to (recursively) remove {} ([y]es/[i]gnore/[m]ove/[n]o)?: ".format(
-                        fl
-                    )
+                    f"Would you like to (recursively) remove {fl} ([y]es/make [i]nvalid/make [o]ld/make out[p]ut/[m]ove/[n]o)?: "
                 )
             )
             .lower()
@@ -55,6 +53,14 @@ def _ask_to_rm(fl):
             rm = None
             kind = "i"
             break
+        elif reply.startswith("o"):
+            rm = None
+            kind = "o"
+            break
+        elif reply.startswith("p"):
+            rm = None
+            kind = "p"
+            break
         elif reply.startswith("m"):
             rm = None
             kind = "m"
@@ -63,22 +69,28 @@ def _ask_to_rm(fl):
             print("please select (y/n) only")
 
     if rm:
-        if os.path.isdir(fl):
+        if fl.is_dir():
             shutil.rmtree(fl)
         else:
-            os.remove(fl)
+            os.remove(str(fl))
         return True
     elif rm is None:
         if kind == "i":
-            shutil.move(fl, fl + ".old")
+            shutil.move(fl, str(fl) + ".invalid")
+            return True
+        if kind == "o":
+            shutil.move(fl, str(fl) + ".old")
+            return True
+        if kind == "p":
+            shutil.move(fl, str(fl) + ".output")
             return True
         elif kind == "m":
-            reply = str(input("Change {} to: ".format(os.path.basename(fl))))
-            newfile = os.path.join(os.path.dirname(os.path.normpath(fl)), reply)
+            reply = str(input(f"Change {fl.name} to: "))
+            newfile = fl.parent / reply
             try:
                 shutil.move(fl, newfile)
             except Exception:
-                print("Couldn't rename the file {} as you asked.".format(newfile))
+                print(f"Couldn't rename the file {newfile} as you asked.")
                 raise
     else:
         return False

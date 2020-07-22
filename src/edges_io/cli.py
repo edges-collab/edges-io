@@ -42,8 +42,8 @@ def check(root, verbosity, less_verbose, fix):
         ][v]
     )
 
-    actual_root, _ = io.CalibrationObservation.check_self(root, fix)
-    io.CalibrationObservation.check_contents(actual_root, fix)
+    root, _ = io.CalibrationObservation.check_self(root, fix)
+    io.CalibrationObservation.check_contents(root, fix)
 
     if not logger.errored:
         logger.success("All checks passed successfully!")
