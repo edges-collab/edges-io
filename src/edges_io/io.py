@@ -1040,7 +1040,12 @@ class S11Dir(_DataContainer):
 
         for name, load in LOAD_ALIASES.items():
             setattr(
-                self, name, LoadS11(self.path / load, run_num=run_nums.get(load, None))
+                self,
+                name,
+                LoadS11(
+                    self.path / load,
+                    run_num=run_nums.get(load, run_nums.get(name, None)),
+                ),
             )
 
         self.simulators = {}
