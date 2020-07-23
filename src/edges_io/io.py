@@ -3,10 +3,10 @@ This module defines the overall file structure and internal contents of the
 calibration observations. It does *not* implement any algorithms/methods on that data,
 making it easier to separate the algorithms from the data checking/reading.
 """
+from __future__ import annotations
 
 import logging
 import numpy as np
-import os
 import re
 import read_acq
 import tempfile
@@ -216,7 +216,12 @@ class _SpectrumOrResistance(_DataFile):
                 f"The load specified [{load}] is not one of the options available."
             )
 
-        files = direc.glob(f"{load}_??_????_???_??_??_??_lab.*")
+        files = list(direc.glob(f"{load}_??_????_???_??_??_??_lab.*"))
+
+        if not files:
+            raise ValueError(
+                f"No Spectrum files found for load {load}. Available spectrum files: {list(direc.glob('*'))}"
+            )
 
         if filetype:
             files = [fl for fl in files if fl.endswith("." + filetype)]
@@ -229,15 +234,17 @@ class _SpectrumOrResistance(_DataFile):
             # Use any format so long as it is supported
             restricted_files = []
             for ftype in cls.supported_formats:
-                restricted_files = [fl for fl in files if fl.endswith("." + ftype)]
+                restricted_files = [fl for fl in files if fl.suffix == ("." + ftype)]
                 if restricted_files:
                     break
-            files = restricted_files
 
-            if not files:
+            if not restricted_files:
                 raise ValueError(
-                    f"No files exist for the load {load} for any filetype on that path: {direc}"
+                    f"No files exist for the load {load} for any filetype on that path: {direc}."
+                    f"Found files: {list(files)}."
                 )
+
+            files = restricted_files
 
         # Restrict to the given run_num (default last run)
         run_nums = [int(fl.name[len(load) + 1 : len(load) + 3]) for fl in files]
@@ -379,18 +386,23 @@ class Resistance(_SpectrumOrResistance):
         super().__init__(*args, **kwargs)
         self.store_data = store_data
 
+    @classmethod
+    def from_load(cls, *args, **kwargs) -> Resistance:
+        classes = super().from_load(*args, **kwargs)
+        return classes[0]
+
     @cached_property
     def file_format(self):
         """The file format of the data to be read."""
         return "csv"
 
     @classmethod
-    def read_csv(self) -> Tuple[np.ndarray, Dict]:
-        with open(self.path, "r", errors="ignore") as fl:
+    def read_csv(cls, path: Path) -> Tuple[np.ndarray, Dict]:
+        with open(path, "r", errors="ignore") as fl:
             if fl.readline().startswith("FLUKE"):
-                return self.read_old_style_csv(self.path)
+                return cls.read_old_style_csv(path)
             else:
-                return self.read_new_style_csv(self.path)
+                return cls.read_new_style_csv(path)
 
     def read(self):
         try:
@@ -611,7 +623,7 @@ class _SpectraOrResistanceFolder(_DataContainer):
         ok = True
 
         groups = [
-            re.search(cls._content_type.file_pattern, fl.name).groupdict() for fl in fls
+            re.search(cls._content_type.pattern, fl.name).groupdict() for fl in fls
         ]
 
         # Ensure all years are the same
@@ -816,6 +828,15 @@ class _S11SubDir(_DataContainer):
             for name in self.STANDARD_NAMES
         }
 
+    def __getattr__(self, item):
+        try:
+            return super().__getattr__(item)
+        except AttributeError as e:
+            try:
+                return self.children[item]
+            except KeyError:
+                raise e
+
     @cached_property
     def filenames(self) -> Tuple[Path]:
         """Filenames of S1P measurements used in this observation."""
@@ -860,8 +881,8 @@ class LoadS11(_S11SubDir):
     known_patterns = (f"(?P<load_name>{'|'.join(LOAD_MAPPINGS.keys())})$",)
     write_pattern = "{load_name}"
 
-    def __init__(self, direc, run_num=None, fix=False):
-        super().__init__(direc, run_num, fix)
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
         self.load_name = LOAD_ALIASES.inverse.get(
             self._match_dict["load_name"], self._match_dict["load_name"]
         )
@@ -897,8 +918,8 @@ class _RepeatNumberableS11SubDir(_S11SubDir):
     known_patterns = ("(?P<load_name>SwitchingState|ReceiverReading)",)
     write_pattern = "{load_name}{repeat_num:0>2}"
 
-    def __init__(self, direc, run_num=None, fix=False):
-        super().__init__(direc, run_num, fix)
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
         self.repeat_num = int(self._match_dict["repeat_num"])
 
     def __eq__(self, other):
