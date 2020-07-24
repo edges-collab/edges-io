@@ -44,6 +44,11 @@ misspells = [
     'simulator1_long',
 ]
 
+[AlanNoiseSource]
+kind = "active"
+misspells = [
+    "AllanNoiseSource",
+]
 
 [AlanNoiseSource_3db]
 kind = "active"
@@ -62,6 +67,12 @@ misspells = [
 kind = "active"
 misspells = [
     "AlansNoiseSource_and_CableBox",
+]
+
+[AlanNoiseSource_6db_CableBox]
+kind = "active"
+misspells = [
+    "Alan_noise_source_6dB_with_cablebox",
 ]
 
 [AlanNoiseSource_6db]
@@ -89,4 +100,10 @@ misspells = [
 kind = "active"
 misspells = [
     'AllanNoiseSource_Enclosed_10dB',
+]
+
+[AlanNoiseSource2]
+kind = "active"
+misspells = [
+    "AlanNoiseSource_2",
 ]

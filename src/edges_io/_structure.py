@@ -2,6 +2,7 @@ import re
 import shutil
 import subprocess
 from abc import ABC, abstractmethod
+from copy import copy
 from pathlib import Path
 from typing import Dict, Iterable, Optional, Tuple, Union
 
@@ -109,7 +110,7 @@ class _ObsNode(ABC):
         """Auto-fix a basename."""
 
         # First try simple substitutions
-        new_name = basename
+        new_name = copy(basename)
         for sub, correct in cls.known_substitutions:
             if sub in new_name:
                 new_name = new_name.replace(sub, correct)
@@ -117,10 +118,14 @@ class _ObsNode(ABC):
         match = re.search(cls.pattern, new_name)
 
         # If a simple substitution did the trick, return.
-        if match is not None:
+        if new_name != basename:
             shutil.move(root / basename, root / new_name)
+
+        if match is not None:
             logger.success(f"Successfully converted to {new_name}")
             return root / new_name, match
+
+        basename = copy(new_name)
 
         # Otherwise, try various patterns.
         for pattern in cls.known_patterns:
@@ -129,7 +134,7 @@ class _ObsNode(ABC):
                 break
 
         if match is None:
-            logger.warning(f"\tCould not auto-fix {new_name}.")
+            logger.warning(f"\tCould not auto-fix {basename}.")
             fixed = utils._ask_to_rm(root / basename)
             if fixed:
                 logger.success("\tSuccessfully removed.")
@@ -138,7 +143,7 @@ class _ObsNode(ABC):
             dct = match.groupdict()
             default = {
                 **cls._get_filename_parameters(dct),
-                **cls._get_filename_params_from_contents(root / new_name),
+                **cls._get_filename_params_from_contents(root / basename),
             }
             dct = {**default, **dct}
 

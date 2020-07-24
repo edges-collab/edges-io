@@ -10,7 +10,12 @@ def get_active_files(path: [str, Path]) -> List[Path]:
     if not path.is_dir():
         raise ValueError(f"{path} is not a directory!")
     fls = path.glob("*")
-    ok_extra_files = ["Notes.txt", "calibration_analysis.ipynb", "derived"]
+    ok_extra_files = [
+        "Notes.txt",
+        "calibration_analysis.ipynb",
+        "derived",
+        "definition.yaml",
+    ]
 
     return [
         fl

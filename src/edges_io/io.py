@@ -72,6 +72,12 @@ class _SpectrumOrResistance(_DataFile):
             r"1,2})_(?P<second>\d{1,2}).(?P<file_format>\w{2,3})$"
         ),
         (
+            r"^(?P<load_name>%s)" % _loadname_pattern
+            + r"_(?P<month>\d{1,2})_(?P<day>\d{1,2})_("
+            r"?P<year>\d\d\d\d)_(?P<hour>\d{1,2})_(?P<minute>\d{"
+            r"1,2})_(?P<second>\d{1,2}).(?P<file_format>\w{2,3})$"
+        ),
+        (
             "^(?P<load_name>{})".format(_loadname_pattern)
             + r"(?P<run_num>\d{1,2})_25C_(?P<month>\d{1,"
             r"2})_(?P<day>\d{1,2})_(?P<year>\d\d\d\d)_("
@@ -444,6 +450,9 @@ class Resistance(_SpectrumOrResistance):
     @classmethod
     def read_old_style_csv_header(cls, path: Path):
         with open(path, "r", errors="ignore") as fl:
+            if not fl.readline().startswith("FLUKE"):
+                return {}
+
             done = False
             out = {}
             while not done:
@@ -542,6 +551,9 @@ class Resistance(_SpectrumOrResistance):
     @classmethod
     def _get_filename_params_from_contents(cls, path: Path) -> Dict:
         meta = cls.read_old_style_csv_header(path)
+
+        if not meta:
+            return {}
 
         start_time = datetime.strptime(meta["Start Time"], "%m/%d/%Y %I:%M:%S %p")
 
