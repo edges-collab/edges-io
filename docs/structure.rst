@@ -21,8 +21,8 @@ information silently.
 
 A global exception to this rule are files with the following suffices: ``.old``, ``.invalid``,
 ``.ignore``. These may be kept in the observation and will always be ignored by the
-checker and reader. In addition, a file called ``Notes.txt`` may be placed anywhere
-in the structure.
+checker and reader. In addition, a file called ``Notes.txt`` *should* be placed at the
+root of the structure (i.e. in the ``25C/`` folder).
 
 Throughout the following description, we will use formats such as ``FileXX_YYY.txt``.
 In these, some groups of letters are intended to be placeholders for meta-information.
@@ -188,6 +188,11 @@ which correspond to:
 * ``MAJOR``: backwards-incompatible change. A change such that the reader itself must
   be changed in order to give the same results, or not error. In this case, all
   observations on disk will require updating.
+
+v1.1.0
+~~~~~~
+* Specified that ``Notes.txt`` must be placed in the root folder rather than anywhere
+  in the structure.
 
 v1.0.1
 ~~~~~~
