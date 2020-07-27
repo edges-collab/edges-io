@@ -816,12 +816,7 @@ class S1P(_DataFile):
 class _S11SubDir(_DataContainer):
     STANDARD_NAMES = S1P.POSSIBLE_KINDS
     _content_type = S1P
-    pattern = None
-    known_substitutions = (
-        ("AmbientLoad", "Ambient"),
-        ("LongCableShort_", "LongCableShorted_"),
-        ("InternalSwitch", "SwitchingState"),
-    )
+    write_pattern = "{load_name}{repeat_num:0>2}"
 
     @classmethod
     def typestr(cls, name: str) -> str:
@@ -831,6 +826,7 @@ class _S11SubDir(_DataContainer):
         super().__init__(path, **kwargs)
 
         self.run_num = run_num or self._get_max_run_num()
+        self.repeat_num = int(self._match_dict["repeat_num"])
 
     @cached_property
     def children(self) -> Dict[str, S1P]:
@@ -886,12 +882,29 @@ class _S11SubDir(_DataContainer):
     def _check_file_consistency(cls, path: Path) -> bool:
         return True
 
+    @classmethod
+    def _get_filename_parameters(cls, dct: dict):
+        out = {}
+        if "repeat_num" not in dct:
+            out["repeat_num"] = 1
+        return out
+
 
 class LoadS11(_S11SubDir):
     STANDARD_NAMES = ["Open", "Short", "Match", "External"]
-    pattern = "(?P<load_name>{})$".format("|".join(LOAD_ALIASES.values()))
-    known_patterns = (f"(?P<load_name>{'|'.join(LOAD_MAPPINGS.keys())})$",)
-    write_pattern = "{load_name}"
+    pattern = r"(?P<load_name>%s)(?P<repeat_num>\d{2})$" % (
+        "|".join(LOAD_ALIASES.values())
+    )
+    known_patterns = (
+        f"(?P<load_name>{'|'.join(LOAD_MAPPINGS.keys())})$",
+        f"(?P<load_name>{'|'.join(LOAD_ALIASES.values())})$",
+        r"(?P<load_name>%s)(?P<repeat_num>\d{1})$" % ("|".join(LOAD_ALIASES.values())),
+    )
+
+    known_substitutions = (
+        ("AmbientLoad", "Ambient"),
+        ("LongCableShort_", "LongCableShorted_"),
+    )
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -907,50 +920,34 @@ class LoadS11(_S11SubDir):
 
     @classmethod
     def _get_filename_parameters(cls, dct: dict):
-        out = {}
+        out = super()._get_filename_parameters(dct)
         if dct["load_name"] in LOAD_MAPPINGS:
             dct["load_name"] = LOAD_MAPPINGS[dct["load_name"]]
         return out
 
 
 class AntSimS11(LoadS11):
-    pattern = r"(?P<load_name>%s)$" % ("|".join(ANTENNA_SIMULATORS.keys()))
-
-    known_patterns = (r"(?P<load_name>%s)$" % ("|".join(ANTSIM_REVERSE.keys())),)
+    pattern = r"(?P<load_name>%s)(?P<repeat_num>\d{2})$" % (
+        "|".join(ANTENNA_SIMULATORS.keys())
+    )
+    known_patterns = (
+        r"(?P<load_name>%s)$" % ("|".join(ANTSIM_REVERSE.keys())),
+        r"(?P<load_name>%s)$" % ("|".join(ANTENNA_SIMULATORS.keys())),
+    )
 
     @classmethod
     def _get_filename_parameters(cls, dct: dict) -> dict:
-        out = {}
+        out = super()._get_filename_parameters(dct)
+
         if dct["load_name"] in ANTSIM_REVERSE:
             dct["load_name"] = ANTSIM_REVERSE[dct["load_name"]]
         return out
 
 
-class _RepeatNumberableS11SubDir(_S11SubDir):
-    known_patterns = ("(?P<load_name>SwitchingState|ReceiverReading)",)
-    write_pattern = "{load_name}{repeat_num:0>2}"
+class SwitchingState(_S11SubDir):
+    pattern = r"(?P<load_name>SwitchingState)(?P<repeat_num>\d{2})$"
+    known_patterns = ("(?P<load_name>SwitchingState)",)
 
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self.repeat_num = int(self._match_dict["repeat_num"])
-
-    def __eq__(self, other):
-        return self.__class__.__name__ == other.__class__.__name__
-
-    @classmethod
-    def typestr(cls, name: str) -> str:
-        return cls.__name__
-
-    @classmethod
-    def _get_filename_parameters(cls, dct: dict):
-        out = {}
-        if "repeat_num" not in dct:
-            out["repeat_num"] = 1
-        return out
-
-
-class SwitchingState(_RepeatNumberableS11SubDir):
-    pattern = r"SwitchingState(?P<repeat_num>\d{2})$"
     STANDARD_NAMES = [
         "Open",
         "Short",
@@ -962,10 +959,11 @@ class SwitchingState(_RepeatNumberableS11SubDir):
     known_substitutions = (("InternalSwitch", "SwitchingState"),)
 
 
-class ReceiverReading(_RepeatNumberableS11SubDir):
-    pattern = r"ReceiverReading(?P<repeat_num>\d{2})$"
+class ReceiverReading(_S11SubDir):
+    pattern = r"(?P<load_name>ReceiverReading)(?P<repeat_num>\d{2})$"
     STANDARD_NAMES = ["Open", "Short", "Match", "ReceiverReading"]
     known_substitutions = (("ReceiverReadings", "ReceiverReading"),)
+    known_patterns = ("(?P<load_name>ReceiverReading)",)
 
 
 class S11Dir(_DataContainer):
@@ -1114,7 +1112,7 @@ class S11Dir(_DataContainer):
     def get_simulator_names(cls, path):
         fls = utils.get_active_files(path)
         return {
-            fl.name
+            fl.name[:-2]
             for fl in fls
             if any(fl.name.startswith(k) for k in ANTENNA_SIMULATORS)
         }

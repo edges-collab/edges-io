@@ -1,3 +1,4 @@
+import os
 import re
 import shutil
 import subprocess
@@ -46,7 +47,7 @@ class _ObsNode(ABC):
         return cls.check_self(path, fix)
 
     @classmethod
-    def check_self(cls, path: [str, Path], fix: bool):
+    def check_self(cls, path: [str, Path], fix: bool) -> Tuple[Path, Optional[dict]]:
         path = Path(path)
         path, match = cls._check_self(path, fix=fix)
         if match is not None:
@@ -134,11 +135,26 @@ class _ObsNode(ABC):
                 break
 
         if match is None:
-            logger.warning(f"\tCould not auto-fix {basename}.")
-            fixed = utils._ask_to_rm(root / basename)
-            if fixed:
-                logger.success("\tSuccessfully removed.")
-            return root / basename, None
+            logger.warning(f"Could not auto-fix {basename}.")
+            new_path = utils._ask_to_rm(root / basename)
+            if new_path is None:
+                logger.success("Successfully removed.")
+            elif new_path != (root / basename):
+                if new_path.suffix not in utils.IGNORABLE:
+                    match = re.search(cls.pattern, str(new_path.relative_to(root)))
+
+                    if match is None:
+                        logger.warning(
+                            f"New name '{str(new_path.relative_to(root))}' is not correctly formatted either!"
+                        )
+                    else:
+                        logger.success(f"Successfully moved to '{new_path.name}'")
+                else:
+                    logger.success(f"Successfully moved to '{new_path.name}'")
+
+                basename = new_path.name
+
+            return root / basename, match
         else:
             dct = match.groupdict()
             default = {
@@ -235,7 +251,7 @@ class _DataContainer(_ObsNode):
         return True
 
     @classmethod
-    def _check_contents_selves(cls, path: Path, fix=False) -> bool:
+    def _check_contents_selves(cls, path: Path, fix=False) -> Tuple[bool, Path]:
         fls = utils.get_active_files(path)
 
         # Start off with a clean slate for this function.
@@ -263,7 +279,10 @@ class _DataContainer(_ObsNode):
                                     check=True,
                                 )
                                 fl = fl.with_suffix(".txt")
-                                logger.success(f"Successfully renamed to {fl}")
+                                if fl.exists():
+                                    os.remove(str(fl.with_suffix(".odt")))
+
+                                logger.success(f"Successfully converted to {fl}")
                             except subprocess.CalledProcessError as e:
                                 logger.warning(
                                     f"Could not convert to .txt -- error: {e.message}"
