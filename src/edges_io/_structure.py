@@ -157,11 +157,11 @@ class _ObsNode(ABC):
             return root / basename, match
         else:
             dct = match.groupdict()
-            default = {
+            dct = {
                 **cls._get_filename_parameters(dct),
+                **dct,
                 **cls._get_filename_params_from_contents(root / basename),
             }
-            dct = {**default, **dct}
 
             new_name = cls.write_pattern.format(**dct)
             new_path = root / new_name
