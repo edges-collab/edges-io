@@ -1011,21 +1011,29 @@ class S11Dir(_DataContainer):
         """
         super().__init__(path, **kwargs)
 
-        if type(repeat_num) == int:
-            sw_rep_num = repeat_num
-            rr_rep_num = repeat_num
-        elif repeat_num is None:
-            sw_rep_num = self._get_highest_rep_num(self.path, "SwitchingState")
-            rr_rep_num = self._get_highest_rep_num(self.path, "ReceiverReading")
-        else:
-            sw_rep_num = repeat_num.get(
-                "switching_state",
-                self._get_highest_rep_num(self.path, "SwitchingState"),
-            )
-            rr_rep_num = repeat_num.get(
-                "receiver_reading",
-                self._get_highest_rep_num(self.path, "ReceiverReading"),
-            )
+        rep_nums = {}
+        for name in (
+            ["switching_state", "receiver_reading"]
+            + list(LOAD_ALIASES.keys())
+            + list(self.get_simulator_names(self.path))
+        ):
+            try:
+                if type(repeat_num) == int:
+                    rep_nums[name] = repeat_num
+                elif repeat_num is None:
+                    rep_nums[name] = self._get_highest_rep_num(
+                        self.path, utils.snake_to_camel(name)
+                    )
+                else:
+                    rep_nums[name] = repeat_num.get(
+                        name,
+                        self._get_highest_rep_num(
+                            self.path, utils.snake_to_camel(name)
+                        ),
+                    )
+            except ValueError:
+                # Probably no load of that kind in the directory. That's fine.
+                pass
 
         if type(run_num) == int or run_num is None:
             run_nums = {
@@ -1040,11 +1048,11 @@ class S11Dir(_DataContainer):
         )
 
         self.switching_state = SwitchingState(
-            self.path / f"SwitchingState{sw_rep_num:>02}",
+            self.path / f"SwitchingState{rep_nums['switching_state']:>02}",
             run_num=run_nums.get("switching_state", None),
         )
         self.receiver_reading = ReceiverReading(
-            self.path / f"ReceiverReading{rr_rep_num:>02}",
+            self.path / f"ReceiverReading{rep_nums['receiver_reading']:>02}",
             run_num=run_nums.get("receiver_reading", None),
         )
 
@@ -1053,7 +1061,7 @@ class S11Dir(_DataContainer):
                 self,
                 name,
                 LoadS11(
-                    self.path / load,
+                    self.path / f"{load}{rep_nums[name]:>02}",
                     run_num=run_nums.get(load, run_nums.get(name, None)),
                 ),
             )
@@ -1061,7 +1069,8 @@ class S11Dir(_DataContainer):
         self.simulators = {}
         for name in self.get_simulator_names(path):
             self.simulators[name] = AntSimS11(
-                self.path / name, run_num=run_nums.get(name, None)
+                self.path / f"{name}{rep_nums[name]:>02}",
+                run_num=run_nums.get(name, None),
             )
 
     @property
@@ -1307,7 +1316,7 @@ class CalibrationObservation(_DataContainer):
         cls._tmpdir = tmpdir
 
         return cls(
-            sympath.parent,
+            sympath,
             run_num={"S11": s11_run_nums},
             repeat_num=rep_nums,
             fix=False,
@@ -1552,7 +1561,7 @@ class CalibrationObservation(_DataContainer):
         name : str
             The name of the observation (i.e. the directory inside the temporary direc).
         """
-        path = Path(path)
+        path = Path(path).absolute()
         obs_name = path.name
 
         assert path.exists(), f"{path} does not exist!"
@@ -1562,7 +1571,7 @@ class CalibrationObservation(_DataContainer):
         root_obs = definition.get("root_obs_dir", None)
 
         if root_obs is None:
-            root_obs = path.parents[1]
+            root_obs = path.parent
         else:
             # Root observation directory should be relative to the definition file.
             if not Path(root_obs).is_absolute():
@@ -1595,7 +1604,6 @@ class CalibrationObservation(_DataContainer):
                 else:
                     this_root_obs = root_obs
                     inc_path = this_root_obs / inc_path
-
                 this_obs_name = inc_path.relative_to(this_root_obs).parts[0]
 
                 # Get all non-invalid files in the other observation.
@@ -1702,8 +1710,9 @@ class CalibrationObservation(_DataContainer):
                 full_part = Path(full_part) / Path(part)
 
                 for thing in _strc:
-                    pth, match = thing.check_self(full_part, fix=False)
-                    if match:
+                    pth, match = thing.check_self(part, fix=False)
+
+                    if match is not None:
                         parts = parts + (thing.typestr(part),)
 
                         if isinstance(_strc, dict):

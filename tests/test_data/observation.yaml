@@ -14,7 +14,10 @@ meta:
   year: 2020
   month: 01
   day: 01
-  receiver: 1
+  rcv_num: 1
+  temp: 25
+  freq_low: 40
+  freq_hi: 200
 
 files:
   # Files (absolute, or relative to 'root') defining the observation.
@@ -22,33 +25,33 @@ files:
   # take glob patterns, or specific lists.
   spectra:
     ambient:
-      - Receiver01_2019_11_26_040_to_200MHz/25C/Spectra/Ambient*
+      - Receiver01_25C_2019_11_26_040_to_200MHz/Spectra/Ambient*
     short:
-      - Receiver01_2019_11_26_040_to_200MHz/25C/Spectra/LongCableShorted*
+      - Receiver01_25C_2019_11_26_040_to_200MHz/Spectra/LongCableShorted*
     open:
-      - Receiver01_2019_11_26_040_to_200MHz/25C/Spectra/LongCableOpen*
+      - Receiver01_25C_2019_11_26_040_to_200MHz/Spectra/LongCableOpen*
     hot_load:
-      - Receiver01_2019_11_26_040_to_200MHz/25C/Spectra/HotLoad*
+      - Receiver01_25C_2019_11_26_040_to_200MHz/Spectra/HotLoad*
     ant_sim4:
-      - Receiver01_2020_11_26_040_to_200MHz/25C/Spectra/AntSim4*
+      - Receiver01_25C_2020_11_26_040_to_200MHz/Spectra/AntSim4*
   resistance:
     ambient:
-      - Receiver01_2019_11_26_040_to_200MHz/25C/Resistance/Ambient*
+      - Receiver01_25C_2019_11_26_040_to_200MHz/Resistance/Ambient*
     short:
-      - Receiver01_2019_11_26_040_to_200MHz/25C/Resistance/LongCableShorted*
+      - Receiver01_25C_2019_11_26_040_to_200MHz/Resistance/LongCableShorted*
     open:
-      - Receiver01_2019_11_26_040_to_200MHz/25C/Resistance/LongCableOpen*
+      - Receiver01_25C_2019_11_26_040_to_200MHz/Resistance/LongCableOpen*
     hot_load:
-      - Receiver01_2019_11_26_040_to_200MHz/25C/Resistance/HotLoad*
+      - Receiver01_25C_2019_11_26_040_to_200MHz/Resistance/HotLoad*
     ant_sim4:
-      - Receiver01_2020_11_26_040_to_200MHz/25C/Resistance/AntSim4*
+      - Receiver01_25C_2020_11_26_040_to_200MHz/Resistance/AntSim4*
   s11:
-    ambient: ['Receiver01_2019_11_26_040_to_200MHz/25C/S11/Ambient', 1]
-    hot_load: ['Receiver01_2019_11_26_040_to_200MHz/25C/S11/HotLoad', 2]
-    open: ['Receiver01_2019_11_26_040_to_200MHz/25C/S11/LongCableOpen', 1]
-    short: ['Receiver01_2019_11_26_040_to_200MHz/25C/S11/LongCableShorted', 2]
-    receiver: ['Receiver01_2019_11_26_040_to_200MHz/25C/S11/ReceiverReading02', 1]
-    switch: ['Receiver01_2020_11_26_040_to_200MHz/25C/S11/SwitchingState01', 2]
+    ambient: ['Receiver01_25C_2019_11_26_040_to_200MHz/S11/Ambient01', 1]
+    hot_load: ['Receiver01_25C_2019_11_26_040_to_200MHz/S11/HotLoad01', 2]
+    open: ['Receiver01_25C_2019_11_26_040_to_200MHz/S11/LongCableOpen01', 1]
+    short: ['Receiver01_25C_2019_11_26_040_to_200MHz/S11/LongCableShorted01', 2]
+    receiver: ['Receiver01_25C_2019_11_26_040_to_200MHz/S11/ReceiverReading02', 1]
+    switch: ['Receiver01_25C_2020_11_26_040_to_200MHz/S11/SwitchingState01', 2]
 
 
 measurements:

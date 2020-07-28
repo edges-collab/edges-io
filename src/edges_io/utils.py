@@ -119,4 +119,4 @@ def get_file_list(top_level: Path, filter=None, ignore=None):
 
 
 def snake_to_camel(word: str):
-    return "".join(w.capitalize() for w in word.split("_"))
+    return "".join(w[0].upper() + w[1:] for w in word.split("_"))

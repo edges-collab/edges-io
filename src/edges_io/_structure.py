@@ -65,7 +65,7 @@ class _ObsNode(ABC):
         match = re.search(cls.pattern, path.name)
         if match is None:
             logger.error(
-                f"The file {path.name} does not have the naming format for a {cls.__name__}. "
+                f"The filename {path.name} does not have the correct format for a {cls.__name__}. "
                 f"Correct format: {cls.write_pattern}."
             )
 

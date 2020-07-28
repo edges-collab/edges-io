@@ -62,7 +62,7 @@ class HDF5Object:
     """
 
     _structure = None
-    _require_no_extra = True
+    _require_no_extra = False
     default_root = Path(".")
 
     filename = attr.ib(default=None, converter=lambda x: x if x is None else Path(x))
@@ -281,7 +281,7 @@ class HDF5Object:
 
         with h5py.File(filename, "r") as fl:
             try:
-                cls._checkgrp(fl, cls._structure, false_if_extra)
+                cls._checkgrp(fl, cls._structure)
             except HDF5StructureExtraKey:
                 if false_if_extra:
                     raise HDF5StructureExtraKey(f"Extra key found in {filename}")

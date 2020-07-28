@@ -1,7 +1,7 @@
-root_obs_dir: '../..'
+root_obs_dir: '../'
 
 prefer:
-  - Receiver01_2020_11_26_040_to_200MHz
+  - Receiver01_25C_2020_11_26_040_to_200MHz
 
 measurements:
   # Use this section to define any parameters of the run(s).
