@@ -6,13 +6,20 @@ import re
 import warnings
 from datetime import datetime, timedelta
 
-_WEATHER_PATTERN = re.compile(
+_NEW_WEATHER_PATTERN = re.compile(
     r"(?P<year>\d{4}):(?P<day>\d{3}):(?P<hour>\d{2}):(?P<minute>\d{2}):(?P<second>\d{2})  "
     r"rack_temp  (?P<rack_temp>\d{3}.\d{2}) Kelvin, "
     r"ambient_temp  (?P<ambient_temp>\d{3}.\d{2}) Kelvin, "
     r"ambient_hum  (?P<ambient_hum>[\d\- ]{3}.\d{2}) percent, "
     r"frontend  (?P<frontend_temp>\d{3}.\d{2}) Kelvin, "
     r"rcv3_lna  (?P<lna_temp>\d{3}.\d{2}) Kelvin"
+)
+
+_OLD_WEATHER_PATTERN = re.compile(
+    r"(?P<year>\d{4}):(?P<day>\d{3}):(?P<hour>\d{2}):(?P<minute>\d{2}):(?P<second>\d{2})  "
+    r"rack_temp  (?P<rack_temp>\d{3}.\d{2}) Kelvin, "
+    r"ambient_temp  (?P<ambient_temp>\d{3}.\d{2}) Kelvin, "
+    r"ambient_hum  (?P<ambient_hum>[\d\- ]{3}.\d{2}) percent, "
 )
 
 _THERMLOG_PATTERN = re.compile(
@@ -155,6 +162,12 @@ def read_weather_file(
         * ``frontend_temp``: temperature of the frontend (K)
         * ``lna_temp``: temperature of the LNA (K).
     """
+    with open(weather_file, "r") as fl:
+        if _NEW_WEATHER_PATTERN.match(fl.readline()) is not None:
+            pattern = _NEW_WEATHER_PATTERN
+        else:
+            pattern = _OLD_WEATHER_PATTERN
+
     start_line, n_lines, nchar = _get_chunk_pos_and_size(
         weather_file, (year, day, hour, minute), end_time=end_time, n_hours=n_hours
     )
@@ -178,7 +191,7 @@ def read_weather_file(
         # Go back to the starting position of the day, and read in each line of the day.
         fl.seek(start_line)
 
-        matches = _parse_lines(fl.read(nchar), _WEATHER_PATTERN)
+        matches = _parse_lines(fl.read(nchar), pattern)
 
         i = -1
         for i, match in enumerate(matches):
