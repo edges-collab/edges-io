@@ -171,21 +171,20 @@ def read_weather_file(
     start_line, n_lines, nchar = _get_chunk_pos_and_size(
         weather_file, (year, day, hour, minute), end_time=end_time, n_hours=n_hours
     )
-    weather = np.zeros(
-        n_lines,
-        dtype=[
-            ("year", int),
-            ("day", int),
-            ("hour", int),
-            ("minute", int),
-            ("second", int),
-            ("rack_temp", float),
-            ("ambient_temp", float),
-            ("ambient_hum", float),
-            ("frontend_temp", float),
-            ("lna_temp", float),
-        ],
-    )
+    dtype = [
+        ("year", int),
+        ("day", int),
+        ("hour", int),
+        ("minute", int),
+        ("second", int),
+        ("rack_temp", float),
+        ("ambient_temp", float),
+        ("ambient_hum", float),
+        ("frontend_temp", float),
+        ("lna_temp", float),
+    ]
+
+    weather = np.zeros(n_lines, dtype)
 
     with open(weather_file, "r") as fl:
         # Go back to the starting position of the day, and read in each line of the day.
@@ -195,7 +194,7 @@ def read_weather_file(
 
         i = -1
         for i, match in enumerate(matches):
-            weather[i] = (
+            w = (
                 match["year"],
                 match["day"],
                 match["hour"],
@@ -204,9 +203,15 @@ def read_weather_file(
                 match["rack_temp"],
                 match["ambient_temp"],
                 match["ambient_hum"],
-                match["frontend_temp"],
-                match["lna_temp"],
             )
+
+            if pattern == _NEW_WEATHER_PATTERN:
+                w = w + (match["frontend_temp"], match["lna_temp"],)
+            else:
+                w = w + (np.nan, np.nan)
+
+            weather[i] = w
+
         if i < len(weather) - 1:
             warnings.warn(
                 f"Only {i+1}/{n_lines} lines of {weather_file} were able to be parsed."
