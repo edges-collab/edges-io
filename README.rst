@@ -135,11 +135,11 @@ extra files as *errors*, and require the user to fix them up. To make this a bit
 and let those files stay in the directory (so we don't lose potentially valuable information),
 one of a few extensions can be added to the extra file:
 
-  * `.old`: for files that contain valid data but that is superseded by newer measurements
+  * ``.old``: for files that contain valid data but that is superseded by newer measurements
     and should be ignored,
-  * `.invalid`: for data that has something wrong with it (equipment broken, wrong input
+  * ``.invalid``: for data that has something wrong with it (equipment broken, wrong input
     parameters, etc.),
-  * `.ignore`: files to ignore for any other reason.
+  * ``.ignore``: files to ignore for any other reason.
 
 If the file does not have one of these extensions, and is not in the list of accepted
 files for the Observation, an error will be raised by the checker.
@@ -168,7 +168,7 @@ Thus, in reality, an observation is contained within one of *these* folders, and
 the ``CalibrationObservation`` has its ``path`` attribute set to the temperature directory.
 
 Inside this directory can be up to two files, and exactly three folders. One of the files
-is a `Notes.txt` file which summarises human-readable notes about the observation ("we
+is a ``Notes.txt`` file which summarises human-readable notes about the observation ("we
 ran the ambient spectra first, but had a delay because of xxx..."). The file is named
 ``definition.yaml`` and includes metadata about the observation in a specific format
 (this file also allows you to supplement the observation with other observations, but

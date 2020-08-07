@@ -1,7 +1,7 @@
 ===========================================
 EDGES Calibration File Structure Definition
 ===========================================
-**VERSION:** v1.0.0
+**VERSION:** v1.1.0
 
 This document is based on
 `memo #113 "Receiver calibration procedure document" <http://loco.lab.asu.edu/loco-memos/edges_reports/tom_20180523_Calibration_Steps.pdf>`_,
@@ -114,9 +114,9 @@ any given directory and file kind.
 
 **Note:** only a single run number for all *standards* (open, short, match etc.) within
 a given *load* (Ambient, SwitchingState etc.) can be *used*. It is never acceptable to
-use for example `Ambient/Open01.s1p` and `Ambient/Short02.s1p` together (though they
+use for example ``Ambient/Open01.s1p`` and ``Ambient/Short02.s1p`` together (though they
 can both exist). Thus, an incomplete set of s1p files for a given run number is flagged
-as en *error* -- these files should be removed, or defined with an `.invalid` suffix.
+as en *error* -- these files should be removed, or defined with an ``.invalid`` suffix.
 Similarly, mixing the same run number for the same load between different *observations*
 is not allowed.
 
