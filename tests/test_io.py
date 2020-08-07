@@ -17,12 +17,12 @@ LOAD_ALIASES = bidict(
 LOGGING = logging.getLogger("edges-io")
 
 
-@pytest.fixture("module")
+@pytest.fixture(scope="module")
 def test_dir(tmp_path_factory):
     return test_env(tmp_path_factory)
 
 
-@pytest.fixture("module")
+@pytest.fixture(scope="module")
 def test_env(tmp_path_factory):
     # Create an ideal observation file using tmp_path_factory
     pthList = ["Spectra", "Resistance", "S11"]
