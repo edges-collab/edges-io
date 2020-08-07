@@ -61,9 +61,9 @@ present (including none)::
                     {ReceiverReading|Open|Short|Match}<NN>.s1p
                 SwitchingState<RR>/
                     {Open|Short|Match|ExternalOpen|ExternalShort|ExternalMatch}<NN>.s1p
-                {LongCableOpen|LongCableShort|Ambient|HotLoad}/
+                {LongCableOpen|LongCableShort|Ambient|HotLoad}<RR>/
                     {Open|Short|Match|External}<NN>.s1p
-                <AntSimX>/
+                <AntSimX><RR>/
                     {Open|Short|Match|External}<NN>.s1p
 
 We will go through each format in more detail below to identify any vague points and
@@ -133,15 +133,17 @@ Contents Format:
         - Contains ``{Open|Short|Match|ExternalOpen|ExternalShort|ExternalMatch}<NN>.s1p``.
           These are again all measurements of different internal/external standards. Again,
           see notes on ``<NN>`` above.
-    * ``{Ambient|HotLoad|LongCableOpen|LongCableShort}/``
+    * ``{Ambient|HotLoad|LongCableOpen|LongCableShort}<RR>/``
         - *All* of these options *must* be present. They represent the S11 measurements
-          of the four calibration loads. Note there is no repeat number here.
+          of the four calibration loads. Repeat number must be greater or equal to one.
         - Each contains *all* of ``{External|Short|Open|Match}<NN>.s1p``.
-    * ``[AntSim<X>]/``
+    * ``[AntSim<X>]<RR>/``
         - Any number of Antenna Simulators *may* be present (up to 9). If present, ``X``
           identifies the simulator (an integer from 1-9).
         - The contents of an antenna simulation are the same as a Load. All of:
           ``{External|Short|Open|Match}<NN>.s1p``.
+        - Repeat number must be greater or equal one.
+
 
 Spectra Folder
 ~~~~~~~~~~~~~~

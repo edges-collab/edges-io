@@ -17,37 +17,35 @@ LOAD_ALIASES = bidict(
 LOGGING = logging.getLogger("edges-io")
 
 
-@pytest.fixture("module")
+@pytest.fixture(scope="module")
 def test_dir(tmp_path_factory):
     return test_env(tmp_path_factory)
 
 
-@pytest.fixture("module")
+@pytest.fixture(scope="module")
 def test_env(tmp_path_factory):
     # Create an ideal observation file using tmp_path_factory
     pthList = ["Spectra", "Resistance", "S11"]
     s11List = [
-        "Ambient",
-        "AntSim3",
-        "HotLoad",
-        "LongCableOpen",
-        "LongCableShorted",
+        "Ambient01",
+        "AntSim301",
+        "HotLoad01",
+        "LongCableOpen01",
+        "LongCableShorted01",
         "ReceiverReading01",
         "ReceiverReading02",
         "SwitchingState01",
         "SwitchingState02",
     ]
     root_dir = tmp_path_factory.mktemp("Test_Obs")
-    obs_dir = root_dir / "Receiver01_2020_01_01_010_to_200MHz"
+    obs_dir = root_dir / "Receiver01_25C_2020_01_01_010_to_200MHz"
     obs_dir.mkdir()
-    temp_dir = obs_dir / "25C"
-    temp_dir.mkdir()
-    note = temp_dir / "Notes.txt"
+    note = obs_dir / "Notes.txt"
     note.touch()
     dlist = []
     slist = []
     for i, p in enumerate(pthList):
-        dlist.append(temp_dir / p)
+        dlist.append(obs_dir / p)
         dlist[i].mkdir()
         if p == "Resistance":
             print("Making Resistance files")
@@ -113,78 +111,86 @@ def test_env(tmp_path_factory):
 
 
 # function to make observation object
-def new_testObs(testdir):
-    return io.CalibrationObservation(testdir)
+def new_test_obs(testdir):
+    return io.CalibrationObservation(
+        testdir, include_previous=False, compile_from_def=False
+    )
 
 
 # directory testing
-def test_make_good_Obs(test_env, caplog):
+def test_make_good_obs(test_env, caplog):
     # test that correct layouts pass (make an obs)
-    testDir = test_env
-    new_testObs(testDir)
+    new_test_obs(test_env)
 
 
-def test_bad_dirname_Obs(test_env, caplog):
+def test_bad_dirname_obs(test_env, caplog):
     # test that incorrect directories fail
-    testDir = test_env
-    base = testDir.parent
-    wrongDir = base / "Receiver_2020_01_01_010_to_200MHz"
-    testDir.rename(wrongDir)
-    with pytest.raises(ValueError):
-        new_testObs(wrongDir)
-    assert "directory name is in the wrong format" in caplog.text
+    test_dir = test_env
+    base = test_dir.parent
+    wrong_dir = base / "Receiver_2020_01_01_010_to_200MHz"
+    test_dir.rename(wrong_dir)
+    with pytest.raises(utils.FileStructureError):
+        new_test_obs(wrong_dir)
+    print(caplog.text)
+    assert (
+        "The filename Receiver_2020_01_01_010_to_200MHz does not have the correct format"
+        in caplog.text
+    )
+
     # receiver number
-    testDir = wrongDir
-    wrongDir = base / "Receiver00_2020_01_01_010_to_200MHz"
-    testDir.rename(wrongDir)
-    new_testObs(wrongDir)
+    test_dir = wrong_dir
+    wrong_dir = base / "Receiver00_25C_2020_01_01_010_to_200MHz"
+    test_dir.rename(wrong_dir)
+    print("WRONGDIR: ", wrong_dir)
+    new_test_obs(wrong_dir)
     assert "Unknown receiver number" in caplog.text
+
     # year
-    testDir = wrongDir
-    wrongDir = base / "Receiver01_2009_01_01_010_to_200MHz"
-    testDir.rename(wrongDir)
-    new_testObs(wrongDir)
+    test_dir = wrong_dir
+    wrong_dir = base / "Receiver01_25C_2009_01_01_010_to_200MHz"
+    test_dir.rename(wrong_dir)
+    new_test_obs(wrong_dir)
     assert "Unknown year" in caplog.text
 
-    testDir = wrongDir
-    wrongDir = base / "Receiver01_2045_01_01_010_to_200MHz"
-    testDir.rename(wrongDir)
-    new_testObs(wrongDir)
+    test_dir = wrong_dir
+    wrong_dir = base / "Receiver01_25C_2045_01_01_010_to_200MHz"
+    test_dir.rename(wrong_dir)
+    new_test_obs(wrong_dir)
     assert "Unknown year" in caplog.text
 
     # month
-    testDir = wrongDir
-    wrongDir = base / "Receiver01_2020_13_01_010_to_200MHz"
-    testDir.rename(wrongDir)
-    new_testObs(wrongDir)
+    test_dir = wrong_dir
+    wrong_dir = base / "Receiver01_25C_2020_13_01_010_to_200MHz"
+    test_dir.rename(wrong_dir)
+    new_test_obs(wrong_dir)
     assert "Unknown month" in caplog.text
 
     # day
-    testDir = wrongDir
-    wrongDir = base / "Receiver01_2020_01_32_010_to_200MHz"
-    testDir.rename(wrongDir)
-    new_testObs(wrongDir)
+    test_dir = wrong_dir
+    wrong_dir = base / "Receiver01_25C_2020_01_32_010_to_200MHz"
+    test_dir.rename(wrong_dir)
+    new_test_obs(wrong_dir)
     assert "Unknown day" in caplog.text
 
     # freqlow
-    testDir = wrongDir
-    wrongDir = base / "Receiver01_2020_01_01_000_to_200MHz"
-    testDir.rename(wrongDir)
-    new_testObs(wrongDir)
+    test_dir = wrong_dir
+    wrong_dir = base / "Receiver01_25C_2020_01_01_000_to_200MHz"
+    test_dir.rename(wrong_dir)
+    new_test_obs(wrong_dir)
     assert "Low frequency is weird" in caplog.text
 
     # freqhigh
-    testDir = wrongDir
-    wrongDir = base / "Receiver01_2020_01_01_010_to_900MHz"
-    testDir.rename(wrongDir)
-    new_testObs(wrongDir)
+    test_dir = wrong_dir
+    wrong_dir = base / "Receiver01_25C_2020_01_01_010_to_900MHz"
+    test_dir.rename(wrong_dir)
+    new_test_obs(wrong_dir)
     assert "High frequency is weird" in caplog.text
 
     # freqrange
-    testDir = wrongDir
-    wrongDir = base / "Receiver01_2020_01_01_200_to_010MHz"
-    testDir.rename(wrongDir)
-    new_testObs(wrongDir)
+    test_dir = wrong_dir
+    wrong_dir = base / "Receiver01_25C_2020_01_01_200_to_010MHz"
+    test_dir.rename(wrong_dir)
+    new_test_obs(wrong_dir)
     assert "Low frequency > High Frequency" in caplog.text
 
 
