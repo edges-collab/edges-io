@@ -1,7 +1,7 @@
 ===========================================
 EDGES Calibration File Structure Definition
 ===========================================
-**VERSION:** v1.0.0
+**VERSION:** v1.1.0
 
 This document is based on
 `memo #113 "Receiver calibration procedure document" <http://loco.lab.asu.edu/loco-memos/edges_reports/tom_20180523_Calibration_Steps.pdf>`_,
@@ -30,7 +30,7 @@ These will *always* be capital letters. They will *usually* be a repeat set of s
 but not always. It will *always* be made explicit in the context which letters are meant
 to be placeholders. The number of such letters in a given position is strict: the actual
 replacement data must match it. For example, in the above, if ``YYY`` represented the
-day of the year, it must be insert as a three-digit string. If the day was the 40th, it
+day of the year, it must be inserted as a three-digit string. If the day was the 40th, it
 must be inserted as ``040`` rather than simply ``40``.
 
 *Optional* format entries will be marked with square brackets, eg. ``File[XX]_YYY.txt``.
@@ -62,9 +62,9 @@ present (including none)::
                 SwitchingState<RR>/
                     {Open|Short|Match|ExternalOpen|ExternalShort|ExternalMatch}<NN>.s1p
                 {LongCableOpen|LongCableShort|Ambient|HotLoad}<RR>/
-                    {Open|Short|Match|External}.s1p
+                    {Open|Short|Match|External}<NN>.s1p
                 <AntSimX><RR>/
-                    {Open|Short|Match|External}.s1p
+                    {Open|Short|Match|External}<NN>.s1p
 
 We will go through each format in more detail below to identify any vague points and
 also describe the metadata of each entry.
@@ -112,6 +112,14 @@ It is an integer, and the entries in any given directory for any given file kind
 start at one and increment by one. There may be an arbitrary number of run numbers for
 any given directory and file kind.
 
+**Note:** only a single run number for all *standards* (open, short, match etc.) within
+a given *load* (Ambient, SwitchingState etc.) can be *used*. It is never acceptable to
+use for example ``Ambient/Open01.s1p`` and ``Ambient/Short02.s1p`` together (though they
+can both exist). Thus, an incomplete set of s1p files for a given run number is flagged
+as en *error* -- these files should be removed, or defined with an ``.invalid`` suffix.
+Similarly, mixing the same run number for the same load between different *observations*
+is not allowed.
+
 Contents Format:
     * ``ReceiverReading<RR>/``
         - ``<RR>``: the "repeat number" of the observation. An integer. Lowest value
@@ -120,7 +128,7 @@ Contents Format:
         - Contains ``ReceiverReading<NN>.s1p``, ``Short<NN>.s1p``, ``Open<NN>.s1p``
           and ``Match<NN>.s1p``. See notes on ``<NN>`` above. Each corresponds to the
           measurement of a different standard.
-    * ``Switchingstate<RR>/``
+    * ``SwitchingState<RR>/``
         - ``<RR>``: See note for ``ReceiverReading<RR>``.
         - Contains ``{Open|Short|Match|ExternalOpen|ExternalShort|ExternalMatch}<NN>.s1p``.
           These are again all measurements of different internal/external standards. Again,
@@ -187,6 +195,10 @@ v1.1.0
 ~~~~~~
 * Specified that ``Notes.txt`` must be placed in the root folder rather than anywhere
   in the structure.
+
+v1.0.1
+~~~~~~
+* Clarification that run-numbers cannot be mixed and matched within S11 measurements.
 
 v1.0.0
 ~~~~~~
