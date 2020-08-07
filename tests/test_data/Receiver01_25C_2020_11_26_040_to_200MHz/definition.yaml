@@ -8,13 +8,13 @@
 
 # A root observation directory from which all paths in this definition are relative
 # (unless specified as absolute).
-root_obs_dir: '../..'
+root_obs_dir: '../'
 
 include:
   # List of directories to include to supplement this observation.
   # These are only used if they are not available in this observation.
   # Specifying a top-level directory means everything under it will be included.
-  - Receiver01_2019_11_26_040_to_200MHz
+  - Receiver01_25C_2019_11_26_040_to_200MHz
 
 measurements:
   # Use this section to define any parameters of the run(s).

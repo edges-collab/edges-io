@@ -13,6 +13,14 @@ class HDF5StructureError(Exception):
     pass
 
 
+class HDF5StructureValidationError(HDF5StructureError):
+    pass
+
+
+class HDF5StructureExtraKey(HDF5StructureError):
+    pass
+
+
 @attr.s
 class HDF5Object:
     """
@@ -54,7 +62,7 @@ class HDF5Object:
     """
 
     _structure = None
-    _require_no_extra = True
+    _require_no_extra = False
     default_root = Path(".")
 
     filename = attr.ib(default=None, converter=lambda x: x if x is None else Path(x))
@@ -76,53 +84,49 @@ class HDF5Object:
 
         false_if_extra = kwargs.get("require_no_extra", cls._require_no_extra)
 
-        cls._checkgrp(data, cls._structure, false_if_extra)
+        try:
+            cls._checkgrp(data, cls._structure)
+        except HDF5StructureExtraKey as e:
+            if false_if_extra:
+                raise HDF5StructureExtraKey(
+                    f"Data had extra key(s)! Extras: {str(e).split(':')[-1]}"
+                )
+            else:
+                warnings.warn(f"Data had extra key! Extras: {str(e).split(':')[-1]}")
 
         inst.__memcache__ = data
         return inst
 
-    @classmethod
-    def _checkgrp(cls, grp, strc, require_no_extra=False):
-        for k, v in strc.items():
-            # We treat 'meta' as synonymous with 'attrs'
-            if k == "meta" and k not in grp:
-                k = "attrs"
-
-            if k not in grp and k != "attrs" and v != "optional":
-                raise TypeError(f"Non-optional key '{k}' not in {grp}")
-            elif k == "attrs":
-                if isinstance(grp, (h5py.Group, h5py.File)):
-                    cls._checkgrp(grp.attrs, v)
-                else:
-                    cls._checkgrp(grp[k], v)
-            elif isinstance(v, dict):
-                cls._checkgrp(grp[k], v)
-            elif not (v is None or v == "optional" or v(grp[k])):
-                raise HDF5StructureError(
-                    f"key {k} in {grp} failed its validation. Type: {type(grp[k])}"
-                )
-
-        # Ensure there's no extra keys in the group
-        if len(strc) < len(grp.keys()):
-            if require_no_extra:
-                raise HDF5StructureError("Extra keys found in the file.")
-            else:
-                warnings.warn("Extra keys found in the file.")
-
     @contextlib.contextmanager
-    def open(self, mode="r"):
-        """Context manager to open the file."""
+    def open(self, mode: str = "r") -> h5py.File:
+        """Context manager to open the file.
+
+        Parameters
+        ----------
+        mode : str
+            The read/write mode to open the file in.
+
+        Yields
+        ------
+        fl : `h5py.File` instance
+            An instance of the open file.
+        """
         fl = h5py.File(self.filename, mode=mode)
         yield fl
         fl.close()
 
-    def load(self, key: str):
+    def load(self, key: str) -> [dict, h5py.Dataset, h5py.Group]:
         """Load key from file into memory and keep it cached in memory.
 
         Parameters
         ----------
         key : str
             The key to load in.
+
+        Returns
+        -------
+        out : dict, :class:`h5py.Group` or :class:`h5py.Dataset`
+            The dataset or group of such datasets that were loaded.
 
         Notes
         -----
@@ -243,6 +247,32 @@ class HDF5Object:
             _write(fl, self._structure, to_write)
 
     @classmethod
+    def _checkgrp(cls, grp, strc):
+        for k, v in strc.items():
+            # We treat 'meta' as synonymous with 'attrs'
+            if k == "meta" and k not in grp:
+                k = "attrs"
+
+            if k not in grp and k != "attrs" and v != "optional":
+                raise TypeError(f"Non-optional key '{k}' not in {grp}")
+            elif k == "attrs":
+                if isinstance(grp, (h5py.Group, h5py.File)):
+                    cls._checkgrp(grp.attrs, v)
+                else:
+                    cls._checkgrp(grp[k], v)
+            elif isinstance(v, dict):
+                cls._checkgrp(grp[k], v)
+            elif not (v is None or v == "optional" or v(grp[k])):
+                raise HDF5StructureValidationError(
+                    f"key {k} in {grp} failed its validation. Type: {type(grp[k])}"
+                )
+
+        # Ensure there's no extra keys in the group
+        if len(strc) < len(grp.keys()):
+            extras = [k for k in grp.keys() if k not in strc]
+            raise HDF5StructureExtraKey(f"Extra keys found in the file: {extras}")
+
+    @classmethod
     def check(cls, filename, false_if_extra=None):
         false_if_extra = false_if_extra or cls._require_no_extra
 
@@ -250,7 +280,13 @@ class HDF5Object:
             return True
 
         with h5py.File(filename, "r") as fl:
-            cls._checkgrp(fl, cls._structure, false_if_extra)
+            try:
+                cls._checkgrp(fl, cls._structure)
+            except HDF5StructureExtraKey:
+                if false_if_extra:
+                    raise HDF5StructureExtraKey(f"Extra key found in {filename}")
+                else:
+                    warnings.warn(f"Extra key found in {filename}")
 
     def __contains__(self, item):
         return item in self.keys()
@@ -318,8 +354,14 @@ class _HDF5Group:
             self.load(k)
 
     @contextlib.contextmanager
-    def open(self):
-        """Context manager for opening up the file and getting this group."""
+    def open(self) -> h5py.Group:
+        """Context manager for opening up the file and getting this group.
+
+        Yields
+        ------
+        grp : :class:`h5py.Group`
+            The h5py Group corresponding to this instance.
+        """
         fl = h5py.File(self.filename, "r")
         grp = fl
 
@@ -355,27 +397,29 @@ class _HDF5Group:
 
 
 class HDF5RawSpectrum(HDF5Object):
+    _require_no_extra = False
+
     _structure = {
         "meta": {
-            "fastspec_version": lambda x: isinstance(x, str),
-            "start": lambda x: isinstance(x, (int, np.int64)),
-            "stop": lambda x: isinstance(x, (int, np.int64)),
-            "site": lambda x: isinstance(x, str),
-            "instrument": lambda x: isinstance(x, str),
-            "switch_io_port": lambda x: isinstance(x, (int, np.int64)),
-            "switch_delay": lambda x: isinstance(x, np.float),
-            "input_channel": lambda x: isinstance(x, (int, np.int64)),
-            "voltage_range": lambda x: isinstance(x, (int, np.int64)),
-            "samples_per_accumulation": lambda x: isinstance(x, (int, np.int64)),
-            "acquisition_rate": lambda x: isinstance(x, (int, np.int64)),
-            "num_channels": lambda x: isinstance(x, (int, np.int64)),
-            "num_taps": lambda x: isinstance(x, (int, np.int64)),
-            "window_function_id": lambda x: isinstance(x, (int, np.int64)),
-            "num_fft_threads": lambda x: isinstance(x, (int, np.int64)),
-            "num_fft_buffers": lambda x: isinstance(x, (int, np.int64)),
-            "stop_cycles": lambda x: isinstance(x, (int, np.int64)),
-            "stop_seconds": lambda x: isinstance(x, np.float),
-            "stop_time": lambda x: isinstance(x, str),
+            "fastspec_version": "optional",
+            "start": "optional",  # lambda x: isinstance(x, (int, np.int64)),
+            "stop": "optional",  # lambda x: isinstance(x, (int, np.int64)),
+            "site": "optional",  # lambda x: isinstance(x, str),
+            "instrument": "optional",  # lambda x: isinstance(x, str),
+            "switch_io_port": "optional",  # lambda x: isinstance(x, (int, np.int64)),
+            "switch_delay": "optional",  # lambda x: isinstance(x, np.float),
+            "input_channel": "optional",  # lambda x: isinstance(x, (int, np.int64)),
+            "voltage_range": "optional",  # lambda x: isinstance(x, (int, np.int64)),
+            "samples_per_accumulation": "optional",  # lambda x: isinstance(x, (int, np.int64)),
+            "acquisition_rate": "optional",  # lambda x: isinstance(x, (int, np.int64)),
+            "num_channels": "optional",  # lambda x: isinstance(x, (int, np.int64)),
+            "num_taps": "optional",  # lambda x: isinstance(x, (int, np.int64)),
+            "window_function_id": "optional",  # lambda x: isinstance(x, (int, np.int64)),
+            "num_fft_threads": "optional",  # lambda x: isinstance(x, (int, np.int64)),
+            "num_fft_buffers": "optional",  # lambda x: isinstance(x, (int, np.int64)),
+            "stop_cycles": "optional",  # lambda x: isinstance(x, (int, np.int64)),
+            "stop_seconds": "optional",  # lambda x: isinstance(x, np.float),
+            "stop_time": "optional",  # lambda x: isinstance(x, str),
         },
         "spectra": {
             "p0": lambda x: (x.ndim == 2 and x.dtype == float),

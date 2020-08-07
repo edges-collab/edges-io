@@ -3,42 +3,39 @@ This module defines the overall file structure and internal contents of the
 calibration observations. It does *not* implement any algorithms/methods on that data,
 making it easier to separate the algorithms from the data checking/reading.
 """
+from __future__ import annotations
 
-import glob
 import logging
 import numpy as np
-import os
 import re
 import read_acq
-import shutil
-import subprocess
 import tempfile
 import toml
 import warnings
 import yaml
-from abc import ABC, abstractmethod
 from bidict import bidict
 from cached_property import cached_property
 from datetime import datetime
 from io import StringIO
 from pathlib import Path
-from typing import Iterable, List, Tuple, Union
+from typing import Dict, List, Optional, Tuple, Union
 
 from . import utils
+from ._structure import _DataContainer, _DataFile
 from .data import DATA_PATH
 from .h5 import HDF5RawSpectrum
 from .logging import logger
 
-LOAD_ALIASES = bidict(
-    {
-        "ambient": "Ambient",
-        "hot_load": "HotLoad",
-        "open": "LongCableOpen",
-        "short": "LongCableShorted",
+with open(DATA_PATH / "calibration_loads.toml") as fl:
+    data = toml.load(fl)
+    LOAD_ALIASES = bidict({v["alias"]: k for k, v in data.items()})
+    LOAD_MAPPINGS = {
+        v: k
+        for k, val in data.items()
+        for v in val.get("misspells", []) + [val["alias"]]
     }
-)
 
-with open(os.path.join(DATA_PATH, "antenna_simulators.toml")) as fl:
+with open(DATA_PATH / "antenna_simulators.toml") as fl:
     ANTENNA_SIMULATORS = toml.load(fl)
 
 # Dictionary of misspelled:true mappings.
@@ -47,430 +44,190 @@ ANTSIM_REVERSE = {
 }
 
 
-class _DataFile(ABC):
-    def __init__(self, path, fix=False, log_level=40):
-        pre_level = logger.getEffectiveLevel()
-        logger.setLevel(log_level)
-
-        self.path, match = self.check_self(path)
-
-        logger.setLevel(pre_level)
-
-        try:
-            self._match_dict = match.groupdict()
-        except AttributeError:
-            try:
-                self._match_dict = [m.groupdict() for m in match]
-            except TypeError:
-                self._match_dict = match
-        except Exception:
-            raise
-
-    @staticmethod
-    @abstractmethod
-    def check_self(path, fix=False) -> Tuple[Path, Union[dict, Iterable]]:
-        pass
-
-    @classmethod
-    def typestr(cls, name):
-        """Generate a string uniquely defining the 'kind of thing' path is.
-
-        The point of this method is to be able to compare two different file/folder
-        names to check whether they describe the same kind of thing. For example,
-        two Spectrum files from different observations which are both "Ambient" should
-        return the same string, even though their dates etc. might be different. However,
-        two Spectrum files of different Loads will be different.
-
-        The reason this has to exist (and as a classmethod) is because merely comparing
-        the type of the thing is not enough, since the class itself has no knowledge of
-        for example the kind of load. But comparing instances is not great either, since
-        instances are expected to have a full complement of files to be "valid", but
-        one of the main purposes of comparing files is to construct such a full observation.
-        """
-        return cls.__name__
-
-
-class _DataContainer(ABC):
-    _content_type = None
-
-    def __init__(self, path, fix=False, log_level=40):
-        pre_level = logger.getEffectiveLevel()
-        logger.setLevel(log_level)
-
-        self.path, match = self.check_self(path, fix)
-        self.path = Path(self.path)
-
-        if not match:
-            raise utils.FileStructureError(
-                f"Directory {self.path.name} is in the wrong format."
-            )
-
-        if not self._check_contents_selves(self.path, fix):
-            raise utils.FileStructureError()
-        if not self._check_all_files_there(self.path):
-            raise utils.IncompleteObservation()
-        if not self._check_file_consistency(self.path):
-            raise utils.InconsistentObservation()
-
-        logger.setLevel(pre_level)
-
-        try:
-            self._match_dict = match.groupdict()
-        except AttributeError:
-            try:
-                self._match_dict = [m.groupdict() for m in match]
-            except TypeError:
-                self._match_dict = match
-        except Exception:
-            raise
-
-    @classmethod
-    @abstractmethod
-    def check_self(
-        cls, path: Path, fix: bool = False
-    ) -> Tuple[Path, Union[dict, Iterable]]:
-        """
-        Check whether the path itself is formatted correctly.
-
-        Parameters
-        ----------
-        path : Path
-            Path to the file/folder.
-        definition : dict, optional
-            Dictionary specifying the definition of the overall observation, which
-            may affect any particular component.
-        fix : bool, optional
-            Whether to apply straight-forward fixes to the filename format.
-        quiet : bool, optional
-            Whether to log anything.
-
-        Returns
-        -------
-        path : Path
-            The path to the file, possibly updated by any fix.
-        match : dict or None
-            If the path was found to be correct, this contains meta information
-            contained in the filename.
-        """
-        pass
-
-    @classmethod
-    def check_contents(cls, path: [str, Path], fix=False) -> bool:
-        """Abstract method for checking whether the contents of this container are in
-         the correct format for the DB"""
-        # Check that everything that *is* there has correct format.
-        path = Path(path)
-        ok_selves = cls._check_contents_selves(path, fix=fix)
-        ok_complete = cls._check_all_files_there(path)
-        # Check that the files that are there have consistent properties, and are also
-        # consistent with outside parameters (eg. if year appears on them, they should
-        # be consistent with outer years).
-        ok_consistent = cls._check_file_consistency(path)
-
-        return ok_selves and ok_complete and ok_consistent
-
-    @classmethod
-    @abstractmethod
-    def _check_all_files_there(cls, path: Path) -> bool:
-        return True
-
-    @classmethod
-    @abstractmethod
-    def _check_file_consistency(cls, path: Path) -> bool:
-        return True
-
-    @classmethod
-    def _check_contents_selves(cls, path: Path, fix=False) -> bool:
-        fls = utils.get_active_files(path)
-
-        # Start off with a clean slate for this function.
-        logger.errored = 0
-        for fl in fls:
-            if isinstance(cls._content_type, dict):
-                for key, ct in cls._content_type.items():
-                    if fl.name.startswith(key):
-                        content_type = ct
-                        break
-                else:
-                    logger.error(f"{fl.name} is an extraneous file/folder")
-
-                    if fix:
-                        if fl.name == "Notes.odt":
-                            try:
-                                subprocess.run(
-                                    [f"pandoc -o {fl.with_suffix('.txt')} {fl}"],
-                                    check=True,
-                                )
-                                fl = fl.with_suffix(".txt")
-                                logger.success(f"Successfully renamed to {fl}")
-                            except subprocess.CalledProcessError as e:
-                                logger.warning(
-                                    f"Could not convert to .txt -- error: {e.message}"
-                                )
-
-                        else:
-                            fixed = utils._ask_to_rm(fl)
-
-                            if fixed:
-                                logger.success("Successfully removed.")
-
-                    continue
-            else:
-                content_type = cls._content_type
-
-            fl, _ = content_type.check_self(fl, fix=fix)
-
-            # Recursively check the contents of the contents.
-            try:
-                content_type.check_contents(fl, fix=fix)
-            except AttributeError:
-                # It's a DataFile, not a DataContainer
-                pass
-
-        ok = not bool(logger.errored)
-        logger.errored = 0
-        return ok
-
-    @classmethod
-    def typestr(cls, name: str) -> str:
-        """Generate a string uniquely defining the 'kind of thing' path is.
-
-        The point of this method is to be able to compare two different file/folder
-        names to check whether they describe the same kind of thing. For example,
-        two Spectrum files from different observations which are both "Ambient" should
-        return the same string, even though their dates etc. might be different. However,
-        two Spectrum files of different Loads will be different.
-
-        The reason this has to exist (and as a classmethod) is because merely comparing
-        the type of the thing is not enough, since the class itself has no knowledge of
-        for example the kind of load. But comparing instances is not great either, since
-        instances are expected to have a full complement of files to be "valid", but
-        one of the main purposes of comparing files is to construct such a full observation.
-        """
-        return cls.__name__
-
-
 class _SpectrumOrResistance(_DataFile):
     load_pattern = "|".join(LOAD_ALIASES.values())
     antsim_pattern = "|".join(ANTENNA_SIMULATORS.keys())
-    file_pattern = (
+    _antsim_rev_pattern = "|".join(ANTSIM_REVERSE.keys())
+    _load_rev_pattern = "|".join(LOAD_MAPPINGS.keys())
+    _loadname_pattern = (
+        f"{load_pattern}|{antsim_pattern}|{_antsim_rev_pattern}|{_load_rev_pattern}"
+    )
+
+    pattern = (
         r"(?P<load_name>%s|%s)" % (load_pattern, antsim_pattern)
         + r"_(?P<run_num>\d{2})_(?P<year>\d{4})_(?P<day>\d{3})_("
         r"?P<hour>\d{2})_(?P<minute>\d{2})_(?P<second>\d{2})_lab.(?P<file_format>\w{2,"
         r"3})$"
     )
+    write_pattern = (
+        "{load_name}_{run_num:0>2}_{year:0>4}_{jd:0>3}_{hour:0>2}_{minute:0>2}_"
+        "{second:0>2}_lab.{file_format}"
+    )
+
+    known_patterns = (
+        (
+            r"^(?P<load_name>%s)" % _loadname_pattern
+            + r"_25C_(?P<month>\d{1,2})_(?P<day>\d{1,2})_("
+            r"?P<year>\d\d\d\d)_(?P<hour>\d{1,2})_(?P<minute>\d{"
+            r"1,2})_(?P<second>\d{1,2}).(?P<file_format>\w{2,3})$"
+        ),
+        (
+            r"^(?P<load_name>%s)" % _loadname_pattern
+            + r"_(?P<month>\d{1,2})_(?P<day>\d{1,2})_("
+            r"?P<year>\d\d\d\d)_(?P<hour>\d{1,2})_(?P<minute>\d{"
+            r"1,2})_(?P<second>\d{1,2}).(?P<file_format>\w{2,3})$"
+        ),
+        (
+            "^(?P<load_name>{})".format(_loadname_pattern)
+            + r"(?P<run_num>\d{1,2})_25C_(?P<month>\d{1,"
+            r"2})_(?P<day>\d{1,2})_(?P<year>\d\d\d\d)_("
+            r"?P<hour>\d{1,2})_(?P<minute>\d{1,"
+            r"2})_(?P<second>\d{1,2}).(?P<file_format>\w{2,3})$"
+        ),
+        (
+            r"(?P<load_name>%s)" % _loadname_pattern
+            + r"_(?P<year>\d{4})_(?P<day>\d{3})_"
+            r"(?P<hour>\d{2})_(?P<minute>\d{2})_(?P<second>\d{2})_lab."
+            r"(?P<file_format>\w{2,3})$"
+        ),
+        (
+            r"(?P<load_name>%s)" % _loadname_pattern
+            + r"_(?P<year>\d{4})_(?P<day>\d{3})_(?P<hour>\d{2}).(?P<file_format>\w{2,3})$"
+        ),
+        (
+            r"(?P<load_name>%s)" % _loadname_pattern
+            + r"_(?P<year>\d{4})_(?P<day>\d{3})_(?P<hour>\d{2}).(?P<file_format>\w{2,3})$"
+        ),
+        (
+            r"(?P<load_name>%s)" % _loadname_pattern
+            + r"_(?P<year>\d{4})_(?P<day>\d{3})_lab.(?P<file_format>\w{2,3})$"
+        ),
+        (
+            r"(?P<load_name>%s)" % _loadname_pattern
+            + r"_(?P<run_num>\d)_(?P<year>\d{4})_(?P<day>\d{3})_lab.(?P<file_format>\w{2,"
+            r"3})$"
+        ),
+        (
+            r"(?P<load_name>%s)" % _loadname_pattern
+            + r"_\d{2}C_(?P<month>\d{1,2})_(?P<day>\d{1,2})_(?P<year>\d{4})_(?P<hour>\d{"
+            r"1,2})_(?P<minute>\d{1,2})_(?P<second>\d{1,2}).(?P<file_format>\w{2,3})"
+        ),
+        (
+            r"(?P<load_name>%s)" % _loadname_pattern
+            + r"_(?P<run_num>\d{2})_(?P<year>\d{4})_(?P<day>\d{3})_("
+            r"?P<hour>\d{2})_(?P<minute>\d{2}).(?P<file_format>\w{2,3})$"
+        ),
+        (
+            r"(?P<load_name>%s)" % _loadname_pattern
+            + r"_(?P<run_num>\d{2})_(?P<year>\d{4})_(?P<day>\d{3})_("
+            r"?P<hour>\d{2}).(?P<file_format>\w{2,3})$"
+        ),
+        (
+            r"(?P<load_name>%s)" % _loadname_pattern
+            + r"_(?P<year>\d{4})_(?P<day>\d{3})_("
+            r"?P<hour>\d{2})_(?P<minute>\d{2}).(?P<file_format>\w{2,3})$"
+        ),
+        (
+            r"(?P<load_name>%s)" % _loadname_pattern
+            + r"_(?P<year>\d{4})_(?P<day>\d{3})_(?P<hour>\d{2}).(?P<file_format>\w{2,3})$"
+        ),
+    )
+
+    known_substitutions = [
+        ("degC", "C"),
+        ("_25C", ""),
+        ("_15C", ""),
+        ("_35C", ""),
+    ]
+
     supported_formats = []
-
-    def __init__(self, path, fix=False):
-        super().__init__(path, fix)
-
-        # Get out metadata
-        self._groups = self._match_dict
 
     @classmethod
     def typestr(cls, name: str):
-        return cls.__name__ + re.match(cls.file_pattern, name).groupdict()["load_name"]
+        return cls.__name__ + re.match(cls.pattern, name).groupdict()["load_name"]
 
     @classmethod
-    def _fix(cls, root, basename):
-        if "AmbientLoad" in basename:
-            newname = basename.replace("AmbientLoad", "Ambient")
-        elif "LongCableShort_" in basename:
-            newname = basename.replace("LongCableShort_", "LongCableShorted_")
-        else:
-            newname = basename
+    def _get_filename_parameters(cls, dct: dict):
+        out = {"run_num": 1, "hour": 0, "minute": 0, "second": 0}
 
-        match = re.search(cls.file_pattern, newname)
+        if "month" in dct:
+            out["jd"] = utils.ymd_to_jd(dct["year"], dct["month"], dct["day"])
+        elif "day" in dct:
+            out["jd"] = dct["day"]
 
-        if match is not None:
-            shutil.move(os.path.join(root, basename), os.path.join(root, newname))
-            logger.success("Successfully converted to {}".format(newname))
-            return os.path.join(root, newname), match
+        # Switch Antenna Simulator "misspells" to true form.
+        if dct["load_name"] in ANTSIM_REVERSE:
+            dct["load_name"] = ANTSIM_REVERSE[dct["load_name"]]
 
-        bad_patterns = [
-            (
-                r"^(?P<load_name>%s|%s)" % (cls.load_pattern, cls.antsim_pattern)
-                + r"_25C_(?P<month>\d{1,2})_(?P<day>\d{1,2})_("
-                r"?P<year>\d\d\d\d)_(?P<hour>\d{1,2})_(?P<minute>\d{"
-                r"1,2})_(?P<second>\d{1,2}).(?P<file_format>\w{2,3})$"
-            ),
-            (
-                "^(?P<load_name>{})".format(cls.load_pattern)
-                + r"(?P<run_num>\d{1,2})_25C_(?P<month>\d{1,"
-                r"2})_(?P<day>\d{1,2})_(?P<year>\d\d\d\d)_("
-                r"?P<hour>\d{1,2})_(?P<minute>\d{1,"
-                r"2})_(?P<second>\d{1,2}).(?P<file_format>\w{2,3})$"
-            ),
-            (
-                r"(?P<load_name>%s|%s)" % (cls.load_pattern, cls.antsim_pattern)
-                + r"_(?P<year>\d{4})_(?P<day>\d{3})_"
-                r"(?P<hour>\d{2})_(?P<minute>\d{2})_(?P<second>\d{2})_lab."
-                r"(?P<file_format>\w{2,3})$"
-            ),
-            (
-                r"(?P<load_name>%s|%s)" % (cls.load_pattern, cls.antsim_pattern)
-                + r"_(?P<year>\d{4})_(?P<day>\d{3})_(?P<hour>\d{2}).(?P<file_format>\w{2,3})$"
-            ),
-            (
-                r"(?P<load_name>%s|%s)" % (cls.load_pattern, cls.antsim_pattern)
-                + r"_(?P<year>\d{4})_(?P<day>\d{3})_(?P<hour>\d{2}).(?P<file_format>\w{2,3})$"
-            ),
-            (
-                r"(?P<load_name>%s|%s)" % (cls.load_pattern, cls.antsim_pattern)
-                + r"_(?P<year>\d{4})_(?P<day>\d{3})_lab.(?P<file_format>\w{2,3})$"
-            ),
-            (
-                r"(?P<load_name>%s|%s)" % (cls.load_pattern, cls.antsim_pattern)
-                + r"_(?P<run_num>\d)_(?P<year>\d{4})_(?P<day>\d{3})_lab.(?P<file_format>\w{2,"
-                r"3})$"
-            ),
-            (
-                r"(?P<load_name>%s|%s)" % (cls.load_pattern, cls.antsim_pattern)
-                + r"_\d{2}C_(?P<month>\d{1,2})_(?P<day>\d{1,2})_(?P<year>\d{4})_(?P<hour>\d{"
-                r"1,2})_(?P<minute>\d{1,2})_(?P<second>\d{1,2}).(?P<file_format>\w{2,3})"
-            ),
-            (
-                r"(?P<load_name>%s)" % ("|".join(ANTSIM_REVERSE.keys()))
-                + r"_\d{2}C_(?P<month>\d{1,2})_(?P<day>\d{1,2})_(?P<year>\d{4})_(?P<hour>\d{"
-                r"1,2})_(?P<minute>\d{1,2})_(?P<second>\d{1,2}).(?P<file_format>\w{2,3})"
-            ),
-        ]
-        i = 0
-        while match is None and i < len(bad_patterns):
-            pattern = bad_patterns[i]
-            match = re.search(pattern, newname)
-            i += 1
+        elif dct["load_name"] in LOAD_MAPPINGS:
+            dct["load_name"] = LOAD_MAPPINGS[dct["load_name"]]
 
-        if match is None:
-            logger.warning("\tCould not auto-fix it.")
+        return out
 
-            fixed = utils._ask_to_rm(os.path.join(root, basename))
-            if fixed:
-                logger.success("Successfully removed.")
-            return None, None
-        else:
-            dct = match.groupdict()
-
-            if "month" in dct:
-                jd = utils.ymd_to_jd(
-                    match.group("year"), match.group("month"), match.group("day")
-                )
-            else:
-                jd = dct["day"]
-
-            if "run_num" not in dct:
-                dct["run_num"] = "01"
-
-            if "hour" not in dct:
-                dct["hour"] = "00"
-
-            if "minute" not in dct:
-                dct["minute"] = "00"
-
-            if "second" not in dct:
-                dct["second"] = "00"
-
-            # Switch Antenna Simulator "misspells" to true form.
-            if dct["load_name"] in ANTSIM_REVERSE:
-                dct["load_name"] = ANTSIM_REVERSE[dct["load_name"]]
-
-            newname = (
-                "{load_name}_{run_num:0>2}_{year:0>4}_{jd:0>3}_{hour:0>2}_{minute:0>2}_"
-                "{second:0>2}_lab.{file_format}".format(jd=jd, **dct)
+    @classmethod
+    def _validate_match(cls, match: Dict[str, str], filename: str):
+        if int(match["run_num"]) < 1:
+            logger.error(f"The run_num for {filename} is less than one!")
+        if not (2010 <= int(match["year"]) <= 2030):
+            logger.error(f"The year for {filename} ({match['year']}) is a bit strange!")
+        if not (0 <= int(match["day"]) <= 366):
+            logger.error(
+                f"The day for {filename} ({match['day']}) is outside the number "
+                f"of days in a year"
             )
-            newpath = os.path.join(root, newname)
-
-            match = re.search(cls.file_pattern, newname)
-
-            if match is not None:
-                logger.success(f"Successfully converted to {newname}")
-                shutil.move(os.path.join(root, basename), newpath)
-                return newpath, match
-            else:
-                return None, None
-
-    @classmethod
-    def check_self(cls, path, fix=False):
-        if isinstance(path, (str, Path)):
-            path = [Path(path)]
-        else:
-            path = [Path(p) for p in path]
-
-        base_fnames = [fname.name for fname in path]
-        root = path[0].parent
-
-        matches = []
-        for i, basename in enumerate(base_fnames):
-            match = re.search(cls.file_pattern, basename)
-            if match is None:
-                logger.error(
-                    f"The file {basename} does not have the correct format for a {cls.__name__}"
-                )
-
-                if fix:
-                    newname, match = cls._fix(root, basename)
-                    path[i] = newname
-
-            if match is not None:
-                newname = os.path.basename(path[i])
-                groups = match.groupdict()
-                if int(groups["run_num"]) < 1:
-                    logger.error(f"The run_num for {newname} is less than one!")
-                if not (2010 <= int(groups["year"]) <= 2030):
-                    logger.error(
-                        f"The year for {newname} ({groups['year']}) is a bit strange!"
-                    )
-                if not (0 <= int(groups["day"]) <= 366):
-                    logger.error(
-                        f"The day for {newname} ({groups['day']}) is outside the number "
-                        f"of days in a year"
-                    )
-                if not (0 <= int(groups["hour"]) <= 24):
-                    logger.error(f"The hour for {newname} is outside 0-24!")
-                if not (0 <= int(groups["minute"]) <= 60):
-                    logger.error(f"The minute for {newname} is outside 0-60!")
-                if not (0 <= int(groups["second"]) <= 60):
-                    logger.error(f"The second for {newname} is outside 0-60!")
-                if groups["file_format"] not in cls.supported_formats:
-                    logger.error(
-                        f"The file {newname} is not of a supported format "
-                        f"({cls.supported_formats}). Got format {groups['file_format']}"
-                    )
-                matches.append(match)
-        return path, matches
+        if not (0 <= int(match["hour"]) <= 24):
+            logger.error(f"The hour for {filename} is outside 0-24!")
+        if not (0 <= int(match["minute"]) <= 60):
+            logger.error(f"The minute for {filename} is outside 0-60!")
+        if not (0 <= int(match["second"]) <= 60):
+            logger.error(f"The second for {filename} is outside 0-60!")
+        if match["file_format"] not in cls.supported_formats:
+            logger.error(
+                f"The file {filename} is not of a supported format "
+                f"({cls.supported_formats}). Got format {match['file_format']}"
+            )
 
     @classmethod
-    def from_load(cls, load, direc, run_num=None, filetype=None):
+    def from_load(
+        cls,
+        load: str,
+        direc: [str, Path],
+        run_num: Optional[int] = None,
+        filetype: Optional[str] = None,
+    ):
         """
         Initialize the object in a simple way.
 
         Parameters
         ----------
-        load : str
+        load
             The load name (eg. 'Ambient', 'HotLoad') or its alias (eg. 'ambient',
             'hot_load').
-        direc : str
+        direc
             The directory in which to search for relevant data
-        run_num : int, optional
+        run_num
             The run number of the data to use. Default, the last run. Each run is
             independent and different run_nums may be used for different loads.
-        filetype : str, optional
+        filetype
             The filetype of the data. Must be one of the supported formats. Defaults
             to `_default_filetype`.
         """
+        direc = Path(direc)
+
         if load in LOAD_ALIASES:
             load = LOAD_ALIASES[load]
 
         if load not in LOAD_ALIASES.values() and load not in ANTENNA_SIMULATORS:
             logger.error(
-                "The load specified {} is not one of the options available.".format(
-                    load
-                )
+                f"The load specified [{load}] is not one of the options available."
             )
 
-        files = glob.glob(
-            os.path.join(direc, "{load}_??_????_???_??_??_??_lab.*".format(load=load))
-        )
+        files = list(direc.glob(f"{load}_??_????_???_??_??_??_lab.*"))
+
+        if not files:
+            raise ValueError(
+                f"No Spectrum files found for load {load}. Available spectrum files: {list(direc.glob('*'))}"
+            )
 
         if filetype:
             files = [fl for fl in files if fl.endswith("." + filetype)]
@@ -483,20 +240,20 @@ class _SpectrumOrResistance(_DataFile):
             # Use any format so long as it is supported
             restricted_files = []
             for ftype in cls.supported_formats:
-                restricted_files = [fl for fl in files if fl.endswith("." + ftype)]
+                restricted_files = [fl for fl in files if fl.suffix == ("." + ftype)]
                 if restricted_files:
                     break
-            files = restricted_files
 
-            if not files:
+            if not restricted_files:
                 raise ValueError(
-                    f"No files exist for the load {load} for any filetype on that path: {direc}"
+                    f"No files exist for the load {load} for any filetype on that path: {direc}."
+                    f"Found files: {list(files)}."
                 )
 
+            files = restricted_files
+
         # Restrict to the given run_num (default last run)
-        run_nums = [
-            int(os.path.basename(fl)[len(load) + 1 : len(load) + 3]) for fl in files
-        ]
+        run_nums = [int(fl.name[len(load) + 1 : len(load) + 3]) for fl in files]
         if run_num is None:
             run_num = max(run_nums)
 
@@ -505,12 +262,11 @@ class _SpectrumOrResistance(_DataFile):
 
         if not files:
             raise ValueError(
-                "No {} files exist on path ({}) with run_num={}. Potential files: {}".format(
-                    load, direc, run_num, pre_files
-                )
+                f"No {load} files exist on path ({direc}) with run_num={run_num}. "
+                f"Potential files: {pre_files}"
             )
 
-        return cls(files)
+        return [cls(fl) for fl in files]
 
     @cached_property
     def run_num(self):
@@ -521,53 +277,38 @@ class _SpectrumOrResistance(_DataFile):
         for different loads.
         """
         # Ensure all load names are the same
-        if any(
-            group["run_num"] != self._groups[0]["run_num"] for group in self._groups
-        ):
-            raise IOError("Two files given with incompatible run_nums")
-        return self._groups[0]["run_num"]
+        return self._match_dict["run_num"]
 
     @cached_property
     def year(self):
         """Year on which data acquisition began"""
         # Ensure all load names are the same
-        if any(group["year"] != self._groups[0]["year"] for group in self._groups):
-            raise IOError("Two files given with incompatible years")
-        return int(self._groups[0]["year"])
+        return int(self._match_dict["year"])
 
     @cached_property
-    def days(self):
-        """List of integer days (one per file) at which data acquisition was begun"""
-        days = [int(group["day"]) for group in self._groups]
-        if max(days) - min(days) > 30:
-            logger.warning(
-                "Spectra taken suspiciously far apart [{} days]".format(
-                    max(days) - min(days)
-                )
-            )
-
-        return days
+    def days(self) -> int:
+        return int(self._match_dict["day"])
 
     @cached_property
     def load_name(self):
         return LOAD_ALIASES.inverse.get(
-            self._groups[0]["load_name"], self._groups[0]["load_name"]
+            self._match_dict["load_name"], self._match_dict["load_name"]
         )
 
     @cached_property
     def hours(self):
         """List of integer hours (one per file) at which data acquisition was begun"""
-        return [int(group["hour"]) for group in self._groups]
+        return int(self._match_dict["hour"])
 
     @cached_property
     def minutes(self):
         """List of integer minutes (one per file) at which data acquisition was begun"""
-        return [int(group["minute"]) for group in self._groups]
+        return int(self._match_dict["minute"])
 
     @cached_property
     def seconds(self):
         """List of integer seconds (one per file) at which data acquisition was begun"""
-        return [int(group["second"]) for group in self._groups]
+        return int(self._match_dict["second"])
 
     def __eq__(self, other):
         return (
@@ -597,15 +338,9 @@ class Spectrum(_SpectrumOrResistance):
     supported_formats = ["h5", "acq", "mat"]
 
     @cached_property
-    def file_format(self):
+    def file_format(self) -> str:
         """The file format of the data to be read."""
-        formats = [os.path.splitext(fl)[1][1:] for fl in self.path]
-        if any(
-            format != formats[0] or format not in self.supported_formats
-            for format in formats
-        ):
-            raise ValueError("not all file formats are the same!")
-        return formats[0]
+        return self.path.suffix[1:]
 
     @cached_property
     def data(self) -> [HDF5RawSpectrum, List[HDF5RawSpectrum]]:
@@ -616,27 +351,18 @@ class Spectrum(_SpectrumOrResistance):
 
         If the number of files is more than one, `data` will be a list of objects.
         """
-        objs = []
-        for fl in self.path:
-            if self.file_format == "h5":
-                objs.append(HDF5RawSpectrum(fl))
-            elif self.file_format == "acq":
-                spec, freq, time, meta = self._read_acq(fl)
-                objs.append(
-                    HDF5RawSpectrum.from_data(
-                        {
-                            "spectra": spec,
-                            "time_ancillary": time,
-                            "freq_ancillary": freq,
-                            "meta": meta,
-                        }
-                    )
-                )
-
-        if len(objs) == 1:
-            return objs[0]
-        else:
-            return objs
+        if self.file_format == "h5":
+            return HDF5RawSpectrum(self.path)
+        elif self.file_format == "acq":
+            spec, freq, time, meta = self._read_acq(self.path)
+            return HDF5RawSpectrum.from_data(
+                {
+                    "spectra": spec,
+                    "time_ancillary": time,
+                    "freq_ancillary": freq,
+                    "meta": meta,
+                }
+            )
 
     @staticmethod
     def _read_acq(file_name):
@@ -657,35 +383,38 @@ class Resistance(_SpectrumOrResistance):
 
     supported_formats = ("csv",)
 
-    def __init__(self, path, fix=False, store_data=True):
-        super(Resistance, self).__init__(path, fix=fix)
-        self.path = self.path[0]
+    known_patterns = _SpectrumOrResistance.known_patterns + (
+        r"^(?P<load_name>%s)" % _SpectrumOrResistance._loadname_pattern
+        + r".(?P<file_format>\w{2,3})$",
+    )
+
+    def __init__(self, *args, store_data=True, **kwargs):
+        super().__init__(*args, **kwargs)
         self.store_data = store_data
 
     @classmethod
-    def check_self(cls, path, fix=False):
-        path, match = super(Resistance, cls).check_self(path, fix)
-        if len(path) > 1:
-            logger.error(
-                "Only one resistance file should exist for each load and run_num"
-            )
-        return path, match
+    def from_load(cls, *args, **kwargs) -> Resistance:
+        classes = super().from_load(*args, **kwargs)
+        return classes[0]
 
     @cached_property
     def file_format(self):
         """The file format of the data to be read."""
         return "csv"
 
-    def read(self):
+    @classmethod
+    def read_csv(cls, path: Path) -> Tuple[np.ndarray, Dict]:
+        with open(path, "r", errors="ignore") as fl:
+            if fl.readline().startswith("FLUKE"):
+                return cls.read_old_style_csv(path)
+            else:
+                return cls.read_new_style_csv(path)
 
+    def read(self):
         try:
             return self._data, self._meta
         except AttributeError:
-            with open(self.path, "r", errors="ignore") as fl:
-                if fl.readline().startswith("FLUKE"):
-                    data, meta = self.read_old_style_csv(self.path)
-                else:
-                    data, meta = self.read_new_style_csv(self.path)
+            data, meta = self.read_csv(self.path)
 
             if self.store_data:
                 self._data = data
@@ -694,7 +423,7 @@ class Resistance(_SpectrumOrResistance):
             return self._data, self._meta
 
     @classmethod
-    def read_new_style_csv(cls, path: [str, Path]):
+    def read_new_style_csv(cls, path: [str, Path]) -> Tuple[np.ndarray, Dict]:
         data = np.genfromtxt(
             path,
             skip_header=1,
@@ -719,25 +448,40 @@ class Resistance(_SpectrumOrResistance):
         return data, {}
 
     @classmethod
-    def read_old_style_csv(cls, path):
+    def read_old_style_csv_header(cls, path: Path):
+        with open(path, "r", errors="ignore") as fl:
+            if not fl.readline().startswith("FLUKE"):
+                return {}
+
+            done = False
+            out = {}
+            while not done:
+                line = fl.readline()
+
+                if line.startswith("Start Time,") or line.startswith("Max Time,"):
+                    names = line.split(",")
+
+                    next_line = fl.readline()
+                    values = next_line.split(",")
+
+                    out.update({name: value for name, value in zip(names, values)})
+
+                if "Scaling" in out:
+                    done = True
+
+        return out
+
+    @classmethod
+    def read_old_style_csv(cls, path) -> Tuple[np.ndarray, Dict]:
         # Weirdly, some old-style files use KOhm, and some just use Ohm.
 
         # These files have bad encoding, which we can ignore. This means we have to
         # read in the whole thing as text first (while ignoring errors) and construct
         # a StringIO object to pass to genfromtxt.
+        header = cls.read_old_style_csv_header(path)
+        nlines = int(header["Total readings"])
+
         with open(path, "r", errors="ignore") as fl:
-            while not fl.readline().startswith("Start Time,"):
-                continue
-
-            # Get the total number of actual lines
-            nlines = int(fl.readline().split(",")[4])
-
-            # The last line can be only half there, so omit it
-            nlines -= 1
-
-            while not fl.readline().startswith("Reading,"):
-                continue
-
             s = StringIO("".join([next(fl) for i in range(nlines)]))
 
             # Determine whether the file is in KOhm
@@ -804,13 +548,37 @@ class Resistance(_SpectrumOrResistance):
 
         return self.read()[1]
 
+    @classmethod
+    def _get_filename_params_from_contents(cls, path: Path) -> Dict:
+        meta = cls.read_old_style_csv_header(path)
+
+        if not meta:
+            return {}
+
+        start_time = datetime.strptime(meta["Start Time"], "%m/%d/%Y %I:%M:%S %p")
+
+        jd = utils.ymd_to_jd(start_time.year, start_time.month, start_time.day)
+
+        return {
+            "hour": start_time.hour,
+            "minute": start_time.minute,
+            "second": start_time.second,
+            "jd": jd,
+            "year": start_time.year,
+        }
+
 
 class _SpectraOrResistanceFolder(_DataContainer):
-    folder_pattern = None
-
-    def __init__(self, path, run_num=None, filetype=None, fix=False):
+    def __init__(
+        self,
+        path: [str, Path],
+        *,
+        run_num: Optional[Union[int, Dict[str, int]]] = None,
+        filetype: Optional[str] = None,
+        **kwargs,
+    ):
         """Collection of spectra in an observation"""
-        super().__init__(path, fix)
+        super().__init__(path, **kwargs)
 
         if type(run_num) is int or run_num is None:
             run_nums = {load: run_num for load in LOAD_ALIASES.values()}
@@ -822,7 +590,7 @@ class _SpectraOrResistanceFolder(_DataContainer):
                 self,
                 name,
                 self._content_type.from_load(
-                    load, path, run_nums.get(load, None), filetype
+                    load, self.path, run_nums.get(load, None), filetype
                 ),
             )
 
@@ -837,20 +605,6 @@ class _SpectraOrResistanceFolder(_DataContainer):
     def run_num(self):
         """Dictionary of run numbers for each load"""
         return {k: getattr(self, k).run_num for k in LOAD_ALIASES}
-
-    @classmethod
-    def check_self(cls, path, fix=False):
-        logger.structure("Checking {} folder contents at {}".format(cls.__name__, path))
-
-        match = re.search(cls.folder_pattern, os.path.basename(path))
-        if match is None:
-            logger.error(
-                "{} directory should be called {}".format(
-                    cls.__name__, cls.folder_pattern
-                )
-            )
-
-        return path, match
 
     @classmethod
     def _check_all_files_there(cls, path: Path) -> bool:
@@ -881,7 +635,7 @@ class _SpectraOrResistanceFolder(_DataContainer):
         ok = True
 
         groups = [
-            re.search(cls._content_type.file_pattern, fl.name).groupdict() for fl in fls
+            re.search(cls._content_type.pattern, fl.name).groupdict() for fl in fls
         ]
 
         # Ensure all years are the same
@@ -913,18 +667,20 @@ class _SpectraOrResistanceFolder(_DataContainer):
 
 
 class Spectra(_SpectraOrResistanceFolder):
-    folder_pattern = "Spectra"
+    pattern = "Spectra"
+    known_patterns = ("spectra",)
     _content_type = Spectrum
+    write_pattern = "Spectra"
 
 
 class Resistances(_SpectraOrResistanceFolder):
-    folder_pattern = "Resistance"
+    pattern = "Resistance"
+    known_patterns = ("resistance",)
     _content_type = Resistance
+    write_pattern = "Resistance"
 
 
 class S1P(_DataFile):
-    file_pattern = r"(?P<kind>\w+)(?P<run_num>\d{2}).s1p$"
-
     POSSIBLE_KINDS = [
         "Match",
         "Short",
@@ -936,48 +692,63 @@ class S1P(_DataFile):
         "ReceiverReading",
         "ExternalLoad",
     ]
+    pattern = r"^(?P<kind>%s)(?P<run_num>\d{2}).s1p$" % ("|".join(POSSIBLE_KINDS))
+    write_pattern = "{kind}{run_num:>02}.s1p"
+    known_patterns = (
+        r"^(?P<kind>%s)(?P<run_num>\d{1}).s1p$" % ("|".join(POSSIBLE_KINDS)),
+        fr"^(?P<kind>{'|'.join(k.lower() for k in POSSIBLE_KINDS)})(?P<run_num>\d{2}).s1p$",
+        fr"^(?P<kind>{'|'.join(k.lower() for k in POSSIBLE_KINDS)})(?P<run_num>\d{1}).s1p$",
+        r"^(?P<kind>%s).s1p$" % ("|".join(POSSIBLE_KINDS)),
+        fr"^(?P<kind>{'|'.join(k.lower() for k in POSSIBLE_KINDS)}).s1p$",
+    )
+    known_substitutions = (("Ext_", "External"), ("Int_", ""))  # "Internal"
 
     @classmethod
     def typestr(cls, name: str) -> str:
-        return cls.__name__ + re.match(cls.file_pattern, name).groupdict()["kind"]
+        return cls.__name__ + re.match(cls.pattern, name).groupdict()["kind"]
 
-    def __init__(self, path, fix=False):
-        super().__init__(path, fix)
+    @property
+    def kind(self):
+        """The standard of this S1P measurement."""
+        return self._match_dict["kind"]
 
-        self.kind = self._match_dict["kind"]
-        self.run_num = int(self._match_dict["run_num"])
+    @property
+    def run_num(self):
+        """The run num of this S1P."""
+        return self._match_dict["run_num"]
 
-        self.s11, self.freq = self.read(self.path)
+    @cached_property
+    def s11(self):
+        """The S11 measurement in this S1P file.
+
+        Corresponds to :attr:`freq`.
+        """
+        return self.read(self.path)[0]
+
+    @cached_property
+    def freq(self):
+        """The frequencies of the S11 measurement in this S1P file.
+
+        Corresponds to :attr:`s11`.
+        """
+        return self.read(self.path)[1]
 
     @classmethod
-    def check_self(cls, path, fix=False):
-        basename = os.path.basename(path)
-        match = re.search(cls.file_pattern, basename)
-        if match is None:
+    def _validate_match(cls, match: Dict[str, str], filename: str):
+        if int(match["run_num"]) < 1:
             logger.error(
-                "The file {} has the wrong filename format for an S11 file".format(path)
+                f"The file {filename} has a run_num ({match['run_num']}) less than one"
             )
-        else:
-            groups = match.groupdict()
-            if groups["kind"] not in cls.POSSIBLE_KINDS:
-                logger.error(
-                    "The file {} has a kind ({}) that is not supported. "
-                    "Possible: {}".format(path, groups["kind"], cls.POSSIBLE_KINDS)
-                )
 
-                if fix and groups["kind"].capitalize() in cls.POSSIBLE_KINDS:
-                    shutil.move(
-                        path, os.path.join(os.path.dirname(path), basename.capitalize())
-                    )
-                    logger.success("Changed to ", basename.capitalize())
-
-            if int(groups["run_num"]) < 1:
-                logger.error(
-                    "The file {} has a run_num ({}) less than one".format(
-                        path, groups["run_num"]
-                    )
-                )
-        return path, match
+    @classmethod
+    def _get_filename_parameters(cls, dct: dict):
+        # If a lower-case kind is passed, use the upper-case version
+        out = {"run_num": 1}
+        if dct.get("kind", None) in (k.lower() for k in cls.POSSIBLE_KINDS):
+            dct["kind"] = cls.POSSIBLE_KINDS[
+                [k.lower() for k in cls.POSSIBLE_KINDS].index(dct["kind"])
+            ]
+        return out
 
     @classmethod
     def read(cls, path_filename):
@@ -1045,77 +816,48 @@ class S1P(_DataFile):
 class _S11SubDir(_DataContainer):
     STANDARD_NAMES = S1P.POSSIBLE_KINDS
     _content_type = S1P
-    folder_pattern = None
+    write_pattern = "{load_name}{repeat_num:0>2}"
 
     @classmethod
     def typestr(cls, name: str) -> str:
-        return (
-            cls.__name__ + re.match(cls.folder_pattern, name).groupdict()["load_name"]
-        )
+        return cls.__name__ + re.match(cls.pattern, name).groupdict()["load_name"]
 
-    def __init__(self, path, run_num=None, fix=False):
-        super().__init__(path, fix)
+    def __init__(self, path, *, run_num=None, **kwargs):
+        super().__init__(path, **kwargs)
 
         self.run_num = run_num or self._get_max_run_num()
+        self.repeat_num = int(self._match_dict["repeat_num"])
 
-        for name in self.STANDARD_NAMES:
-            setattr(
-                self, name.lower(), S1P(self.path / f"{name}{self.run_num:>02}.s1p")
-            )
+    @cached_property
+    def children(self) -> Dict[str, S1P]:
+        """Filenames of S1P measurements used in this observation."""
+        return {
+            name.lower(): S1P(self.path / f"{name}{self.run_num:>02}.s1p")
+            for name in self.STANDARD_NAMES
+        }
 
-        # All frequencies should be the same.
-        self.freq = getattr(self, self.STANDARD_NAMES[0].lower()).freq
+    def __getattr__(self, item):
+        try:
+            return super().__getattr__(item)
+        except AttributeError as e:
+            try:
+                return self.children[item]
+            except KeyError:
+                raise e
 
-        self.filenames = [
-            getattr(self, thing.lower()).path for thing in self.STANDARD_NAMES
-        ]
+    @cached_property
+    def filenames(self) -> Tuple[Path]:
+        """Filenames of S1P measurements used in this observation."""
+        return tuple(val.path for val in self.children.values())
+
+    @property
+    def freq(self):
+        """Frequencies measured in child S1P files."""
+        return self.children["match"].freq
 
     @property
     def active_contents(self):
         return utils.get_active_files(self.path)
-
-    @classmethod
-    def check_self(cls, path, fix=False):
-        if not os.path.exists(path):
-            logger.error("The path {} does not exist!".format(path))
-            return path, None
-
-        match = re.search(cls.folder_pattern, os.path.basename(path))
-
-        if match is None:
-            logger.error(
-                "The folder {} did not match any of the correct folder name "
-                "criteria. Required pattern: {} [class={}]".format(
-                    path, cls.folder_pattern, cls.__name__
-                )
-            )
-
-            if fix:
-                if "AmbientLoad" in path:
-                    newpath = path.replace("AmbientLoad", "Ambient")
-                elif "LongCableShort_" in path or path.endswith("LongCableShort"):
-                    newpath = path.replace("LongCableShort", "LongCableShorted")
-                elif "InternalSwitch" in path:
-                    newpath = path.replace("InternalSwitch", "SwitchingState")
-                else:
-                    newpath = path
-
-                # Sometimes they don't have repeat_nums attached.
-                if os.path.basename(newpath) == "SwitchingState":
-                    newpath = newpath.replace("SwitchingState", "SwitchingState01")
-                elif os.path.basename(newpath) == "ReceiverReading":
-                    newpath = newpath.replace("ReceiverReading", "ReceiverReading01")
-
-                if newpath != path:
-                    shutil.move(path, newpath)
-                    path = newpath
-
-                match = re.search(cls.folder_pattern, os.path.basename(path))
-
-                if match is not None:
-                    logger.success("Successfully converted to {}".format(path))
-
-        return path, match
 
     @classmethod
     def _check_all_files_there(cls, path: Path) -> bool:
@@ -1128,7 +870,7 @@ class _S11SubDir(_DataContainer):
 
     def _get_max_run_num(self):
         return max(
-            int(re.match(S1P.file_pattern, fl.name).group("run_num"))
+            int(re.match(S1P.pattern, fl.name).group("run_num"))
             for fl in self.active_contents
         )
 
@@ -1140,13 +882,32 @@ class _S11SubDir(_DataContainer):
     def _check_file_consistency(cls, path: Path) -> bool:
         return True
 
+    @classmethod
+    def _get_filename_parameters(cls, dct: dict):
+        out = {}
+        if "repeat_num" not in dct:
+            out["repeat_num"] = 1
+        return out
+
 
 class LoadS11(_S11SubDir):
     STANDARD_NAMES = ["Open", "Short", "Match", "External"]
-    folder_pattern = "(?P<load_name>{})$".format("|".join(LOAD_ALIASES.values()))
+    pattern = r"(?P<load_name>%s)(?P<repeat_num>\d{2})$" % (
+        "|".join(LOAD_ALIASES.values())
+    )
+    known_patterns = (
+        f"(?P<load_name>{'|'.join(LOAD_MAPPINGS.keys())})$",
+        f"(?P<load_name>{'|'.join(LOAD_ALIASES.values())})$",
+        r"(?P<load_name>%s)(?P<repeat_num>\d{1})$" % ("|".join(LOAD_ALIASES.values())),
+    )
 
-    def __init__(self, direc, run_num=None, fix=False):
-        super().__init__(direc, run_num, fix)
+    known_substitutions = (
+        ("AmbientLoad", "Ambient"),
+        ("LongCableShort_", "LongCableShorted_"),
+    )
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
         self.load_name = LOAD_ALIASES.inverse.get(
             self._match_dict["load_name"], self._match_dict["load_name"]
         )
@@ -1157,50 +918,36 @@ class LoadS11(_S11SubDir):
             and self.load_name == other.load_name
         )
 
+    @classmethod
+    def _get_filename_parameters(cls, dct: dict):
+        out = super()._get_filename_parameters(dct)
+        if dct["load_name"] in LOAD_MAPPINGS:
+            dct["load_name"] = LOAD_MAPPINGS[dct["load_name"]]
+        return out
+
 
 class AntSimS11(LoadS11):
-    folder_pattern = r"(?P<load_name>%s)$" % ("|".join(ANTENNA_SIMULATORS.keys()))
+    pattern = r"(?P<load_name>%s)(?P<repeat_num>\d{2})$" % (
+        "|".join(ANTENNA_SIMULATORS.keys())
+    )
+    known_patterns = (
+        r"(?P<load_name>%s)$" % ("|".join(ANTSIM_REVERSE.keys())),
+        r"(?P<load_name>%s)$" % ("|".join(ANTENNA_SIMULATORS.keys())),
+    )
 
     @classmethod
-    def check_self(cls, path: Path, fix=False):
-        path, match = super().check_self(path, fix)
+    def _get_filename_parameters(cls, dct: dict) -> dict:
+        out = super()._get_filename_parameters(dct)
 
-        if match is None and fix:
-            bad_patterns = [r"(?P<load_name>%s)$" % ("|".join(ANTSIM_REVERSE.keys()))]
-
-            for pattern in bad_patterns:
-                match = re.search(pattern, path.name)
-
-            if match is not None:
-                loadname = match.groupdict()["load_name"]
-
-                if loadname in ANTSIM_REVERSE:
-                    loadname = ANTSIM_REVERSE[loadname]
-
-                newpath = path.parent / loadname
-
-                shutil.move(path, newpath)
-                path = newpath
-                logger.success(f"Successfully converted to {path}")
-
-        return path, match
+        if dct["load_name"] in ANTSIM_REVERSE:
+            dct["load_name"] = ANTSIM_REVERSE[dct["load_name"]]
+        return out
 
 
-class _RepeatNumberableS11SubDir(_S11SubDir):
-    def __init__(self, direc, run_num=None, fix=False):
-        super().__init__(direc, run_num, fix)
-        self.repeat_num = int(self._match_dict["repeat_num"])
+class SwitchingState(_S11SubDir):
+    pattern = r"(?P<load_name>SwitchingState)(?P<repeat_num>\d{2})$"
+    known_patterns = ("(?P<load_name>SwitchingState)",)
 
-    def __eq__(self, other):
-        return self.__class__.__name__ == other.__class__.__name__
-
-    @classmethod
-    def typestr(cls, name: str) -> str:
-        return cls.__name__
-
-
-class SwitchingState(_RepeatNumberableS11SubDir):
-    folder_pattern = r"SwitchingState(?P<repeat_num>\d{2})$"
     STANDARD_NAMES = [
         "Open",
         "Short",
@@ -1209,32 +956,39 @@ class SwitchingState(_RepeatNumberableS11SubDir):
         "ExternalShort",
         "ExternalMatch",
     ]
+    known_substitutions = (("InternalSwitch", "SwitchingState"),)
 
 
-class ReceiverReading(_RepeatNumberableS11SubDir):
-    folder_pattern = r"ReceiverReading(?P<repeat_num>\d{2})$"
+class ReceiverReading(_S11SubDir):
+    pattern = r"(?P<load_name>ReceiverReading)(?P<repeat_num>\d{2})$"
     STANDARD_NAMES = ["Open", "Short", "Match", "ReceiverReading"]
+    known_substitutions = (("ReceiverReadings", "ReceiverReading"),)
+    known_patterns = ("(?P<load_name>ReceiverReading)",)
 
 
 class S11Dir(_DataContainer):
     _content_type = {
         **{load: LoadS11 for load in LOAD_ALIASES.values()},
+        **{load: LoadS11 for load in LOAD_MAPPINGS.keys()},
         **{
             "SwitchingState": SwitchingState,
             "ReceiverReading": ReceiverReading,
             "InternalSwitch": SwitchingState,  # To catch the old way so it can be fixed.
-            "LongCableShort": LoadS11,
         },
         **{key: AntSimS11 for key in ANTENNA_SIMULATORS.keys()},
         **{key: AntSimS11 for key in ANTSIM_REVERSE.keys()},
     }
+    pattern = "S11"
+    known_patterns = ("s11",)
+    write_pattern = "S11"
 
     def __init__(
         self,
         path: [str, Path],
+        *,
         repeat_num: [None, int, dict] = None,
         run_num: [None, int, dict] = None,
-        fix=False,
+        **kwargs,
     ):
         """Class representing the entire S11 subdirectory of an observation
 
@@ -1255,23 +1009,31 @@ class S11Dir(_DataContainer):
             and the repeat_num to use for that.
             By default, will find the last repeat.
         """
-        super().__init__(path, fix)
+        super().__init__(path, **kwargs)
 
-        if type(repeat_num) == int:
-            sw_rep_num = repeat_num
-            rr_rep_num = repeat_num
-        elif repeat_num is None:
-            sw_rep_num = self._get_highest_rep_num(self.path, "SwitchingState")
-            rr_rep_num = self._get_highest_rep_num(self.path, "ReceiverReading")
-        else:
-            sw_rep_num = repeat_num.get(
-                "switching_state",
-                self._get_highest_rep_num(self.path, "SwitchingState"),
-            )
-            rr_rep_num = repeat_num.get(
-                "receiver_reading",
-                self._get_highest_rep_num(self.path, "ReceiverReading"),
-            )
+        rep_nums = {}
+        for name in (
+            ["switching_state", "receiver_reading"]
+            + list(LOAD_ALIASES.keys())
+            + list(self.get_simulator_names(self.path))
+        ):
+            try:
+                if type(repeat_num) == int:
+                    rep_nums[name] = repeat_num
+                elif repeat_num is None:
+                    rep_nums[name] = self._get_highest_rep_num(
+                        self.path, utils.snake_to_camel(name)
+                    )
+                else:
+                    rep_nums[name] = repeat_num.get(
+                        name,
+                        self._get_highest_rep_num(
+                            self.path, utils.snake_to_camel(name)
+                        ),
+                    )
+            except ValueError:
+                # Probably no load of that kind in the directory. That's fine.
+                pass
 
         if type(run_num) == int or run_num is None:
             run_nums = {
@@ -1286,23 +1048,29 @@ class S11Dir(_DataContainer):
         )
 
         self.switching_state = SwitchingState(
-            self.path / f"SwitchingState{sw_rep_num:>02}",
+            self.path / f"SwitchingState{rep_nums['switching_state']:>02}",
             run_num=run_nums.get("switching_state", None),
         )
         self.receiver_reading = ReceiverReading(
-            self.path / f"ReceiverReading{rr_rep_num:>02}",
+            self.path / f"ReceiverReading{rep_nums['receiver_reading']:>02}",
             run_num=run_nums.get("receiver_reading", None),
         )
 
         for name, load in LOAD_ALIASES.items():
             setattr(
-                self, name, LoadS11(self.path / load, run_num=run_nums.get(load, None))
+                self,
+                name,
+                LoadS11(
+                    self.path / f"{load}{rep_nums[name]:>02}",
+                    run_num=run_nums.get(load, run_nums.get(name, None)),
+                ),
             )
 
         self.simulators = {}
         for name in self.get_simulator_names(path):
             self.simulators[name] = AntSimS11(
-                self.path / name, run_num=run_nums.get(name, None)
+                self.path / f"{name}{rep_nums[name]:>02}",
+                run_num=run_nums.get(name, None),
             )
 
     @property
@@ -1323,18 +1091,6 @@ class S11Dir(_DataContainer):
     def get_highest_rep_num(self, kind: str):
         """Get the highest repeat number for this kind."""
         return self._get_highest_rep_num(self.path, kind)
-
-    @classmethod
-    def check_self(cls, path, fix=False):
-        logger.structure("Checking S11 folder contents at {}".format(path))
-
-        if not os.path.exists(path):
-            logger.error(f"This path does not exist: {path}")
-
-        if os.path.basename(path) != "S11":
-            logger.error("The S11 folder should be called S11")
-
-        return path, os.path.basename(path) == "S11"
 
     @classmethod
     def _check_all_files_there(cls, path: Path) -> bool:
@@ -1365,7 +1121,7 @@ class S11Dir(_DataContainer):
     def get_simulator_names(cls, path):
         fls = utils.get_active_files(path)
         return {
-            fl.name
+            fl.name[:-2]
             for fl in fls
             if any(fl.name.startswith(k) for k in ANTENNA_SIMULATORS)
         }
@@ -1375,22 +1131,40 @@ class S11Dir(_DataContainer):
 
 
 class CalibrationObservation(_DataContainer):
-    file_pattern = re.compile(
-        r"^Receiver(?P<rcv_num>\d{2})_(?P<year>\d{4})_(?P<month>\d{2})_(?P<day>\d{2})_("
-        r"?P<freq_low>\d{3})_to_(?P<freq_hi>\d{3})MHz/(?P<temp>\d{2})C$"
+    pattern = re.compile(
+        r"^Receiver(?P<rcv_num>\d{2})_(?P<temp>\d{2})C_(?P<year>\d{4})_(?P<month>\d{2})_(?P<day>\d{2})_"
+        r"(?P<freq_low>\d{3})_to_(?P<freq_hi>\d{3})MHz$"
     )
-    _content_type = {"S11": S11Dir, "Spectra": Spectra, "Resistance": Resistances}
+
+    known_patterns = (
+        (
+            r"^Receiver(\d{1,2})_(?P<temp>\d{2})C_(\d{4})_(\d{1,2})_(\d{1,2})_(\d{2,3})_"
+            r"to_(\d{2,3})MHz$"
+        ),
+        (
+            r"Receiver(?P<rcv_num>\d{2})_(?P<temp>\d{2})C_(?P<year>\d{4})_(?P<month>\d{2})_"
+            r"(?P<day>\d{2})_(?P<freq_low>\d{3})"
+            r"_to_(?P<freq_hi>\d{3})_MHz$"
+        ),
+    )
+    write_pattern = "Receiver{rcv_num:0>2}_{temp:>02}C_{year:>04}_{month:0>2}_{day:0>2}_{freq_low:0>3}_to_{freq_hi:0>3}MHz"
+    _content_type = {
+        "S11": S11Dir,
+        "Spectra": Spectra,
+        "Resistance": Resistances,
+        "spectra": Spectra,
+        "resistance": Resistances,
+        "s11": S11Dir,
+    }
 
     def __init__(
         self,
         path: [str, Path],
-        ambient_temp: int = 25,
         run_num: [int, dict, None] = None,
         repeat_num: [int, None] = None,
-        fix: bool = False,
         include_previous: bool = True,
         compile_from_def: bool = True,
-        log_level=40,
+        **kwargs,
     ):
         """
         A full set of data required to calibrate field observations.
@@ -1432,9 +1206,6 @@ class CalibrationObservation(_DataContainer):
             simply wants to instantiate the object. Default is to only print errors. Set
             it lower to also print other information.
         """
-        if ambient_temp not in [15, 25, 35]:
-            raise ValueError("ambient temp must be one of 15, 25, 35!")
-
         # Read the definition file, and combine other observations into a single
         # temporary directory if they exist (otherwise, just symlink this full directory)
         # Note that we need to keep the actual _tmpdir object around otherwise it gets
@@ -1448,19 +1219,15 @@ class CalibrationObservation(_DataContainer):
             )
 
         if compile_from_def:
-            self._tmpdir, name = self.compile_obs_from_def(
-                path, f"{ambient_temp}C", include_previous
-            )
+            self._tmpdir, name = self.compile_obs_from_def(path, include_previous)
 
-            path = Path(self._tmpdir.name) / name / f"{ambient_temp}C"
-        else:
-            path = Path(path) / f"{ambient_temp}C"
+            path = Path(self._tmpdir.name) / name
 
-        super().__init__(path, fix)
+        super().__init__(path, **kwargs)
 
-        self.ambient_temp = ambient_temp
         self._groups = self._match_dict
         self.receiver_num = int(self._groups["rcv_num"])
+        self.ambient_temp = int(self._groups["temp"])
         self.year = int(self._groups["year"])
         self.month = int(self._groups["month"])
         self.day = int(self._groups["day"])
@@ -1473,16 +1240,16 @@ class CalibrationObservation(_DataContainer):
             run_nums = dict(run_num)
 
         self.spectra = Spectra(
-            self.path / "Spectra", run_num=run_nums.get("Spectra", None), fix=fix
+            self.path / "Spectra", run_num=run_nums.get("Spectra", None), **kwargs
         )
         self.resistance = Resistances(
-            self.path / "Resistance", run_num=run_nums.get("Resistance", None), fix=fix
+            self.path / "Resistance", run_num=run_nums.get("Resistance", None), **kwargs
         )
         self.s11 = S11Dir(
             self.path / "S11",
             run_num=run_nums.get("S11", None),
             repeat_num=repeat_num,
-            fix=fix,
+            **kwargs,
         )
 
         self.simulator_names = self.get_simulator_names(self.path)
@@ -1508,10 +1275,7 @@ class CalibrationObservation(_DataContainer):
 
         tmpdir = tempfile.TemporaryDirectory()
 
-        sympath = (
-            Path(tmpdir.name)
-            / f"Receiver{meta['receiver']:02d}_{meta['year']}_{meta['month']:02d}_{meta['day']:02d}_040_to_200MHz/25C"
-        )
+        sympath = Path(tmpdir.name) / cls.write_pattern.format(**meta)
         sympath.mkdir(parents=True)
 
         # Make top-level directories
@@ -1552,8 +1316,7 @@ class CalibrationObservation(_DataContainer):
         cls._tmpdir = tmpdir
 
         return cls(
-            sympath.parent,
-            ambient_temp=25,
+            sympath,
             run_num={"S11": s11_run_nums},
             repeat_num=rep_nums,
             fix=False,
@@ -1633,94 +1396,47 @@ class CalibrationObservation(_DataContainer):
         return definition
 
     @classmethod
-    def check_self(cls, path: [str, Path], fix: bool = False):
-        path = Path(path).absolute()
-
-        logger.structure(f"Checking root folder: {path}")
-
-        if not path.exists():
-            raise IOError(f"The path {path} does not exist!")
-
-        base = path.parents[1]  # Gets root obs dir.
-        name = str(Path(path.parent.name) / Path(path.name))
+    def _check_self(cls, path: Path, **kwargs):
+        path = path.absolute()
 
         # Warn if this is an invalid observation entirely. Also, we don't check the
         # observation then, as it's annoyingly difficult.
         if path.parent.suffix in [".invalid", ".old"]:
             logger.warning(
-                f"Observation {path.parent.name} is marked as invalid -- "
+                f"Observation {path.parent.name} is marked as {path.parent.suffix} -- "
                 f"proceed with caution!"
             )
             return path, None
 
-        # If it was specified as entirely valid in the yaml, we can continue to check
-        # other aspects, but we'll still emit a warning
+        return super()._check_self(path, **kwargs)
 
-        match = cls.file_pattern.search(name)
-
-        if match is None:
+    @classmethod
+    def _validate_match(cls, match: Dict[str, str], filename: str):
+        groups = match
+        if int(groups["rcv_num"]) < 1:
+            logger.error(f"Unknown receiver number: {groups['rcv_num']}")
+        if not (2010 <= int(groups["year"]) <= 2030):
+            logger.error(f"Unknown year: {groups['year']}")
+        if not (1 <= int(groups["month"]) <= 12):
+            logger.error(f"Unknown month: {groups['month']}")
+        if not (1 <= int(groups["day"]) <= 31):
+            logger.error(f"Unknown day: {groups['day']}")
+        if not (1 <= int(groups["freq_low"]) <= 300):
+            logger.error(f"Low frequency is weird: {groups['freq_low']}")
+        if not (1 <= int(groups["freq_hi"]) <= 300):
+            logger.error(f"High frequency is weird: {groups['freq_hi']}")
+        if not int(groups["freq_low"]) < int(groups["freq_hi"]):
             logger.error(
-                f"Calibration Observation directory name is in the wrong format! Got {name}"
+                f"Low frequency > High Frequency: {groups['freq_low']} > {groups['freq_hi']}"
+            )
+        if not (0 < int(groups["temp"]) < 100):
+            logger.error(
+                f"Ambient temperature out of range (0 - 100): {groups['temp']}"
             )
 
-            if fix:
-
-                bad_pattern = re.compile(
-                    r"^Receiver(\d{1,2})_(\d{4})_(\d{1,2})_(\d{1,2})_(\d{2,3})_to_(\d{"
-                    r"2,3})MHz/(?P<temp>\d{2})C$"
-                )
-
-                match = bad_pattern.search(name)
-
-                if match is None:
-                    bad_pattern = re.compile(
-                        r"Receiver(?P<rcv_num>\d{2})_(?P<year>\d{4})_(?P<month>\d{2})_"
-                        r"(?P<day>\d{2})_(?P<freq_low>\d{3})"
-                        r"_to_(?P<freq_hi>\d{3})_MHz/(?P<temp>\d{2})C$"
-                    )
-                    match = bad_pattern.search(name)
-
-                if match is not None:
-                    new_name = "Receiver{:0>2}_{}_{:0>2}_{:0>2}_{:0>3}_to_{:0>3}MHz/{}C".format(
-                        *match.groups()
-                    )
-                    shutil.move(
-                        os.path.normpath(os.path.dirname(path)),
-                        os.path.join(base, os.path.dirname(new_name)),
-                    )
-
-                    name = new_name
-                    path = base / name
-                    logger.success(f"Successfully renamed to {new_name}")
-                else:
-                    logger.warning("Failed to fix the name scheme")
-
-        if match is not None:
-            groups = match.groupdict()
-            if int(groups["rcv_num"]) < 1:
-                logger.error(f"Unknown receiver number: {groups['rcv_num']}")
-            if not (2010 <= int(groups["year"]) <= 2030):
-                logger.error(f"Unknown year: {groups['year']}")
-            if not (1 <= int(groups["month"]) <= 12):
-                logger.error(f"Unknown month: {groups['month']}")
-            if not (1 <= int(groups["day"]) <= 31):
-                logger.error(f"Unknown day: {groups['day']}")
-            if not (1 <= int(groups["freq_low"]) <= 300):
-                logger.error(f"Low frequency is weird: {groups['freq_low']}")
-            if not (1 <= int(groups["freq_hi"]) <= 300):
-                logger.error(f"High frequency is weird: {groups['freq_hi']}")
-            if not int(groups["freq_low"]) < int(groups["freq_hi"]):
-                logger.error(
-                    f"Low frequency > High Frequency: {groups['freq_low']} > {groups['freq_hi']}"
-                )
-
-            logger.info("Calibration Observation Metadata:")
-            for k, v in groups.items():
-                logger.info(f"\t{k}: {v}")
-
-        logger.debug(f"\tReturning path={path}")
-
-        return path, match
+        logger.info("Calibration Observation Metadata:")
+        for k, v in groups.items():
+            logger.info(f"\t{k}: {v}")
 
     @classmethod
     def path_to_datetime(cls, path: [str, Path]):
@@ -1744,7 +1460,7 @@ class CalibrationObservation(_DataContainer):
         ok = True
         for folder in ["S11", "Spectra", "Resistance"]:
             if not (path / folder).exists():
-                logger.error(f"No {folder} folder in observation!")
+                logger.warning(f"No {folder} folder in observation!")
                 ok = False
         return ok
 
@@ -1755,11 +1471,15 @@ class CalibrationObservation(_DataContainer):
         return True
 
     @classmethod
-    def get_simulator_names(cls, path):
+    def get_simulator_names(cls, path: [str, Path]):
         # Go through the subdirectories and check their simulators
+        path = Path(path)
         dct = {
-            name: tuple(sorted(kls.get_simulator_names(os.path.join(path, name))))
-            for name, kls in cls._content_type.items()
+            name: tuple(
+                sorted(cls._content_type[name].get_simulator_names(path / name))
+            )
+            for name in ["Spectra", "S11", "Resistance"]
+            if (path / name).exists()
         }
 
         # If any list of simulators is not the same as the others, make an error.
@@ -1808,7 +1528,7 @@ class CalibrationObservation(_DataContainer):
 
     @classmethod
     def compile_obs_from_def(
-        cls, path: Path, ambient_temp="25C", include_previous=True
+        cls, path: Path, include_previous=True
     ) -> [tempfile.TemporaryDirectory, str]:
         """Make a tempdir containing pointers to relevant files built from a definition.
 
@@ -1841,9 +1561,8 @@ class CalibrationObservation(_DataContainer):
         name : str
             The name of the observation (i.e. the directory inside the temporary direc).
         """
-        path = Path(path)
+        path = Path(path).absolute()
         obs_name = path.name
-        path = (path / ambient_temp).absolute()
 
         assert path.exists(), f"{path} does not exist!"
         definition = cls.check_definition(path)
@@ -1852,16 +1571,16 @@ class CalibrationObservation(_DataContainer):
         root_obs = definition.get("root_obs_dir", None)
 
         if root_obs is None:
-            root_obs = path.parents[1]
+            root_obs = path.parent
         else:
             # Root observation directory should be relative to the definition file.
             if not Path(root_obs).is_absolute():
                 root_obs = (path / root_obs).resolve()
 
-        files = {fl.relative_to(path.parents[1]): fl for fl in cls.get_base_files(path)}
+        files = {fl.relative_to(path.parent): fl for fl in cls.get_base_files(path)}
 
         file_parts = {
-            fl.relative_to(obs_name): cls.match_path(fl, root=path.parents[1])
+            fl.relative_to(obs_name): cls.match_path(fl, root=path.parent)
             for fl in files
         }
         # Actually need files to *not* have the top-level name
@@ -1872,13 +1591,19 @@ class CalibrationObservation(_DataContainer):
                 # Need to get this root_obs if inc_path is absolute, because we need
                 # to know where the observation starts (in the path)
                 if inc_path.is_absolute():
-                    indx = inc_path.parts.index(ambient_temp)
-                    this_root_obs = inc_path.parents[len(inc_path.parts) - indx]
+                    for indx, part in enumerate(inc_path.parts[::-1]):
+                        if cls.pattern.search(part):
+                            break
+                    else:
+                        raise ValueError(
+                            f"Can't find an observation root in {inc_path}"
+                        )
+
+                    this_root_obs = inc_path.parents[indx]
                     inc_path = inc_path.relative_to(this_root_obs)
                 else:
                     this_root_obs = root_obs
                     inc_path = this_root_obs / inc_path
-
                 this_obs_name = inc_path.relative_to(this_root_obs).parts[0]
 
                 # Get all non-invalid files in the other observation.
@@ -1977,8 +1702,6 @@ class CalibrationObservation(_DataContainer):
 
         # Get parts of the path, but keep the top-level and the '25C' together
         path_parts = list(path.parts)
-        path_parts[0] = os.path.join(path_parts[0], path_parts[1])
-        del path_parts[1]
 
         try:
             parts = ()
@@ -1987,8 +1710,9 @@ class CalibrationObservation(_DataContainer):
                 full_part = Path(full_part) / Path(part)
 
                 for thing in _strc:
-                    pth, match = thing.check_self(full_part, fix=False)
-                    if match:
+                    pth, match = thing.check_self(part, fix=False)
+
+                    if match is not None:
                         parts = parts + (thing.typestr(part),)
 
                         if isinstance(_strc, dict):

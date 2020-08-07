@@ -2,7 +2,11 @@ import datetime
 import os
 import shutil
 from pathlib import Path
-from typing import List
+from rich.console import Console
+from typing import List, Optional
+
+IGNORABLE = (".old", ".ignore", ".invalid", ".output")
+console = Console()
 
 
 def get_active_files(path: [str, Path]) -> List[Path]:
@@ -10,13 +14,15 @@ def get_active_files(path: [str, Path]) -> List[Path]:
     if not path.is_dir():
         raise ValueError(f"{path} is not a directory!")
     fls = path.glob("*")
-    ok_extra_files = ["Notes.txt", "calibration_analysis.ipynb", "derived"]
+    ok_extra_files = [
+        "Notes.txt",
+        "calibration_analysis.ipynb",
+        "derived",
+        "definition.yaml",
+    ]
 
     return [
-        fl
-        for fl in fls
-        if fl.suffix not in (".old", ".ignore", ".invalid")
-        and fl.name not in ok_extra_files
+        fl for fl in fls if fl.suffix not in IGNORABLE and fl.name not in ok_extra_files
     ]
 
 
@@ -32,56 +38,56 @@ def ymd_to_jd(y, m, d):
     ).days + 1
 
 
-def _ask_to_rm(fl):
-    while True:
+def _ask_to_rm(fl: Path) -> Optional[Path]:
+    reply = "z"
+    while reply not in "yniopm":
         reply = (
             str(
-                input(
-                    "Would you like to (recursively) remove {} ([y]es/[i]gnore/[m]ove/[n]o)?: ".format(
-                        fl
-                    )
+                console.input(
+                    f"""[bold] Action for '{fl}':
+>>> [red]y[/]: remove the file
+>>> [dark_orange]n[/]: ignore/skip the file for now
+>>> [cyan]i[/]: make it 'invalid'
+>>> [cyan]o[/]: [bold]make it 'old'
+>>> [cyan]p[/]: [bold]make it 'output'
+>>> [green]m[/]: [bold]interactively move/rename
+"""
                 )
             )
             .lower()
             .strip()
         )
-        if reply.startswith("y"):
-            rm = True
-            break
-        elif reply.startswith("n") or not reply:
-            rm = False
-            break
-        elif reply.startswith("i"):
-            rm = None
-            kind = "i"
-            break
-        elif reply.startswith("m"):
-            rm = None
-            kind = "m"
-            break
-        else:
-            print("please select (y/n) only")
 
-    if rm:
-        if os.path.isdir(fl):
+    if reply == "y":
+        if fl.is_dir():
             shutil.rmtree(fl)
         else:
-            os.remove(fl)
-        return True
-    elif rm is None:
-        if kind == "i":
-            shutil.move(fl, fl + ".old")
-            return True
-        elif kind == "m":
-            reply = str(input("Change {} to: ".format(os.path.basename(fl))))
-            newfile = os.path.join(os.path.dirname(os.path.normpath(fl)), reply)
-            try:
-                shutil.move(fl, newfile)
-            except Exception:
-                print("Couldn't rename the file {} as you asked.".format(newfile))
-                raise
+            os.remove(str(fl))
+        return None
+    elif reply == "i":
+        shutil.move(fl, str(fl) + ".invalid")
+        return Path(str(fl) + ".invalid")
+    elif reply == "o":
+        shutil.move(fl, str(fl) + ".old")
+        return Path(str(fl) + ".old")
+    elif reply == "p":
+        shutil.move(fl, str(fl) + ".output")
+        return Path(str(fl) + ".output")
+    elif reply == "m":
+        reply = str(console.input(f"[bold]Change '{fl.name}' to:[/] "))
+        newfile = fl.parent / reply
+        try:
+            shutil.move(fl, newfile)
+        except Exception:
+            console.print(
+                f"[bold red]Couldn't rename the file '{newfile}' as you asked."
+            )
+            raise
+        return newfile
+    elif reply == "n":
+        return fl
     else:
-        return False
+        raise IOError("Something went very wrong.")
 
 
 class FileStructureError(Exception):
@@ -113,4 +119,4 @@ def get_file_list(top_level: Path, filter=None, ignore=None):
 
 
 def snake_to_camel(word: str):
-    return "".join(w.capitalize() for w in word.split("_"))
+    return "".join(w[0].upper() + w[1:] for w in word.split("_"))
