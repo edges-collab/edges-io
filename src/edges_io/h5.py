@@ -436,8 +436,6 @@ class HDF5RawSpectrum(HDF5Object):
             "adcmin": lambda x: (
                 x.ndim == 2 and x.shape[1] == 3 and x.dtype in (float, np.float32)
             ),
-            "data_drops": lambda x: (
-                x.ndim == 2 and x.shape[1] == 3 and x.dtype == int
-            ),
+            "data_drops": "optional",
         },
     }
