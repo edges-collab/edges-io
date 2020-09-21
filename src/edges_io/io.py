@@ -372,7 +372,7 @@ class Spectrum(_SpectrumOrResistance):
 
         freq_anc = {"frequencies": anc.frequencies}
         time_anc = anc.data
-        spectra = {"Q": Q.T, "p0": px[0].T, "p1": px[1].T, "p2": px[2].T}
+        spectra = {"Q": Q, "p0": px[0], "p1": px[1], "p2": px[2]}
 
         meta = anc.meta
         return spectra, freq_anc, time_anc, meta
