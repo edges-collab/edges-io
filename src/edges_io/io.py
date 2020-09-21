@@ -363,12 +363,12 @@ class Spectrum(_SpectrumOrResistance):
                     "meta": meta,
                 }
             )
+        else:
+            raise ValueError(f"File format '{self.file_format}' not supported.")
 
     @staticmethod
     def _read_acq(file_name):
-        Q, px, anc = read_acq.decode_file(
-            file_name, progress=False, write_formats=[], meta=True
-        )
+        Q, px, anc = read_acq.decode_file(file_name, progress=False, meta=True)
 
         freq_anc = {"frequencies": anc.frequencies}
         time_anc = anc.data
