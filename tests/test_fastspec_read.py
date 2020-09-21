@@ -63,3 +63,11 @@ def test_io_read(fastspec_spectrum_fl):
     assert np.all(Q2 == Q)
     assert "p0" in obj["spectra"].__memcache__
     assert "time_ancillary" not in obj.__memcache__
+
+
+def test_read_acq(datadir):
+    spec = Spectrum(datadir / "sample.acq")
+    assert spec.data["spectra"]["Q"].shape == (32768, 1)
+    assert spec.data["spectra"]["Q"].shape == spec.data["spectra"]["p0"].shape
+    assert spec.data["spectra"]["Q"].shape == spec.data["spectra"]["p1"].shape
+    assert spec.data["spectra"]["Q"].shape == spec.data["spectra"]["p2"].shape
