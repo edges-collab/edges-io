@@ -71,3 +71,9 @@ def test_read_acq(datadir):
     assert spec.data["spectra"]["Q"].shape == spec.data["spectra"]["p0"].shape
     assert spec.data["spectra"]["Q"].shape == spec.data["spectra"]["p1"].shape
     assert spec.data["spectra"]["Q"].shape == spec.data["spectra"]["p2"].shape
+
+
+def test_read_bad_format(datadir):
+    spec = Spectrum(datadir / "bad.file")
+    with pytest.raises(ValueError):
+        spec.data
