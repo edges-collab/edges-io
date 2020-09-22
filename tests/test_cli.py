@@ -1,12 +1,14 @@
 import pytest
 
 import os
+import rich
 import shutil
 from click.testing import CliRunner
 from pathlib import Path
 from typing import Tuple
 
 from edges_io import cli
+from edges_io.utils import console
 
 
 @pytest.mark.parametrize(
@@ -26,10 +28,22 @@ def test_check(datadir, caplog, folder):
     assert "SUCCESS" in caplog.records[-1].levelname
 
 
-def test_check_fix(datadir, tmpdir, caplog):
+@pytest.mark.parametrize("fix_strategy", ["y", "i", "o", "p"])
+def test_check_fix(datadir, tmpdir, caplog, monkeypatch, fix_strategy):
     runner = CliRunner()
     folder = "Receiver01_25C_2022_11_26_040_to_200MHz"
+    tmpdir = tmpdir / fix_strategy
+    tmpdir.mkdir()
     shutil.copytree(datadir / folder, tmpdir / folder)
+
+    # Patch the console.input() function to always return 'y' -- which will delete
+    # stuff in the _ask_to_rm function.
+    monkeypatch.setattr(
+        console,
+        "input",
+        lambda msg: "badfile.here.old" if "Change " in msg else fix_strategy,
+    )
+
     result = runner.invoke(cli.check, [str(tmpdir / folder), "--fix"])
 
     assert result.exit_code == 0
