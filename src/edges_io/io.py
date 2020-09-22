@@ -420,7 +420,7 @@ class Resistance(_SpectrumOrResistance):
                 self._data = data
                 self._meta = meta
 
-            return self._data, self._meta
+            return data, meta
 
     @classmethod
     def read_new_style_csv(cls, path: [str, Path]) -> Tuple[np.ndarray, Dict]:
@@ -455,6 +455,7 @@ class Resistance(_SpectrumOrResistance):
 
             done = False
             out = {}
+            nheader_lines = 0
             while not done:
                 line = fl.readline()
 
@@ -462,14 +463,18 @@ class Resistance(_SpectrumOrResistance):
                     names = line.split(",")
 
                     next_line = fl.readline()
+                    nheader_lines += 1
                     values = next_line.split(",")
 
                     out.update({name: value for name, value in zip(names, values)})
 
-                if "Scaling" in out:
+                print(line, line.startswith("1,"))
+                if line.startswith("1,") or line == "":
                     done = True
 
-        return out
+                nheader_lines += 1
+
+        return out, nheader_lines
 
     @classmethod
     def read_old_style_csv(cls, path) -> Tuple[np.ndarray, Dict]:
@@ -478,12 +483,16 @@ class Resistance(_SpectrumOrResistance):
         # These files have bad encoding, which we can ignore. This means we have to
         # read in the whole thing as text first (while ignoring errors) and construct
         # a StringIO object to pass to genfromtxt.
-        header = cls.read_old_style_csv_header(path)
+        header, nheader_lines = cls.read_old_style_csv_header(path)
         nlines = int(header["Total readings"])
 
         with open(path, "r", errors="ignore") as fl:
-            s = StringIO("".join([next(fl) for i in range(nlines)]))
+            # Get past the header.
+            for i in range(nheader_lines):
+                next(fl)
 
+            s = StringIO("".join([next(fl) for i in range(nlines)]))
+            print(s.read()[:400])
             # Determine whether the file is in KOhm
             kohm = "KOhm" in s.readline()
             s.seek(0)
@@ -550,7 +559,7 @@ class Resistance(_SpectrumOrResistance):
 
     @classmethod
     def _get_filename_params_from_contents(cls, path: Path) -> Dict:
-        meta = cls.read_old_style_csv_header(path)
+        meta, _ = cls.read_old_style_csv_header(path)
 
         if not meta:
             return {}
