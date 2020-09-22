@@ -138,6 +138,7 @@ class _SpectrumOrResistance(_DataFile):
         ("_25C", ""),
         ("_15C", ""),
         ("_35C", ""),
+        ("LongCableShort_", "LongCableShorted_"),
     ]
 
     supported_formats = []
@@ -451,7 +452,7 @@ class Resistance(_SpectrumOrResistance):
     def read_old_style_csv_header(cls, path: Path):
         with open(path, "r", errors="ignore") as fl:
             if not fl.readline().startswith("FLUKE"):
-                return {}
+                return {}, 0
 
             done = False
             out = {}
