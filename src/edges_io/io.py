@@ -469,7 +469,6 @@ class Resistance(_SpectrumOrResistance):
 
                     out.update({name: value for name, value in zip(names, values)})
 
-                print(line, line.startswith("1,"))
                 if line.startswith("1,") or line == "":
                     done = True
 
@@ -493,7 +492,7 @@ class Resistance(_SpectrumOrResistance):
                 next(fl)
 
             s = StringIO("".join([next(fl) for i in range(nlines)]))
-            print(s.read()[:400])
+
             # Determine whether the file is in KOhm
             kohm = "KOhm" in s.readline()
             s.seek(0)
