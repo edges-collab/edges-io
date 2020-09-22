@@ -1454,13 +1454,12 @@ class CalibrationObservation(_DataContainer):
         try:
             path, match = cls.check_self(path, fix=False)
         except Exception as e:
-            raise (e)
+            raise e
         finally:
             logger.setLevel(pre_level)
 
         if match:
-            grp = match.groupdict()
-            return datetime(int(grp["year"]), int(grp["month"]), int(grp["day"]))
+            return datetime(int(match["year"]), int(match["month"]), int(match["day"]))
         else:
             raise utils.FileStructureError("The path is not valid for an Observation.")
 
