@@ -4,6 +4,7 @@ import os
 import shutil
 from click.testing import CliRunner
 from pathlib import Path
+from typing import Tuple
 
 from edges_io import cli
 
@@ -84,16 +85,15 @@ def test_check_verbosity_overkill(datadir, caplog):
     assert result.exit_code == 0
 
 
-def test_mv(datadir: Path, tmpdir: Path):
+def unmove(temp: str, datadir: Path, tmpdir: Path) -> Tuple[Path, Path]:
     folder = "Receiver01_25C_2019_11_26_040_to_200MHz"
     bad = tmpdir / "Receiver01_2019_11_26_040_to_200MHz"
+    shutil.copytree(datadir / folder, bad / temp)
+    return folder, bad
 
-    shutil.copytree(datadir / folder, bad)
-    (bad / "25C").mkdir()
-    shutil.move(bad / "Spectra", bad / "25C/Spectra")
-    shutil.move(bad / "Resistance", bad / "25C/Resistance")
-    shutil.move(bad / "S11", bad / "25C/S11")
-    shutil.move(bad / "Notes.txt", bad / "25C/Notes.txt")
+
+def test_mv(datadir: Path, tmpdir: Path):
+    folder, bad = unmove("25C", datadir, tmpdir)
 
     runner = CliRunner()
     result = runner.invoke(cli.mv, [str(bad / "25C"), "--clean"])
@@ -102,4 +102,28 @@ def test_mv(datadir: Path, tmpdir: Path):
     assert not bad.exists()
     assert (tmpdir / folder).exists()
     assert not (tmpdir / f"{folder}/25C").exists()
+    assert (tmpdir / f"{folder}/Spectra").exists()
+
+
+def test_mv_all(datadir: Path, tmpdir: Path):
+    tmpdir = tmpdir / "mvall"
+    folder, bad = unmove("25C", datadir, tmpdir)
+    unmove("35C", datadir, tmpdir)
+    unmove("15C", datadir, tmpdir)
+
+    print(list((bad / "25C").glob("*")))
+
+    runner = CliRunner()
+    folders = [str(x) for x in bad.glob("*C")]
+    result = runner.invoke(cli.mv_all, folders + ["--clean"])
+    print(result.stdout)
+    print(result.exception)
+
+    assert result.exit_code == 0
+    assert not bad.exists()
+    assert (tmpdir / folder).exists()
+    assert not (tmpdir / f"{folder}/25C").exists()
+    assert not (tmpdir / f"{folder}/35C").exists()
+    assert not (tmpdir / f"{folder}/15C").exists()
+
     assert (tmpdir / f"{folder}/Spectra").exists()
