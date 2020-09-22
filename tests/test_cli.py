@@ -26,6 +26,16 @@ def test_check(datadir, caplog, folder):
     assert "SUCCESS" in caplog.records[-1].levelname
 
 
+def test_check_fix(datadir, tmpdir, caplog):
+    runner = CliRunner()
+    folder = "Receiver01_25C_2022_11_26_040_to_200MHz"
+    shutil.copytree(datadir / folder, tmpdir / folder)
+    result = runner.invoke(cli.check, [str(tmpdir / folder), "--fix"])
+
+    assert result.exit_code == 0
+    assert "SUCCESS" in caplog.records[-1].levelname
+
+
 def test_check_verbosity_noop(datadir, caplog):
     runner = CliRunner()
 
