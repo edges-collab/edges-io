@@ -52,6 +52,9 @@ def check(root, verbosity, less_verbose, fix):
             f"There were {logger.errored} errors in the checks... please fix them!"
         )
 
+    # Reset the error counter in case the user calls something else in the same session.
+    logger.errored = 0
+
 
 @main.command()
 @click.argument("root", type=click.Path(exists=True, dir_okay=True, file_okay=False))
@@ -89,7 +92,7 @@ def mv(root, clean):
 
     if clean:
         print("Cleaning up...")
-        if not parent.glob("*"):
+        if not list(parent.glob("*")):
             shutil.rmtree(parent)
 
 
