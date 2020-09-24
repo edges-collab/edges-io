@@ -13,13 +13,10 @@ def tmpdir(tmp_path_factory):
     return tmp_path_factory.mktemp("edges-io-tests")
 
 
-@pytest.fixture(scope="session", autouse=True)
-def fastspec_spectrum_fl(tmpdir):
-    """An auto-generate empty Fastspec h5 format file"""
-
+@pytest.fixture(scope="session")
+def fastspec_data():
     ntimes = 2
     nfreqs = 32768
-    flname = tmpdir / "fastspec_example_file.h5"
 
     attrs = {}
     attrs["fastspec_version"] = "0.0.0"
@@ -59,14 +56,19 @@ def fastspec_spectrum_fl(tmpdir):
     time_anc["adcmin"] = np.zeros((ntimes, 3))
     time_anc["data_drops"] = np.zeros((ntimes, 3), dtype="int")
 
-    spectrum = HDF5RawSpectrum.from_data(
-        {
-            "meta": attrs,
-            "spectra": spec,
-            "time_ancillary": time_anc,
-            "freq_ancillary": fq_anc,
-        }
-    )
+    return {
+        "meta": attrs,
+        "spectra": spec,
+        "time_ancillary": time_anc,
+        "freq_ancillary": fq_anc,
+    }
+
+
+@pytest.fixture(scope="session", autouse=True)
+def fastspec_spectrum_fl(tmpdir, fastspec_data):
+    """An auto-generate empty Fastspec h5 format file"""
+    spectrum = HDF5RawSpectrum.from_data(fastspec_data)
+    flname = tmpdir / "fastspec_example_file.h5"
 
     spectrum.write(flname)
     return flname

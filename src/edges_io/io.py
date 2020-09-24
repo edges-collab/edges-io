@@ -138,6 +138,7 @@ class _SpectrumOrResistance(_DataFile):
         ("_25C", ""),
         ("_15C", ""),
         ("_35C", ""),
+        ("LongCableShort_", "LongCableShorted_"),
     ]
 
     supported_formats = []
@@ -420,7 +421,7 @@ class Resistance(_SpectrumOrResistance):
                 self._data = data
                 self._meta = meta
 
-            return self._data, self._meta
+            return data, meta
 
     @classmethod
     def read_new_style_csv(cls, path: [str, Path]) -> Tuple[np.ndarray, Dict]:
@@ -451,10 +452,11 @@ class Resistance(_SpectrumOrResistance):
     def read_old_style_csv_header(cls, path: Path):
         with open(path, "r", errors="ignore") as fl:
             if not fl.readline().startswith("FLUKE"):
-                return {}
+                return {}, 0
 
             done = False
             out = {}
+            nheader_lines = 0
             while not done:
                 line = fl.readline()
 
@@ -462,14 +464,17 @@ class Resistance(_SpectrumOrResistance):
                     names = line.split(",")
 
                     next_line = fl.readline()
+                    nheader_lines += 1
                     values = next_line.split(",")
 
                     out.update({name: value for name, value in zip(names, values)})
 
-                if "Scaling" in out:
+                if line.startswith("1,") or line == "":
                     done = True
 
-        return out
+                nheader_lines += 1
+
+        return out, nheader_lines
 
     @classmethod
     def read_old_style_csv(cls, path) -> Tuple[np.ndarray, Dict]:
@@ -478,10 +483,14 @@ class Resistance(_SpectrumOrResistance):
         # These files have bad encoding, which we can ignore. This means we have to
         # read in the whole thing as text first (while ignoring errors) and construct
         # a StringIO object to pass to genfromtxt.
-        header = cls.read_old_style_csv_header(path)
+        header, nheader_lines = cls.read_old_style_csv_header(path)
         nlines = int(header["Total readings"])
 
         with open(path, "r", errors="ignore") as fl:
+            # Get past the header.
+            for i in range(nheader_lines):
+                next(fl)
+
             s = StringIO("".join([next(fl) for i in range(nlines)]))
 
             # Determine whether the file is in KOhm
@@ -550,7 +559,7 @@ class Resistance(_SpectrumOrResistance):
 
     @classmethod
     def _get_filename_params_from_contents(cls, path: Path) -> Dict:
-        meta = cls.read_old_style_csv_header(path)
+        meta, _ = cls.read_old_style_csv_header(path)
 
         if not meta:
             return {}
@@ -1445,13 +1454,12 @@ class CalibrationObservation(_DataContainer):
         try:
             path, match = cls.check_self(path, fix=False)
         except Exception as e:
-            raise (e)
+            raise e
         finally:
             logger.setLevel(pre_level)
 
         if match:
-            grp = match.groupdict()
-            return datetime(int(grp["year"]), int(grp["month"]), int(grp["day"]))
+            return datetime(int(match["year"]), int(match["month"]), int(match["day"]))
         else:
             raise utils.FileStructureError("The path is not valid for an Observation.")
 

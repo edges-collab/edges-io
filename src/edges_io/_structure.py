@@ -137,6 +137,7 @@ class _ObsNode(ABC):
         if match is None:
             logger.warning(f"Could not auto-fix {basename}.")
             new_path = utils._ask_to_rm(root / basename)
+
             if new_path is None:
                 logger.success("Successfully removed.")
             elif new_path != (root / basename):
@@ -289,10 +290,30 @@ class _DataContainer(_ObsNode):
                                 )
 
                         else:
-                            fixed = utils._ask_to_rm(fl)
+                            new_path = utils._ask_to_rm(fl)
 
-                            if fixed:
+                            if new_path is None:
                                 logger.success("Successfully removed.")
+                            elif new_path != fl:
+                                if new_path.suffix not in utils.IGNORABLE:
+                                    match = re.search(
+                                        cls.pattern,
+                                        str(new_path.relative_to(fl.parent)),
+                                    )
+
+                                    if match is None:
+                                        logger.warning(
+                                            f"New name '{str(new_path.relative_to(fl.parent))}' is not "
+                                            f"correctly formatted either!"
+                                        )
+                                    else:
+                                        logger.success(
+                                            f"Successfully moved to '{new_path.name}'"
+                                        )
+                                else:
+                                    logger.success(
+                                        f"Successfully moved to '{new_path.name}'"
+                                    )
 
                     continue
             else:

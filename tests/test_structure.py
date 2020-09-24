@@ -1,6 +1,9 @@
+import pytest
+
 from pathlib import Path
 
-from edges_io.io import Spectrum
+from edges_io.io import CalibrationObservation, Spectrum
+from edges_io.utils import FileStructureError
 
 
 def test_spectrum_file_params(tmpdir: Path):
@@ -27,3 +30,13 @@ def test_spectrum_file_param_validation(tmpdir: Path, caplog):
     path, _ = Spectrum.check_self(fname, fix=True)
 
     assert caplog.text.count("ERROR") == 7
+
+
+def test_obs_to_time(datadir):
+    fl = datadir / "Receiver01_25C_2019_11_26_040_to_200MHz"
+    dt = CalibrationObservation.path_to_datetime(fl)
+    assert dt.year == 2019
+    assert dt.month == 11
+
+    with pytest.raises(FileStructureError):
+        CalibrationObservation.path_to_datetime("herpy_derpy")
