@@ -613,7 +613,7 @@ class _SpectraOrResistanceFolder(_DataContainer):
     @property
     def run_num(self):
         """Dictionary of run numbers for each load"""
-        return {k: getattr(self, k).run_num for k in LOAD_ALIASES}
+        return {k: getattr(self, k)[0].run_num for k in LOAD_ALIASES}
 
     @classmethod
     def _check_all_files_there(cls, path: Path) -> bool:
