@@ -2,6 +2,7 @@ import pytest
 
 import logging
 from bidict import bidict
+from pathlib import Path
 
 from edges_io import io, utils
 
@@ -192,6 +193,22 @@ def test_bad_dirname_obs(test_env, caplog):
     test_dir.rename(wrong_dir)
     new_test_obs(wrong_dir)
     assert "Low frequency > High Frequency" in caplog.text
+
+
+def test_spectra_run_num(datadir: Path):
+    spec = io.Spectra(
+        datadir / "Receiver01_25C_2019_11_26_040_to_200MHz/Spectra", run_num=1
+    )
+    assert isinstance(spec.run_num, dict)
+    assert all(int(v) == 1 for v in spec.run_num.values())
+
+
+def test_resistance_run_num(datadir: Path):
+    spec = io.Resistances(
+        datadir / "Receiver01_25C_2019_11_26_040_to_200MHz/Resistance", run_num=1
+    )
+    assert isinstance(spec.run_num, dict)
+    assert all(int(v) == 1 for v in spec.run_num.values())
 
 
 ### read testing
