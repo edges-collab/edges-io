@@ -40,12 +40,12 @@ def test_resistance_read_new(datadir: Path):
 def test_resistance_read_old(datadir: Path):
     fl = datadir / "old_resistance_file.csv"
 
-    r = Resistance(fl)
+    r = Resistance(fl, check=False)
     r.read()
     assert len(r.resistance) == 11
     assert len(r.resistance.dtype.names) == 11
     assert len(r.ancillary) == 0
-    assert not np.any(np.isnan(r.resistance))
+    assert not np.any(np.isnan(r.resistance["load_resistance"]))
 
 
 def test_resistance_read_no_store(datadir: Path):
