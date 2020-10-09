@@ -493,9 +493,6 @@ class Resistance(_SpectrumOrResistance):
 
             s = StringIO("".join([next(fl) for i in range(nlines - 1)]))
 
-            with open(f"derpymcderpface_{path.name}.csv", "w") as derp:
-                derp.write(s.read())
-
             # Determine whether the file is in KOhm
             kohm = "KOhm" in s.readline()
             s.seek(0)
