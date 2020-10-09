@@ -1,5 +1,6 @@
 import pytest
 
+import numpy as np
 import shutil
 from pathlib import Path
 
@@ -41,9 +42,10 @@ def test_resistance_read_old(datadir: Path):
 
     r = Resistance(fl)
     r.read()
-    assert len(r.resistance) == 12
+    assert len(r.resistance) == 11
     assert len(r.resistance.dtype.names) == 11
     assert len(r.ancillary) == 0
+    assert not np.any(np.isnan(r.resistance))
 
 
 def test_resistance_read_no_store(datadir: Path):
