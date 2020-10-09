@@ -348,9 +348,7 @@ class _HDF5Group:
 
     def load_all(self):
         """Read the whole file into memory at once."""
-        print(f"doing load_all on {self.group_path}")
         for k in self.structure:
-            print(k)
             self.load(k)
 
     @contextlib.contextmanager
@@ -393,7 +391,7 @@ class _HDF5Group:
 
     def items(self):
         for k in self.keys():
-            return k, self[k]
+            yield k, self[k]
 
 
 class HDF5RawSpectrum(HDF5Object):
