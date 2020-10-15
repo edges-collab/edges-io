@@ -295,12 +295,6 @@ class HDF5Object:
         if item in self.__memcache__:
             return self.__memcache__[item]
 
-        if item not in self._structure:
-            raise KeyError(
-                f"'{item}' is not a valid part of {self.__class__.__name__}."
-                f" Valid keys: {self.keys()}"
-            )
-
         with h5py.File(self.filename, "r") as fl:
             if item in ("attrs", "meta"):
                 out = dict(fl.attrs)
@@ -315,6 +309,11 @@ class HDF5Object:
                 self.__memcache__[item] = out
             elif isinstance(fl[item], h5py.Dataset):
                 out = fl[item][...]
+            elif item not in self._structure:
+                raise KeyError(
+                    f"'{item}' is not a valid part of {self.__class__.__name__}."
+                    f" Valid keys: {self.keys()}"
+                )
             else:
                 raise NotImplementedError("that item is not supported yet.")
 
