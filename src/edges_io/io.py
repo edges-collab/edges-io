@@ -3,8 +3,6 @@ This module defines the overall file structure and internal contents of the
 calibration observations. It does *not* implement any algorithms/methods on that data,
 making it easier to separate the algorithms from the data checking/reading.
 """
-from __future__ import annotations
-
 import logging
 import numpy as np
 import re
@@ -394,7 +392,7 @@ class Resistance(_SpectrumOrResistance):
         self.store_data = store_data
 
     @classmethod
-    def from_load(cls, *args, **kwargs) -> Resistance:
+    def from_load(cls, *args, **kwargs):
         classes = super().from_load(*args, **kwargs)
         return classes[0]
 
@@ -491,7 +489,7 @@ class Resistance(_SpectrumOrResistance):
             for i in range(nheader_lines):
                 next(fl)
 
-            s = StringIO("".join([next(fl) for i in range(nlines)]))
+            s = StringIO("".join([next(fl) for i in range(nlines - 1)]))
 
             # Determine whether the file is in KOhm
             kohm = "KOhm" in s.readline()

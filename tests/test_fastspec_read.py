@@ -10,7 +10,6 @@ from edges_io.io import Spectrum
 def test_hdf5rawspectrum(fastspec_spectrum_fl):
     obj = HDF5RawSpectrum(fastspec_spectrum_fl)
 
-    assert "meta" in obj
     assert "spectra" in obj
     assert "freq_ancillary" in obj
     assert "time_ancillary" in obj
@@ -41,7 +40,6 @@ def test_io_read(fastspec_spectrum_fl):
 
     obj = spec.data
 
-    assert "meta" in obj
     assert "spectra" in obj
     assert "freq_ancillary" in obj
     assert "time_ancillary" in obj

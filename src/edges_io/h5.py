@@ -111,6 +111,11 @@ class HDF5Object:
         fl : `h5py.File` instance
             An instance of the open file.
         """
+        if not self.filename:
+            raise IOError(
+                "this object has no associated file. You can define one with the write() method."
+            )
+
         fl = h5py.File(self.filename, mode=mode)
         yield fl
         fl.close()
@@ -289,24 +294,23 @@ class HDF5Object:
                     warnings.warn(f"Extra key found in {filename}")
 
     def __contains__(self, item):
-        return item in self.keys()
+        return item in list(self.keys())
 
     def __getitem__(self, item):
         if item in self.__memcache__:
             return self.__memcache__[item]
 
-        if item not in self._structure:
-            raise KeyError(
-                f"'{item}' is not a valid part of {self.__class__.__name__}."
-                f" Valid keys: {self.keys()}"
-            )
-
-        with h5py.File(self.filename, "r") as fl:
+        with self.open() as fl:
             if item in ("attrs", "meta"):
                 out = dict(fl.attrs)
                 for k, v in out.items():
                     if isinstance(v, str) and v == "none":
                         out[k] = None
+            elif item not in fl:
+                raise KeyError(
+                    f"'{item}' is not a valid part of {self.__class__.__name__}."
+                    f" Valid keys: {self.keys()}"
+                )
             elif isinstance(fl[item], h5py.Group):
                 out = _HDF5Group(self.filename, self._structure[item], item)
 
@@ -321,7 +325,8 @@ class HDF5Object:
         return out
 
     def keys(self):
-        return self._structure.keys()
+        with self.open() as fl:
+            yield from fl.keys()
 
     def items(self):
         for k in self.keys():
@@ -348,9 +353,7 @@ class _HDF5Group:
 
     def load_all(self):
         """Read the whole file into memory at once."""
-        print(f"doing load_all on {self.group_path}")
         for k in self.structure:
-            print(k)
             self.load(k)
 
     @contextlib.contextmanager
@@ -379,6 +382,11 @@ class _HDF5Group:
         with self.open() as fl:
             if item in ("attrs", "meta"):
                 out = dict(fl.attrs)
+            elif item not in fl:
+                raise KeyError(
+                    f"'{item}' is not a valid part of {self.__class__.__name__}."
+                    f" Valid keys: {self.keys()}"
+                )
             elif isinstance(fl[item], h5py.Group):
                 out = _HDF5Group(self.filename, item)
             elif isinstance(fl[item], h5py.Dataset):
@@ -389,11 +397,12 @@ class _HDF5Group:
         return out
 
     def keys(self):
-        return self.structure.keys()
+        with self.open() as grp:
+            yield from grp.keys()
 
     def items(self):
         for k in self.keys():
-            return k, self[k]
+            yield k, self[k]
 
 
 class HDF5RawSpectrum(HDF5Object):
