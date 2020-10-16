@@ -1,11 +1,12 @@
 import pytest
 
+import h5py
 import inspect
 import numpy as np
 from copy import deepcopy
 from pathlib import Path
 
-from edges_io.h5 import HDF5RawSpectrum, HDF5StructureExtraKey
+from edges_io.h5 import HDF5Object, HDF5RawSpectrum, HDF5StructureExtraKey
 
 
 def test_extra_key(fastspec_data, fastspec_spectrum_fl):
@@ -75,3 +76,26 @@ def test_get_items(fastspec_spectrum_fl):
     assert inspect.isgeneratorfunction(obj.items)
     for key, val in obj.items():
         assert key in obj.keys()
+
+
+def test_read_none(tmpdir: Path):
+    fname = tmpdir / "tmp_file.h5"
+
+    with h5py.File(fname, "w") as fl:
+        fl.attrs["key"] = "none"
+
+    obj = HDF5Object(fname)
+    assert obj["meta"]["key"] is None
+    assert obj["attrs"]["key"] is None
+
+
+def test_read_group_meta(fastspec_spectrum_fl):
+    obj = HDF5RawSpectrum(fastspec_spectrum_fl)
+    assert obj["spectra"]["meta"] == {}
+
+    with pytest.raises(KeyError):
+        obj["spectra"]["non-existent"]
+
+    assert len(list(obj["spectra"].keys())) == 4
+    for key, val in obj["spectra"].items():
+        assert isinstance(val, np.ndarray)
