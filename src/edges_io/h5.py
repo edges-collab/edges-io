@@ -306,6 +306,11 @@ class HDF5Object:
                 for k, v in out.items():
                     if isinstance(v, str) and v == "none":
                         out[k] = None
+            elif item not in fl:
+                raise KeyError(
+                    f"'{item}' is not a valid part of {self.__class__.__name__}."
+                    f" Valid keys: {self.keys()}"
+                )
             elif isinstance(fl[item], h5py.Group):
                 out = _HDF5Group(self.filename, self._structure[item], item)
 
@@ -314,11 +319,6 @@ class HDF5Object:
                 self.__memcache__[item] = out
             elif isinstance(fl[item], h5py.Dataset):
                 out = fl[item][...]
-            elif item not in self._structure:
-                raise KeyError(
-                    f"'{item}' is not a valid part of {self.__class__.__name__}."
-                    f" Valid keys: {self.keys()}"
-                )
             else:
                 raise NotImplementedError("that item is not supported yet.")
 
@@ -382,15 +382,15 @@ class _HDF5Group:
         with self.open() as fl:
             if item in ("attrs", "meta"):
                 out = dict(fl.attrs)
-            elif isinstance(fl[item], h5py.Group):
-                out = _HDF5Group(self.filename, item)
-            elif isinstance(fl[item], h5py.Dataset):
-                out = fl[item][...]
-            elif item not in self.structure:
+            elif item not in fl:
                 raise KeyError(
                     f"'{item}' is not a valid part of {self.__class__.__name__}."
                     f" Valid keys: {self.keys()}"
                 )
+            elif isinstance(fl[item], h5py.Group):
+                out = _HDF5Group(self.filename, item)
+            elif isinstance(fl[item], h5py.Dataset):
+                out = fl[item][...]
             else:
                 raise NotImplementedError("that item is not supported yet.")
 
