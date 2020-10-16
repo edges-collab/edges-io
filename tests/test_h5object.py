@@ -3,11 +3,12 @@ import pytest
 import inspect
 import numpy as np
 from copy import deepcopy
+from pathlib import Path
 
 from edges_io.h5 import HDF5RawSpectrum, HDF5StructureExtraKey
 
 
-def test_extra_key(fastspec_data):
+def test_extra_key(fastspec_data, fastspec_spectrum_fl):
     this = deepcopy(fastspec_data)
     this["meta"]["new_key"] = 2
     this["spectra"]["new_spectrum"] = np.zeros(20)
@@ -22,12 +23,19 @@ def test_extra_key(fastspec_data):
     with pytest.raises(KeyError):
         obj["spectra"]["non-existent"]
 
+    with pytest.raises(IOError):
+        obj["non-existent"]
+
     HDF5RawSpectrum._require_no_extra = True
 
     with pytest.raises(HDF5StructureExtraKey):
         HDF5RawSpectrum.from_data(this)
 
     HDF5RawSpectrum._require_no_extra = False
+
+    this = HDF5RawSpectrum(fastspec_spectrum_fl)
+    with pytest.raises(KeyError):
+        this["non-existent"]
 
 
 def test_h5_open(fastspec_spectrum_fl):

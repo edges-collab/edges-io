@@ -111,6 +111,11 @@ class HDF5Object:
         fl : `h5py.File` instance
             An instance of the open file.
         """
+        if not self.filename:
+            raise IOError(
+                "this object has no associated file. You can define one with the write() method."
+            )
+
         fl = h5py.File(self.filename, mode=mode)
         yield fl
         fl.close()
@@ -295,7 +300,7 @@ class HDF5Object:
         if item in self.__memcache__:
             return self.__memcache__[item]
 
-        with h5py.File(self.filename, "r") as fl:
+        with self.open() as fl:
             if item in ("attrs", "meta"):
                 out = dict(fl.attrs)
                 for k, v in out.items():
@@ -320,7 +325,8 @@ class HDF5Object:
         return out
 
     def keys(self):
-        return self._structure.keys()
+        with self.open() as fl:
+            yield from fl.keys()
 
     def items(self):
         for k in self.keys():
@@ -380,13 +386,19 @@ class _HDF5Group:
                 out = _HDF5Group(self.filename, item)
             elif isinstance(fl[item], h5py.Dataset):
                 out = fl[item][...]
+            elif item not in self.structure:
+                raise KeyError(
+                    f"'{item}' is not a valid part of {self.__class__.__name__}."
+                    f" Valid keys: {self.keys()}"
+                )
             else:
                 raise NotImplementedError("that item is not supported yet.")
 
         return out
 
     def keys(self):
-        return self.structure.keys()
+        with self.open() as grp:
+            yield from grp.keys()
 
     def items(self):
         for k in self.keys():
