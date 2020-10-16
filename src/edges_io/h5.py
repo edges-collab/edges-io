@@ -294,7 +294,7 @@ class HDF5Object:
                     warnings.warn(f"Extra key found in {filename}")
 
     def __contains__(self, item):
-        return item in self.keys()
+        return item in list(self.keys())
 
     def __getitem__(self, item):
         if item in self.__memcache__:
