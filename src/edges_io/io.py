@@ -609,6 +609,10 @@ class _SpectraOrResistanceFolder(_DataContainer):
             )
 
     @property
+    def load_names(self):
+        return tuple(LOAD_ALIASES.keys())
+
+    @property
     def run_num(self):
         """Dictionary of run numbers for each load"""
         try:
@@ -1084,10 +1088,21 @@ class S11Dir(_DataContainer):
             )
 
     @property
+    def load_names(self):
+        return tuple(LOAD_ALIASES.keys())
+
+    @property
     def run_num(self):
         """Dictionary specifying run numbers for each load."""
         return {
             k: getattr(self, k).run_num
+            for k in list(LOAD_ALIASES.keys()) + ["switching_state", "receiver_reading"]
+        }
+
+    @property
+    def repeat_num(self):
+        return {
+            k: getattr(self, k).repeat_num
             for k in list(LOAD_ALIASES.keys()) + ["switching_state", "receiver_reading"]
         }
 
@@ -1531,7 +1546,8 @@ class CalibrationObservation(_DataContainer):
         return utils.get_file_list(
             path,
             filter=lambda x: x.suffix not in [".invalid", ".old"]
-            and x.name not in other_ignores,
+            and x.name not in other_ignores
+            and x.parent.name != "outputs",
             ignore=invalid,
         )
 
@@ -1752,3 +1768,16 @@ class CalibrationObservation(_DataContainer):
             "Spectra": self.spectra.run_num,
             "Resistance": self.resistance.run_num,
         }
+
+    @property
+    def list_of_files(self):
+        """A list of all data files used in this observation."""
+        fls = []
+        for name in self.s11.load_names:
+            fls += list(getattr(self.s11, name).filenames)
+
+        for name in self.spectra.load_names:
+            fls += [x.path for x in getattr(self.spectra, name)]
+            fls.append(getattr(self.resistance, name).path)
+
+        return fls

@@ -107,14 +107,11 @@ def get_file_list(top_level: Path, filter=None, ignore=None):
 
     out = []
     for pth in top_level.iterdir():
-        if (
-            pth.is_file()
-            and str(pth) not in ignore
-            and (filter(pth) if filter is not None else True)
-        ):
-            out.append(pth.absolute())
-        elif pth.is_dir():
-            out.extend(get_file_list(pth, filter=filter, ignore=ignore))
+        if str(pth) not in ignore and (filter(pth) if filter is not None else True):
+            if pth.is_file():
+                out.append(pth.absolute())
+            elif pth.is_dir():
+                out.extend(get_file_list(pth, filter=filter, ignore=ignore))
     return out
 
 
