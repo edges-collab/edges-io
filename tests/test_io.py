@@ -215,7 +215,8 @@ def test_list_of_files(datadir: Path):
     obs = datadir / "Receiver01_25C_2019_11_26_040_to_200MHz"
     calobs = io.CalibrationObservation(obs)
 
-    lof = [fl.relative_to("/" + "/".join(fl.parts[1:3])) for fl in calobs.list_of_files]
+    lof = [fl.relative_to(obs.parent) for fl in calobs.list_of_files]
+
     for fl in lof:
         print(fl)
     assert (

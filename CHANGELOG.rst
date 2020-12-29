@@ -2,6 +2,12 @@
 Changelog
 =========
 
+v0.5.0
+======
+Added
+-----
+* ``list_of_files`` method that contains all files used in a calibration.
+
 v0.4.0
 ======
 Added

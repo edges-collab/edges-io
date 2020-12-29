@@ -1780,4 +1780,4 @@ class CalibrationObservation(_DataContainer):
             fls += [x.path for x in getattr(self.spectra, name)]
             fls.append(getattr(self.resistance, name).path)
 
-        return fls
+        return sorted(fl.resolve() for fl in fls)
