@@ -5,10 +5,11 @@ from os import path, remove, rename
 from pathlib import Path
 
 from . import io
-from .logging import logging
+from .logging import ColoredLogger, logging
 from .utils import FileStructureError
 
 logger = logging.getLogger("edges-io")
+logging.setLoggerClass(ColoredLogger)
 
 main = click.Group()
 

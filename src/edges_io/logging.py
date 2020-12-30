@@ -88,6 +88,5 @@ class ColoredLogger(logging.Logger):
             self._log(logging.ERROR, msg, args, **kwargs)
 
 
-logging.setLoggerClass(ColoredLogger)
 logger = logging.getLogger("edges-io")
 logger.setLevel(logging.WARNING)
