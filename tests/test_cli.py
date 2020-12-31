@@ -1,7 +1,5 @@
 import pytest
 
-import os
-import rich
 import shutil
 from click.testing import CliRunner
 from pathlib import Path
