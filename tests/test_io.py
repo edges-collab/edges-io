@@ -211,6 +211,29 @@ def test_resistance_run_num(datadir: Path):
     assert all(int(v) == 1 for v in spec.run_num.values())
 
 
+def test_list_of_files(datadir: Path):
+    obs = datadir / "Receiver01_25C_2019_11_26_040_to_200MHz"
+    calobs = io.CalibrationObservation(obs)
+
+    lof = [fl.relative_to(obs.parent) for fl in calobs.list_of_files]
+
+    for fl in lof:
+        print(fl)
+    assert (
+        obs.relative_to(obs.parent)
+        / "Resistance"
+        / "Ambient_01_2019_329_16_02_35_lab.csv"
+        in lof
+    )
+    assert obs.relative_to(obs.parent) / "S11" / "Ambient01" / "External02.s1p" in lof
+    assert (
+        obs.relative_to(obs.parent) / "S11" / "Ambient02" / "External02.s1p" not in lof
+    )
+    assert (
+        obs.relative_to(obs.parent) / "S11" / "Ambient01" / "External01.s1p" not in lof
+    )
+
+
 ### read testing
 # do identical acq and h5 files read in identically?
 # how does the read handle missing fields?

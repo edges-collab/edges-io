@@ -91,3 +91,4 @@ class ColoredLogger(logging.Logger):
 logging.setLoggerClass(ColoredLogger)
 logger = logging.getLogger("edges-io")
 logger.setLevel(logging.WARNING)
+logging.setLoggerClass(logging.Logger)
