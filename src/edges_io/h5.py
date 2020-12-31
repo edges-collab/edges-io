@@ -332,6 +332,10 @@ class HDF5Object:
         for k in self.keys():
             yield k, self[k]
 
+    def clear(self):
+        """Clear all items from memory loaded from file."""
+        self.__memcache__ = {}
+
 
 @attr.s
 class _HDF5Group:
@@ -403,6 +407,10 @@ class _HDF5Group:
     def items(self):
         for k in self.keys():
             yield k, self[k]
+
+    def clear(self):
+        """Clear all items that are loaded into memory from the file."""
+        self.__memcache__ = {}
 
 
 class HDF5RawSpectrum(HDF5Object):
