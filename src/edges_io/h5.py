@@ -275,7 +275,7 @@ class HDF5Object:
         # Ensure there's no extra keys in the group
         if len(strc) < len(grp.keys()):
             extras = [k for k in grp.keys() if k not in strc]
-            raise HDF5StructureExtraKey(f"Extra keys found in the file: {extras}")
+            raise HDF5StructureExtraKey(f"Extra keys found in {grp}: {extras}")
 
     @classmethod
     def check(cls, filename, false_if_extra=None):
@@ -287,11 +287,11 @@ class HDF5Object:
         with h5py.File(filename, "r") as fl:
             try:
                 cls._checkgrp(fl, cls._structure)
-            except HDF5StructureExtraKey:
+            except HDF5StructureExtraKey as e:
                 if false_if_extra:
-                    raise HDF5StructureExtraKey(f"Extra key found in {filename}")
+                    raise e
                 else:
-                    warnings.warn(f"Extra key found in {filename}")
+                    warnings.warn(f"{e}. Filename={filename}. ")
 
     def __contains__(self, item):
         return item in list(self.keys())
