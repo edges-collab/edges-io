@@ -5,5 +5,9 @@ prefer:
 
 measurements:
   # Use this section to define any parameters of the run(s).
-  resistance_m: 50.0
-  resistance_f: 50.0
+  resistance_m:
+    01: 50.0
+    02: 50.0
+  resistance_f:
+    01: 50.0
+    02: 50.0
