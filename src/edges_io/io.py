@@ -1399,7 +1399,10 @@ class CalibrationObservation(_DataContainer):
             "include": list,
             "prefer": list,
             "invalid": list,
-            "measurements": {"resistance_m": float, "resistance_f": float},
+            "measurements": {
+                "resistance_m": {"01": float, "02": float, "03": float},
+                "resistance_f": {"01": float, "02": float, "03": float},
+            },
             "defaults": {"resistance": dict, "spectra": dict, "s11": dict},
         }
 

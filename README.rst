@@ -169,7 +169,7 @@ the ``CalibrationObservation`` has its ``path`` attribute set to the temperature
 
 Inside this directory can be up to two files, and exactly three folders. One of the files
 is a ``Notes.txt`` file which summarises human-readable notes about the observation ("we
-ran the ambient spectra first, but had a delay because of xxx..."). The file is named
+ran the ambient spectra first, but had a delay because of xxx..."). The other file is named
 ``definition.yaml`` and includes metadata about the observation in a specific format
 (this file also allows you to supplement the observation with other observations, but
 we'll get to that later). Measurements/data like the male/female resistance should be
