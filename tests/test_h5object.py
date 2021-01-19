@@ -30,7 +30,7 @@ def test_extra_key(fastspec_data, fastspec_spectrum_fl):
     HDF5RawSpectrum._require_no_extra = True
 
     with pytest.raises(HDF5StructureExtraKey):
-        HDF5RawSpectrum.from_data(this)
+        HDF5RawSpectrum.from_data(this, require_no_extra=True)
 
     HDF5RawSpectrum._require_no_extra = False
 
@@ -99,3 +99,13 @@ def test_read_group_meta(fastspec_spectrum_fl):
     assert len(list(obj["spectra"].keys())) == 4
     for key, val in obj["spectra"].items():
         assert isinstance(val, np.ndarray)
+
+
+def test_clear(fastspec_spectrum_fl):
+    obj = HDF5RawSpectrum(fastspec_spectrum_fl)
+    obj.load_all()
+    assert "p0" in obj.__memcache__["spectra"].__memcache__
+    obj["spectra"].clear()
+    assert "p0" not in obj.__memcache__["spectra"].__memcache__
+    obj.clear()
+    assert "spectra" not in obj.__memcache__
