@@ -79,20 +79,23 @@ class HDF5Object:
             self.load_all(self.filename)
 
     @classmethod
-    def from_data(cls, data, **kwargs):
+    def from_data(cls, data, validate=True, **kwargs):
         inst = cls(**kwargs)
 
-        false_if_extra = kwargs.get("require_no_extra", cls._require_no_extra)
+        if validate:
+            false_if_extra = kwargs.get("require_no_extra", cls._require_no_extra)
 
-        try:
-            cls._checkgrp(data, cls._structure)
-        except HDF5StructureExtraKey as e:
-            if false_if_extra:
-                raise HDF5StructureExtraKey(
-                    f"Data had extra key(s)! Extras: {str(e).split(':')[-1]}"
-                )
-            else:
-                warnings.warn(f"Data had extra key! Extras: {str(e).split(':')[-1]}")
+            try:
+                cls._checkgrp(data, cls._structure)
+            except HDF5StructureExtraKey as e:
+                if false_if_extra:
+                    raise HDF5StructureExtraKey(
+                        f"Data had extra key(s)! Extras: {str(e).split(':')[-1]}"
+                    )
+                else:
+                    warnings.warn(
+                        f"Data had extra key! Extras: {str(e).split(':')[-1]}"
+                    )
 
         inst.__memcache__ = data
         return inst
