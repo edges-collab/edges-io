@@ -35,6 +35,7 @@ jobs:
         run: |
           pip install -U coverage
           pip install .[dev]
+          python -m ipykernel install --user --name edges --display-name "edges"
       - name: Get downstream package
         run: |
           cd ..
