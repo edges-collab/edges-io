@@ -240,8 +240,8 @@ def test_io_partial(datadir: Path):
     calobs = io.CalibrationObservation(
         obs, include_previous=False, spectra_kwargs={"filetype": "acq"}
     )
-    assert calobs.spectra.ambient is None  # simply nothing there
-    assert calobs.spectra.short is None  # wrong format
+    assert not hasattr(calobs.spectra, "ambient")  # simply nothing there
+    assert not hasattr(calobs.spectra, "short")  # wrong format
 
 
 ### read testing
