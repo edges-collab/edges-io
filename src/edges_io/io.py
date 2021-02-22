@@ -1058,14 +1058,21 @@ class S11Dir(_DataContainer):
         else:
             run_nums = dict(run_num)
 
-        self.switching_state = SwitchingState(
-            self.path / f"SwitchingState{rep_nums['switching_state']:>02}",
-            run_num=run_nums.get("switching_state", None),
-        )
-        self.receiver_reading = ReceiverReading(
-            self.path / f"ReceiverReading{rep_nums['receiver_reading']:>02}",
-            run_num=run_nums.get("receiver_reading", None),
-        )
+        if "switching_state" in rep_nums:
+            self.switching_state = SwitchingState(
+                self.path / f"SwitchingState{rep_nums['switching_state']:>02}",
+                run_num=run_nums.get("switching_state", None),
+            )
+        else:
+            self.switching_state = None
+
+        if "receiver_reading" in rep_nums:
+            self.receiver_reading = ReceiverReading(
+                self.path / f"ReceiverReading{rep_nums['receiver_reading']:>02}",
+                run_num=run_nums.get("receiver_reading", None),
+            )
+        else:
+            self.receiver_reading = None
 
         for name, load in LOAD_ALIASES.items():
             setattr(
@@ -1092,14 +1099,14 @@ class S11Dir(_DataContainer):
     def run_num(self):
         """Dictionary specifying run numbers for each load."""
         return {
-            k: getattr(self, k).run_num
+            k: getattr(getattr(self, k), "run_num", None)
             for k in list(LOAD_ALIASES.keys()) + ["switching_state", "receiver_reading"]
         }
 
     @property
     def repeat_num(self):
         return {
-            k: getattr(self, k).repeat_num
+            k: getattr(getattr(self, k), "repeat_num", None)
             for k in list(LOAD_ALIASES.keys()) + ["switching_state", "receiver_reading"]
         }
 
