@@ -18,43 +18,42 @@ def fastspec_data():
     ntimes = 2
     nfreqs = 32768
 
-    attrs = {}
-    attrs["fastspec_version"] = "0.0.0"
-    attrs["start"] = 0
-    attrs["stop"] = 0
-    attrs["site"] = "simulated"
-    attrs["instrument"] = "mid"
-    attrs["switch_io_port"] = 57360
-    attrs["switch_delay"] = 0.5
-    attrs["input_channel"] = 1
-    attrs["voltage_range"] = 0
-    attrs["samples_per_accumulation"] = 4294967269
-    attrs["acquisition_rate"] = 400
-    attrs["num_channels"] = nfreqs
-    attrs["num_taps"] = 5
-    attrs["window_function_id"] = 3
-    attrs["num_fft_threads"] = 10
-    attrs["num_fft_buffers"] = 100
-    attrs["stop_cycles"] = 0
-    attrs["stop_seconds"] = 0.0
-    attrs["stop_time"] = ""
+    attrs = {
+        "fastspec_version": "0.0.0",
+        "start": 0,
+        "stop": 0,
+        "site": "simulated",
+        "instrument": "mid",
+        "switch_io_port": 57360,
+        "switch_delay": 0.5,
+        "input_channel": 1,
+        "voltage_range": 0,
+        "samples_per_accumulation": 4294967269,
+        "acquisition_rate": 400,
+        "num_channels": nfreqs,
+        "num_taps": 5,
+        "window_function_id": 3,
+        "num_fft_threads": 10,
+        "num_fft_buffers": 100,
+        "stop_cycles": 0,
+        "stop_seconds": 0.0,
+        "stop_time": "",
+    }
 
-    spec = {}
-    spec["p0"] = np.zeros((ntimes, nfreqs))
-    spec["p1"] = np.zeros((ntimes, nfreqs))
-    spec["p2"] = np.zeros((ntimes, nfreqs))
-    spec["Q"] = np.zeros((ntimes, nfreqs))
+    spec = {
+        "p0": np.zeros((ntimes, nfreqs)),
+        "p1": np.zeros((ntimes, nfreqs)),
+        "p2": np.zeros((ntimes, nfreqs)),
+        "Q": np.zeros((ntimes, nfreqs)),
+    }
 
-    fq_anc = {}
-    fq_anc["frequencies"] = np.linspace(40, 200, nfreqs)
-
-    time_anc = {}
-    time_anc["times"] = np.array(
-        ["2020:001:01:01:01", "2020:001:01:02:01"], dtype="|S17"
-    )
-    time_anc["adcmax"] = np.zeros((ntimes, 3))
-    time_anc["adcmin"] = np.zeros((ntimes, 3))
-    time_anc["data_drops"] = np.zeros((ntimes, 3), dtype="int")
+    fq_anc = {"frequencies": np.linspace(40, 200, nfreqs)}
+    time_anc = {
+        "times": np.array(["2020:001:01:01:01", "2020:001:01:02:01"], dtype="|S17"),
+        "adcmax": np.zeros((ntimes, 3)),
+        "adcmin": np.zeros((ntimes, 3)),
+        "data_drops": np.zeros((ntimes, 3), dtype="int"),
+    }
 
     return {
         "meta": attrs,
