@@ -600,7 +600,7 @@ class _SpectraOrResistanceFolder(_DataContainer):
                     ),
                 )
             except utils.LoadExistError:
-                setattr(self, name, None)
+                pass
 
         # Populate simulators.
         self.simulators = {}
