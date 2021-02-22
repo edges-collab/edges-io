@@ -1114,14 +1114,16 @@ class S11Dir(_DataContainer):
         """Dictionary specifying run numbers for each load."""
         return {
             k: getattr(getattr(self, k), "run_num", None)
-            for k in self.available_load_names + ["switching_state", "receiver_reading"]
+            for k in list(self.available_load_names)
+            + ["switching_state", "receiver_reading"]
         }
 
     @property
     def repeat_num(self):
         return {
             k: getattr(getattr(self, k), "repeat_num", None)
-            for k in self.available_load_names + ["switching_state", "receiver_reading"]
+            for k in list(self.available_load_names)
+            + ["switching_state", "receiver_reading"]
         }
 
     @classmethod
