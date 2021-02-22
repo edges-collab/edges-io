@@ -614,12 +614,16 @@ class _SpectraOrResistanceFolder(_DataContainer):
         return tuple(LOAD_ALIASES.keys())
 
     @property
+    def available_load_names(self):
+        return tuple(name for name in self.load_names if hasattr(self, name))
+
+    @property
     def run_num(self):
         """Dictionary of run numbers for each load"""
         try:
-            return {k: getattr(self, k)[0].run_num for k in LOAD_ALIASES}
+            return {k: getattr(self, k)[0].run_num for k in self.available_load_names}
         except TypeError:
-            return {k: getattr(self, k).run_num for k in LOAD_ALIASES}
+            return {k: getattr(self, k).run_num for k in self.available_load_names}
 
     @classmethod
     def _check_all_files_there(cls, path: Path) -> bool:
@@ -673,7 +677,7 @@ class _SpectraOrResistanceFolder(_DataContainer):
         """Read all spectra"""
         out = {}
         meta = {}
-        for name in LOAD_ALIASES:
+        for name in self.available_load_names:
             out[name], meta[name] = getattr(self, name).read()
         return out
 
