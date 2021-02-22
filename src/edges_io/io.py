@@ -1029,7 +1029,7 @@ class S11Dir(_DataContainer):
         rep_nums = {}
         for name in (
             ["switching_state", "receiver_reading"]
-            + list(LOAD_ALIASES.keys())
+            + list(self.available_load_names)
             + list(self.get_simulator_names(self.path))
         ):
             try:
@@ -1074,16 +1074,16 @@ class S11Dir(_DataContainer):
         else:
             self.receiver_reading = None
 
-        for name, load in LOAD_ALIASES.items():
-            if name in run_nums or load in run_nums:
-                setattr(
-                    self,
-                    name,
-                    LoadS11(
-                        self.path / f"{load}{rep_nums[name]:>02}",
-                        run_num=run_nums.get(load, run_nums.get(name, None)),
-                    ),
-                )
+        for name in self.available_load_names:
+            load = LOAD_ALIASES[name]
+            setattr(
+                self,
+                name,
+                LoadS11(
+                    self.path / f"{load}{rep_nums[name]:>02}",
+                    run_num=run_nums.get(load, run_nums.get(name, None)),
+                ),
+            )
 
         self.simulators = {}
         for name in self.get_simulator_names(path):
@@ -1091,6 +1091,19 @@ class S11Dir(_DataContainer):
                 self.path / f"{name}{rep_nums[name]:>02}",
                 run_num=run_nums.get(name, None),
             )
+
+    @property
+    def available_load_names(self):
+        return self.get_available_load_names(self.path)
+
+    @classmethod
+    def get_available_load_names(cls, path):
+        fls = utils.get_active_files(path)
+        return {
+            fl.name[:-2]
+            for fl in fls
+            if any(fl.name.startswith(k) for k in LOAD_ALIASES)
+        }
 
     @property
     def load_names(self):
