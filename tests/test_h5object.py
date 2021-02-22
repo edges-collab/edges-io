@@ -109,3 +109,15 @@ def test_clear(fastspec_spectrum_fl):
     assert "p0" not in obj.__memcache__["spectra"].__memcache__
     obj.clear()
     assert "spectra" not in obj.__memcache__
+
+
+def test_getitem(fastspec_spectrum_fl):
+    obj = HDF5RawSpectrum(fastspec_spectrum_fl)
+    assert "spectra" in obj
+    assert obj["spectra"]["p0"].ndim == 2
+    assert isinstance(obj["meta"], dict)
+    assert isinstance(obj["attrs"], dict)
+    assert obj["attrs"] == obj["meta"]
+
+    with pytest.raises(KeyError):
+        obj["not_existent"]
