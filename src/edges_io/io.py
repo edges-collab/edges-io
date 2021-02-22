@@ -1100,9 +1100,9 @@ class S11Dir(_DataContainer):
     def get_available_load_names(cls, path):
         fls = utils.get_active_files(path)
         return {
-            fl.name[:-2]
+            LOAD_ALIASES.inverse[fl.name[:-2]]
             for fl in fls
-            if any(fl.name.startswith(k) for k in LOAD_ALIASES)
+            if any(fl.name.startswith(k) for k in LOAD_ALIASES.inverse)
         }
 
     @property
