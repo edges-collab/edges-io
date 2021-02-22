@@ -224,32 +224,30 @@ class _SpectrumOrResistance(_DataFile):
         files = list(direc.glob(f"{load}_??_????_???_??_??_??_lab.*"))
 
         if not files:
-            raise ValueError(
-                f"No Spectrum files found for load {load}. Available spectrum files: {list(direc.glob('*'))}"
+            raise utils.LoadExistError(
+                f"No files exist for the load {load} for any filetype on that path: {direc}."
+                f"Found files: {list(files)}."
             )
 
         if filetype:
-            files = [fl for fl in files if fl.endswith("." + filetype)]
-            if not files:
-                raise ValueError(
-                    f"No files exist for the load {load} with filetype {filetype} on the path: {direc}"
-                )
-
+            filetype = [filetype]
         else:
-            # Use any format so long as it is supported
-            restricted_files = []
-            for ftype in cls.supported_formats:
-                restricted_files = [fl for fl in files if fl.suffix == ("." + ftype)]
-                if restricted_files:
-                    break
+            filetype = cls.supported_formats
 
-            if not restricted_files:
-                raise utils.LoadExistError(
-                    f"No files exist for the load {load} for any filetype on that path: {direc}."
-                    f"Found files: {list(files)}."
-                )
+        # Use any format so long as it is supported
+        rfiles = []
+        for ftype in cls.supported_formats:
+            rfiles = [fl for fl in files if fl.suffix == ("." + ftype)]
+            if rfiles:
+                break
 
-            files = restricted_files
+        if not rfiles:
+            raise utils.LoadExistError(
+                f"No files exist for the load {load} for any of the filetypes '{filetype}'."
+                f"Found files: {list(files)}."
+            )
+
+        files = rfiles
 
         # Restrict to the given run_num (default last run)
         run_nums = [int(fl.name[len(load) + 1 : len(load) + 3]) for fl in files]

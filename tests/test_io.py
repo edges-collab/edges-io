@@ -234,6 +234,12 @@ def test_list_of_files(datadir: Path):
     )
 
 
+def test_io_partial(datadir: Path):
+    obs = datadir / "Receiver01_25C_2023_11_26_040_to_200MHz"
+    calobs = io.CalibrationObservation(obs, include_previous=False)
+    assert calobs.spectra.ambient is None
+
+
 ### read testing
 # do identical acq and h5 files read in identically?
 # how does the read handle missing fields?
