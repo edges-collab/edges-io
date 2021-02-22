@@ -1058,10 +1058,6 @@ class S11Dir(_DataContainer):
         else:
             run_nums = dict(run_num)
 
-        logger.debug(
-            f"Highest rep_num for switching state: {self._get_highest_rep_num(self.path, 'SwitchingState')}"
-        )
-
         self.switching_state = SwitchingState(
             self.path / f"SwitchingState{rep_nums['switching_state']:>02}",
             run_num=run_nums.get("switching_state", None),
