@@ -78,6 +78,8 @@ class HDF5Object:
         if not self.lazy:
             self.load_all(self.filename)
 
+        self.__fl_inst = None
+
     @classmethod
     def from_data(cls, data, validate=True, **kwargs):
         inst = cls(**kwargs)
@@ -119,9 +121,13 @@ class HDF5Object:
                 "this object has no associated file. You can define one with the write() method."
             )
 
-        fl = h5py.File(self.filename, mode=mode)
-        yield fl
-        fl.close()
+        if not self.__fl_inst or self.__fl_inst.mode != mode:
+            self.__fl_inst = h5py.File(self.filename, mode=mode)
+
+        yield self.__fl_inst
+
+        self.__fl_inst.close()
+        self.__fl_inst = None
 
     def load(self, key: str) -> [dict, h5py.Dataset, h5py.Group]:
         """Load key from file into memory and keep it cached in memory.
