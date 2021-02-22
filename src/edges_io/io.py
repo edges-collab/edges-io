@@ -244,7 +244,7 @@ class _SpectrumOrResistance(_DataFile):
                     break
 
             if not restricted_files:
-                raise ValueError(
+                raise utils.LoadExistError(
                     f"No files exist for the load {load} for any filetype on that path: {direc}."
                     f"Found files: {list(files)}."
                 )
@@ -593,13 +593,16 @@ class _SpectraOrResistanceFolder(_DataContainer):
             run_nums = run_num
 
         for name, load in LOAD_ALIASES.items():
-            setattr(
-                self,
-                name,
-                self._content_type.from_load(
-                    load, self.path, run_nums.get(load, None), filetype
-                ),
-            )
+            try:
+                setattr(
+                    self,
+                    name,
+                    self._content_type.from_load(
+                        load, self.path, run_nums.get(load, None), filetype
+                    ),
+                )
+            except utils.LoadExistError:
+                setattr(self, name, None)
 
         # Populate simulators.
         self.simulators = {}

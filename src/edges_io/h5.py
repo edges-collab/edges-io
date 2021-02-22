@@ -395,7 +395,9 @@ class _HDF5Group:
                     f" Valid keys: {self.keys()}"
                 )
             elif isinstance(fl[item], h5py.Group):
-                out = _HDF5Group(self.filename, item)
+                out = _HDF5Group(
+                    self.filename, self.structure[item], self.group_path + "." + item
+                )
             elif isinstance(fl[item], h5py.Dataset):
                 out = fl[item][...]
             else:

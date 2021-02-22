@@ -94,6 +94,10 @@ class FileStructureError(Exception):
     pass
 
 
+class LoadExistError(Exception):
+    pass
+
+
 class IncompleteObservation(FileStructureError):
     pass
 
