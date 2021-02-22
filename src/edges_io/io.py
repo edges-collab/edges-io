@@ -236,7 +236,7 @@ class _SpectrumOrResistance(_DataFile):
 
         # Use any format so long as it is supported
         rfiles = []
-        for ftype in cls.supported_formats:
+        for ftype in filetype:
             rfiles = [fl for fl in files if fl.suffix == ("." + ftype)]
             if rfiles:
                 break
@@ -1190,6 +1190,9 @@ class CalibrationObservation(_DataContainer):
         repeat_num: [int, None] = None,
         include_previous: bool = True,
         compile_from_def: bool = True,
+        spectra_kwargs: Optional[dict] = None,
+        s11_kwargs: Optional[dict] = None,
+        resistance_kwargs: Optional[dict] = None,
         **kwargs,
     ):
         """
@@ -1265,17 +1268,25 @@ class CalibrationObservation(_DataContainer):
         else:
             run_nums = dict(run_num)
 
+        spectra_kwargs = spectra_kwargs or {}
+        resistance_kwargs = resistance_kwargs or {}
+        s11_kwargs = s11_kwargs or {}
+
         self.spectra = Spectra(
-            self.path / "Spectra", run_num=run_nums.get("Spectra", None), **kwargs
+            self.path / "Spectra",
+            run_num=run_nums.get("Spectra", None),
+            **spectra_kwargs,
         )
         self.resistance = Resistances(
-            self.path / "Resistance", run_num=run_nums.get("Resistance", None), **kwargs
+            self.path / "Resistance",
+            run_num=run_nums.get("Resistance", None),
+            **resistance_kwargs,
         )
         self.s11 = S11Dir(
             self.path / "S11",
             run_num=run_nums.get("S11", None),
             repeat_num=repeat_num,
-            **kwargs,
+            **s11_kwargs,
         )
 
         self.simulator_names = self.get_simulator_names(self.path)
