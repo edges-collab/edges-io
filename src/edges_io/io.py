@@ -1075,14 +1075,15 @@ class S11Dir(_DataContainer):
             self.receiver_reading = None
 
         for name, load in LOAD_ALIASES.items():
-            setattr(
-                self,
-                name,
-                LoadS11(
-                    self.path / f"{load}{rep_nums[name]:>02}",
-                    run_num=run_nums.get(load, run_nums.get(name, None)),
-                ),
-            )
+            if name in run_nums or load in run_nums:
+                setattr(
+                    self,
+                    name,
+                    LoadS11(
+                        self.path / f"{load}{rep_nums[name]:>02}",
+                        run_num=run_nums.get(load, run_nums.get(name, None)),
+                    ),
+                )
 
         self.simulators = {}
         for name in self.get_simulator_names(path):
