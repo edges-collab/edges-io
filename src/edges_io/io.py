@@ -224,32 +224,30 @@ class _SpectrumOrResistance(_DataFile):
         files = list(direc.glob(f"{load}_??_????_???_??_??_??_lab.*"))
 
         if not files:
-            raise ValueError(
-                f"No Spectrum files found for load {load}. Available spectrum files: {list(direc.glob('*'))}"
+            raise utils.LoadExistError(
+                f"No files exist for the load {load} for any filetype on that path: {direc}."
+                f"Found files: {list(files)}."
             )
 
         if filetype:
-            files = [fl for fl in files if fl.endswith("." + filetype)]
-            if not files:
-                raise ValueError(
-                    f"No files exist for the load {load} with filetype {filetype} on the path: {direc}"
-                )
-
+            filetype = [filetype]
         else:
-            # Use any format so long as it is supported
-            restricted_files = []
-            for ftype in cls.supported_formats:
-                restricted_files = [fl for fl in files if fl.suffix == ("." + ftype)]
-                if restricted_files:
-                    break
+            filetype = cls.supported_formats
 
-            if not restricted_files:
-                raise ValueError(
-                    f"No files exist for the load {load} for any filetype on that path: {direc}."
-                    f"Found files: {list(files)}."
-                )
+        # Use any format so long as it is supported
+        rfiles = []
+        for ftype in filetype:
+            rfiles = [fl for fl in files if fl.suffix == ("." + ftype)]
+            if rfiles:
+                break
 
-            files = restricted_files
+        if not rfiles:
+            raise utils.LoadExistError(
+                f"No files exist for the load {load} for any of the filetypes '{filetype}'."
+                f"Found files: {list(files)}."
+            )
+
+        files = rfiles
 
         # Restrict to the given run_num (default last run)
         run_nums = [int(fl.name[len(load) + 1 : len(load) + 3]) for fl in files]
@@ -431,16 +429,16 @@ class Resistance(_SpectrumOrResistance):
                 [
                     ("date", "S10"),
                     ("time", "S8"),
-                    ("lna_voltage", np.float),
-                    ("lna_resistance", np.float),
-                    ("lna_temp", np.float),
-                    ("sp4t_voltage", np.float),
-                    ("sp4t_resistance", np.float),
-                    ("sp4t_temp", np.float),
-                    ("load_voltage", np.float),
-                    ("load_resistance", np.float),
-                    ("load_temp", np.float),
-                    ("room_temp", np.float),
+                    ("lna_voltage", float),
+                    ("lna_resistance", float),
+                    ("lna_temp", float),
+                    ("sp4t_voltage", float),
+                    ("sp4t_resistance", float),
+                    ("sp4t_temp", float),
+                    ("load_voltage", float),
+                    ("load_resistance", float),
+                    ("load_temp", float),
+                    ("room_temp", float),
                 ]
             ),
         )
@@ -504,15 +502,15 @@ class Resistance(_SpectrumOrResistance):
                 delimiter=",",
                 dtype=np.dtype(
                     [
-                        ("reading_num", np.int),
-                        ("sample_resistance", np.float),
+                        ("reading_num", int),
+                        ("sample_resistance", float),
                         ("start_time", "S20"),
                         ("duration", "S9"),
                         ("max_time", "S20"),
-                        ("max_resistance", np.float),
-                        ("load_resistance", np.float),
+                        ("max_resistance", float),
+                        ("load_resistance", float),
                         ("min_time", "S20"),
-                        ("min_resistance", np.float),
+                        ("min_resistance", float),
                         ("description", "S20"),
                         ("end_time", "S22"),
                     ]
@@ -593,13 +591,16 @@ class _SpectraOrResistanceFolder(_DataContainer):
             run_nums = run_num
 
         for name, load in LOAD_ALIASES.items():
-            setattr(
-                self,
-                name,
-                self._content_type.from_load(
-                    load, self.path, run_nums.get(load, None), filetype
-                ),
-            )
+            try:
+                setattr(
+                    self,
+                    name,
+                    self._content_type.from_load(
+                        load, self.path, run_nums.get(load, None), filetype
+                    ),
+                )
+            except utils.LoadExistError:
+                setattr(self, name, None)
 
         # Populate simulators.
         self.simulators = {}
@@ -1189,6 +1190,9 @@ class CalibrationObservation(_DataContainer):
         repeat_num: [int, None] = None,
         include_previous: bool = True,
         compile_from_def: bool = True,
+        spectra_kwargs: Optional[dict] = None,
+        s11_kwargs: Optional[dict] = None,
+        resistance_kwargs: Optional[dict] = None,
         **kwargs,
     ):
         """
@@ -1264,17 +1268,25 @@ class CalibrationObservation(_DataContainer):
         else:
             run_nums = dict(run_num)
 
+        spectra_kwargs = spectra_kwargs or {}
+        resistance_kwargs = resistance_kwargs or {}
+        s11_kwargs = s11_kwargs or {}
+
         self.spectra = Spectra(
-            self.path / "Spectra", run_num=run_nums.get("Spectra", None), **kwargs
+            self.path / "Spectra",
+            run_num=run_nums.get("Spectra", None),
+            **spectra_kwargs,
         )
         self.resistance = Resistances(
-            self.path / "Resistance", run_num=run_nums.get("Resistance", None), **kwargs
+            self.path / "Resistance",
+            run_num=run_nums.get("Resistance", None),
+            **resistance_kwargs,
         )
         self.s11 = S11Dir(
             self.path / "S11",
             run_num=run_nums.get("S11", None),
             repeat_num=repeat_num,
-            **kwargs,
+            **s11_kwargs,
         )
 
         self.simulator_names = self.get_simulator_names(self.path)

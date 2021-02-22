@@ -78,6 +78,8 @@ class HDF5Object:
         if not self.lazy:
             self.load_all(self.filename)
 
+        self.__fl_inst = None
+
     @classmethod
     def from_data(cls, data, validate=True, **kwargs):
         inst = cls(**kwargs)
@@ -119,9 +121,13 @@ class HDF5Object:
                 "this object has no associated file. You can define one with the write() method."
             )
 
-        fl = h5py.File(self.filename, mode=mode)
-        yield fl
-        fl.close()
+        if not self.__fl_inst or self.__fl_inst.mode != mode:
+            self.__fl_inst = h5py.File(self.filename, mode=mode)
+
+        yield self.__fl_inst
+
+        self.__fl_inst.close()
+        self.__fl_inst = None
 
     def load(self, key: str) -> [dict, h5py.Dataset, h5py.Group]:
         """Load key from file into memory and keep it cached in memory.
@@ -395,7 +401,9 @@ class _HDF5Group:
                     f" Valid keys: {self.keys()}"
                 )
             elif isinstance(fl[item], h5py.Group):
-                out = _HDF5Group(self.filename, item)
+                out = _HDF5Group(
+                    self.filename, self.structure[item], self.group_path + "." + item
+                )
             elif isinstance(fl[item], h5py.Dataset):
                 out = fl[item][...]
             else:
@@ -422,24 +430,26 @@ class HDF5RawSpectrum(HDF5Object):
     _structure = {
         "meta": {
             "fastspec_version": "optional",
-            "start": "optional",  # lambda x: isinstance(x, (int, np.int64)),
-            "stop": "optional",  # lambda x: isinstance(x, (int, np.int64)),
-            "site": "optional",  # lambda x: isinstance(x, str),
-            "instrument": "optional",  # lambda x: isinstance(x, str),
-            "switch_io_port": "optional",  # lambda x: isinstance(x, (int, np.int64)),
-            "switch_delay": "optional",  # lambda x: isinstance(x, np.float),
-            "input_channel": "optional",  # lambda x: isinstance(x, (int, np.int64)),
-            "voltage_range": "optional",  # lambda x: isinstance(x, (int, np.int64)),
-            "samples_per_accumulation": "optional",  # lambda x: isinstance(x, (int, np.int64)),
-            "acquisition_rate": "optional",  # lambda x: isinstance(x, (int, np.int64)),
-            "num_channels": "optional",  # lambda x: isinstance(x, (int, np.int64)),
-            "num_taps": "optional",  # lambda x: isinstance(x, (int, np.int64)),
-            "window_function_id": "optional",  # lambda x: isinstance(x, (int, np.int64)),
-            "num_fft_threads": "optional",  # lambda x: isinstance(x, (int, np.int64)),
-            "num_fft_buffers": "optional",  # lambda x: isinstance(x, (int, np.int64)),
-            "stop_cycles": "optional",  # lambda x: isinstance(x, (int, np.int64)),
-            "stop_seconds": "optional",  # lambda x: isinstance(x, np.float),
-            "stop_time": "optional",  # lambda x: isinstance(x, str),
+            "start": "optional",
+            "stop": "optional",
+            "site": "optional",
+            "instrument": "optional",
+            "switch_delay": "optional",
+            "input_channel": "optional",
+            "voltage_range": "optional",
+            "samples_per_accumulation": "optional",
+            "acquisition_rate": "optional",
+            "num_channels": "optional",
+            "num_taps": "optional",
+            "window_function_id": "optional",
+            "num_fft_threads": "optional",
+            "num_fft_buffers": "optional",
+            "stop_cycles": "optional",
+            "stop_seconds": "optional",
+            "stop_time": "optional",
+            "edges_io_version": "optional",
+            "object_name": "optional",
+            "write_time": "optional",
         },
         "spectra": {
             "p0": lambda x: (x.ndim == 2 and x.dtype == float),
