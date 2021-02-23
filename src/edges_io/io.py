@@ -1035,15 +1035,21 @@ class S11Dir(_DataContainer):
             + list(self.available_load_names)
             + list(self.get_simulator_names(self.path))
         ):
-            if isinstance(run_num, int):
-                run_nums[name] = run_num
-            elif isinstance(run_num, dict):
-                run_nums[name] = run_num.get(
-                    name,
-                    self._get_highest_run_num(self.path, utils.snake_to_camel(name)),
-                )
-            else:
-                raise ValueError("run_num must be an int or dict.")
+            try:
+                if isinstance(run_num, int):
+                    run_nums[name] = run_num
+                elif isinstance(run_num, dict):
+                    run_nums[name] = run_num.get(
+                        name,
+                        self._get_highest_run_num(
+                            self.path, utils.snake_to_camel(name)
+                        ),
+                    )
+                else:
+                    raise ValueError("run_num must be an int or dict.")
+            except FileNotFoundError:
+                # that's fine, it's probably switching_state or receiver_Reading
+                pass
 
         if repeat_num is None or isinstance(repeat_num, int):
             rep_nums = {
@@ -1126,7 +1132,7 @@ class S11Dir(_DataContainer):
         fls = utils.get_active_files(path)
         fls = [fl for fl in fls if kind in str(fl)]
         if not fls:
-            raise ValueError(f"No S11 measurements found for {kind}")
+            raise FileNotFoundError(f"No S11 measurements found for {kind}")
 
         run_nums = [int(str(fl)[-2:]) for fl in fls]
         return max(run_nums)
