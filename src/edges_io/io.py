@@ -1125,6 +1125,9 @@ class S11Dir(_DataContainer):
     def _get_highest_run_num(cls, path, kind):
         fls = utils.get_active_files(path)
         fls = [fl for fl in fls if kind in str(fl)]
+        if not fls:
+            raise ValueError(f"No S11 measurements found for {kind}")
+
         run_nums = [int(str(fl)[-2:]) for fl in fls]
         return max(run_nums)
 
