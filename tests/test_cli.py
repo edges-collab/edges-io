@@ -107,7 +107,7 @@ def test_check_verbosity_overkill(datadir, caplog):
     assert result.exit_code == 0
 
 
-def unmove(temp: str, datadir: Path, tmpdir: Path) -> Tuple[Path, Path]:
+def unmove(temp: str, datadir: Path, tmpdir: Path) -> Tuple[str, Path]:
     folder = "Receiver01_25C_2019_11_26_040_to_200MHz"
     bad = tmpdir / "Receiver01_2019_11_26_040_to_200MHz"
     shutil.copytree(datadir / folder, bad / temp)

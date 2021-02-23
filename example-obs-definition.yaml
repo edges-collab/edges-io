@@ -37,19 +37,14 @@ measurements:
 
 defaults:
   # Use this section to give default run numbers / repeat numbers to use
-  # Note that you don't *need* this section: by default in the program, the last run
-  # will be used. Use this only if you know that the first run is better for some reason.
-  resistance:
-    run: 1        # Specifies which run to use (by default) for _all_ sources
-    hot_load: 2   # Specifies which run to use for hot_load. Over-rides 'run' if provided.
-  spectra:
-    ambient: 1    # use the first run for ambient (by default). Note that the default for all
-                  # other sources here will be the last available run. Also, spectra
-                  # can contain multiple files per-run, which are just merged in the read.
-  s11:
-    repeat: 1     # Sets the default repeat number for all s11 files.
-    run:    1     # Sets the default run number for all s11 files (within the repeat)
-    SwitchingState:
-      repeat: 2   # Default repeat for switching state
-      run:    1   # Default run num for switching state files
-      match:  2   # Default run num for match load within switching state.
+  # Note that you don't *need* this section: by default in the program, the last run and repeat
+  # will be used for each load. It is restricted to use the same repeat for all standards
+  # within a load.
+  run:
+    ambient: 1
+    hot_load: 2
+    short: 1
+    open: 2
+  repeat:
+    ambient: 1
+    SwitchingState: 1
