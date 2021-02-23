@@ -1418,7 +1418,7 @@ class CalibrationObservation(_DataContainer):
             return {}
 
         with open(definition_file, "r") as fl:
-            definition = yaml.load(fl, Loader=yaml.FullLoader)
+            definition = yaml.load(fl, Loader=yaml.FullLoader) or {}
 
         allowed_keys = {
             "root_obs_dir": str,
