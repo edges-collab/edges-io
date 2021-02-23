@@ -1430,7 +1430,7 @@ class CalibrationObservation(_DataContainer):
                 "resistance_m": {"01": float, "02": float, "03": float},
                 "resistance_f": {"01": float, "02": float, "03": float},
             },
-            "defaults": {"resistance": dict, "spectra": dict, "s11": dict},
+            "defaults": {"run": dict, "repeat": dict},
         }
 
         def _check_grp(defn, allowed):
