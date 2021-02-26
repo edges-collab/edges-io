@@ -1116,6 +1116,7 @@ class S11Dir(_DataContainer):
         return {
             k: getattr(getattr(self, k), "repeat_num", None)
             for k in list(self.available_load_names)
+            + list(self.simulators.keys())
             + ["switching_state", "receiver_reading"]
         }
 
@@ -1124,6 +1125,7 @@ class S11Dir(_DataContainer):
         return {
             k: getattr(getattr(self, k), "run_num", None)
             for k in list(self.available_load_names)
+            + list(self.simulators.keys())
             + ["switching_state", "receiver_reading"]
         }
 
