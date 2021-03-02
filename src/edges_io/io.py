@@ -1064,16 +1064,12 @@ class S11Dir(_DataContainer):
                 self.path / f"SwitchingState{run_nums['switching_state']:>02}",
                 repeat_num=rep_nums.get("switching_state", None),
             )
-        else:
-            self.switching_state = None
 
         if "receiver_reading" in run_nums:
             self.receiver_reading = ReceiverReading(
                 self.path / f"ReceiverReading{run_nums['receiver_reading']:>02}",
                 repeat_num=rep_nums.get("receiver_reading", None),
             )
-        else:
-            self.receiver_reading = None
 
         for name in self.available_load_names:
             load = LOAD_ALIASES[name]
@@ -1113,21 +1109,34 @@ class S11Dir(_DataContainer):
     @property
     def repeat_num(self):
         """Dictionary specifying run numbers for each load."""
-        out = {
-            k: getattr(getattr(self, k), "repeat_num", None)
-            for k in list(self.available_load_names)
-            + ["switching_state", "receiver_reading"]
-        }
+        out = {k: getattr(self, k).repeat_num for k in list(self.available_load_names)}
+
+        try:
+            out["switching_state"] = self.switching_state.repeat_num
+        except AttributeError:
+            pass
+
+        try:
+            out["receiver_reading"] = self.receiver_reading.repeat_num
+        except AttributeError:
+            pass
+
         out.update({k: v.repeat_num for k, v in self.simulators.items()})
         return out
 
     @property
     def run_num(self):
-        out = {
-            k: getattr(getattr(self, k), "run_num", None)
-            for k in list(self.available_load_names)
-            + ["switching_state", "receiver_reading"]
-        }
+        out = {k: getattr(self, k).run_num for k in list(self.available_load_names)}
+        try:
+            out["switching_state"] = self.switching_state.run_num
+        except AttributeError:
+            pass
+
+        try:
+            out["receiver_reading"] = self.receiver_reading.run_num
+        except AttributeError:
+            pass
+
         out.update({k: v.run_num for k, v in self.simulators.items()})
         return out
 
