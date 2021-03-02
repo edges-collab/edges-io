@@ -1113,21 +1113,23 @@ class S11Dir(_DataContainer):
     @property
     def repeat_num(self):
         """Dictionary specifying run numbers for each load."""
-        return {
+        out = {
             k: getattr(getattr(self, k), "repeat_num", None)
             for k in list(self.available_load_names)
-            + list(self.simulators.keys())
             + ["switching_state", "receiver_reading"]
         }
+        out.update({k: v.repeat_num for k, v in self.simulators})
+        return out
 
     @property
     def run_num(self):
-        return {
+        out = {
             k: getattr(getattr(self, k), "run_num", None)
             for k in list(self.available_load_names)
-            + list(self.simulators.keys())
             + ["switching_state", "receiver_reading"]
         }
+        out.update({k: v.run_num for k, v in self.simulators})
+        return out
 
     @classmethod
     def _get_highest_run_num(cls, path, kind):
