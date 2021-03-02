@@ -1118,7 +1118,7 @@ class S11Dir(_DataContainer):
             for k in list(self.available_load_names)
             + ["switching_state", "receiver_reading"]
         }
-        out.update({k: v.repeat_num for k, v in self.simulators})
+        out.update({k: v.repeat_num for k, v in self.simulators.items()})
         return out
 
     @property
@@ -1128,7 +1128,7 @@ class S11Dir(_DataContainer):
             for k in list(self.available_load_names)
             + ["switching_state", "receiver_reading"]
         }
-        out.update({k: v.run_num for k, v in self.simulators})
+        out.update({k: v.run_num for k, v in self.simulators.items()})
         return out
 
     @classmethod
