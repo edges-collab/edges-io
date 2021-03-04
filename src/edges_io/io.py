@@ -856,13 +856,7 @@ class _S11SubDir(_DataContainer):
         }
 
     def __getattr__(self, item):
-        try:
-            return super().__getattr__(item)
-        except AttributeError as e:
-            try:
-                return self.children[item]
-            except KeyError:
-                raise e
+        return self.children[item]
 
     @cached_property
     def filenames(self) -> Tuple[Path]:
