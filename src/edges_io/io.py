@@ -1443,6 +1443,8 @@ class CalibrationObservation(_DataContainer):
                 "resistance_f": {"01": float, "02": float, "03": float},
             },
             "defaults": {"run": dict, "repeat": dict},
+            "purpose": str,
+            "history": str,
         }
 
         def _check_grp(defn, allowed):
