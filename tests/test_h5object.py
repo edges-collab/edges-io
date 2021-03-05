@@ -132,7 +132,7 @@ def test_bad_existing_h5(tmpdir: Path):
     class Bad(HDF5Object):
         _structure = {"data": lambda x: isinstance(x, np.ndarray)}
 
-    with h5py.File(tmpdir / "bad.h5") as fl:
+    with h5py.File(tmpdir / "bad.h5", "w") as fl:
         grp = fl.create_group("data")
         grp.attrs["bad_key"] = True
         grp["data"] = np.linspace(0, 1, 10)
