@@ -856,7 +856,12 @@ class _S11SubDir(_DataContainer):
         }
 
     def __getattr__(self, item):
-        return self.children[item]
+        try:
+            return self.children[item]
+        except KeyError:
+            raise AttributeError(
+                f"{item} is not an attribute of {self.__class__.__name__}"
+            )
 
     @cached_property
     def filenames(self) -> Tuple[Path]:
