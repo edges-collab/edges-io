@@ -244,6 +244,15 @@ def test_io_partial(datadir: Path):
     assert not hasattr(calobs.spectra, "short")  # wrong format
 
 
+def test_repeat_num_zero(tmpdir: Path, caplog):
+    open = tmpdir / "Open00.s1p"
+    open.touch()
+
+    io.S1P(open)
+    print(caplog.records)
+    assert "The file Open00.s1p has a repeat_num (00) less than one" in caplog.messages
+
+
 ### read testing
 # do identical acq and h5 files read in identically?
 # how does the read handle missing fields?

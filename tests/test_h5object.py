@@ -6,7 +6,12 @@ import numpy as np
 from copy import deepcopy
 from pathlib import Path
 
-from edges_io.h5 import HDF5Object, HDF5RawSpectrum, HDF5StructureExtraKey
+from edges_io.h5 import (
+    HDF5Object,
+    HDF5RawSpectrum,
+    HDF5StructureExtraKey,
+    HDF5StructureValidationError,
+)
 
 
 def test_extra_key(fastspec_data, fastspec_spectrum_fl):
@@ -121,3 +126,16 @@ def test_getitem(fastspec_spectrum_fl):
 
     with pytest.raises(KeyError):
         obj["not_existent"]
+
+
+def test_bad_existing_h5(tmpdir: Path):
+    class Bad(HDF5Object):
+        _structure = {"data": lambda x: isinstance(x, np.ndarray)}
+
+    with h5py.File(tmpdir / "bad.h5") as fl:
+        grp = fl.create_group("data")
+        grp.attrs["bad_key"] = True
+        grp["data"] = np.linspace(0, 1, 10)
+
+    with pytest.raises(HDF5StructureValidationError):
+        Bad(tmpdir / "bad.h5")
