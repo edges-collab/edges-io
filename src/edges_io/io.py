@@ -886,14 +886,17 @@ class _S11SubDir(_DataContainer):
                 ok = False
         return ok
 
-    def _get_max_repeat_num(self):
-        return max(
-            int(re.match(S1P.pattern, fl.name).group("repeat_num"))
-            for fl in self.active_contents
-        )
+    def _get_max_repeat_num(self) -> int:
+        if self.active_contents:
+            return max(
+                int(re.match(S1P.pattern, fl.name).group("repeat_num"))
+                for fl in self.active_contents
+            )
+        else:
+            return 0
 
     @property
-    def max_repeat_num(self):
+    def max_repeat_num(self) -> int:
         return self._get_max_repeat_num()
 
     @classmethod
