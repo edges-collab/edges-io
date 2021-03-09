@@ -600,7 +600,7 @@ class _SpectraOrResistanceFolder(_DataContainer):
                     ),
                 )
             except utils.LoadExistError:
-                setattr(self, name, None)
+                pass
 
         # Populate simulators.
         self.simulators = {}
@@ -614,12 +614,16 @@ class _SpectraOrResistanceFolder(_DataContainer):
         return tuple(LOAD_ALIASES.keys())
 
     @property
+    def available_load_names(self):
+        return tuple(name for name in self.load_names if hasattr(self, name))
+
+    @property
     def run_num(self):
         """Dictionary of run numbers for each load"""
         try:
-            return {k: getattr(self, k)[0].run_num for k in LOAD_ALIASES}
+            return {k: getattr(self, k)[0].run_num for k in self.available_load_names}
         except TypeError:
-            return {k: getattr(self, k).run_num for k in LOAD_ALIASES}
+            return {k: getattr(self, k).run_num for k in self.available_load_names}
 
     @classmethod
     def _check_all_files_there(cls, path: Path) -> bool:
@@ -673,7 +677,7 @@ class _SpectraOrResistanceFolder(_DataContainer):
         """Read all spectra"""
         out = {}
         meta = {}
-        for name in LOAD_ALIASES:
+        for name in self.available_load_names:
             out[name], meta[name] = getattr(self, name).read()
         return out
 
@@ -707,12 +711,12 @@ class S1P(_DataFile):
         "ReceiverReading",
         "ExternalLoad",
     ]
-    pattern = r"^(?P<kind>%s)(?P<run_num>\d{2}).s1p$" % ("|".join(POSSIBLE_KINDS))
-    write_pattern = "{kind}{run_num:>02}.s1p"
+    pattern = r"^(?P<kind>%s)(?P<repeat_num>\d{2}).s1p$" % ("|".join(POSSIBLE_KINDS))
+    write_pattern = "{kind}{repeat_num:>02}.s1p"
     known_patterns = (
-        r"^(?P<kind>%s)(?P<run_num>\d{1}).s1p$" % ("|".join(POSSIBLE_KINDS)),
-        fr"^(?P<kind>{'|'.join(k.lower() for k in POSSIBLE_KINDS)})(?P<run_num>\d{2}).s1p$",
-        fr"^(?P<kind>{'|'.join(k.lower() for k in POSSIBLE_KINDS)})(?P<run_num>\d{1}).s1p$",
+        r"^(?P<kind>%s)(?P<repeat_num>\d{1}).s1p$" % ("|".join(POSSIBLE_KINDS)),
+        fr"^(?P<kind>{'|'.join(k.lower() for k in POSSIBLE_KINDS)})(?P<repeat_num>\d{2}).s1p$",
+        fr"^(?P<kind>{'|'.join(k.lower() for k in POSSIBLE_KINDS)})(?P<repeat_num>\d{1}).s1p$",
         r"^(?P<kind>%s).s1p$" % ("|".join(POSSIBLE_KINDS)),
         fr"^(?P<kind>{'|'.join(k.lower() for k in POSSIBLE_KINDS)}).s1p$",
     )
@@ -728,9 +732,9 @@ class S1P(_DataFile):
         return self._match_dict["kind"]
 
     @property
-    def run_num(self):
-        """The run num of this S1P."""
-        return self._match_dict["run_num"]
+    def repeat_num(self):
+        """The repeat num of this S1P."""
+        return self._match_dict["repeat_num"]
 
     @cached_property
     def s11(self):
@@ -750,15 +754,15 @@ class S1P(_DataFile):
 
     @classmethod
     def _validate_match(cls, match: Dict[str, str], filename: str):
-        if int(match["run_num"]) < 1:
+        if int(match["repeat_num"]) < 1:
             logger.error(
-                f"The file {filename} has a run_num ({match['run_num']}) less than one"
+                f"The file {filename} has a repeat_num ({match['repeat_num']}) less than one"
             )
 
     @classmethod
     def _get_filename_parameters(cls, dct: dict):
         # If a lower-case kind is passed, use the upper-case version
-        out = {"run_num": 1}
+        out = {"repeat_num": 1}
         if dct.get("kind", None) in (k.lower() for k in cls.POSSIBLE_KINDS):
             dct["kind"] = cls.POSSIBLE_KINDS[
                 [k.lower() for k in cls.POSSIBLE_KINDS].index(dct["kind"])
@@ -831,34 +835,33 @@ class S1P(_DataFile):
 class _S11SubDir(_DataContainer):
     STANDARD_NAMES = S1P.POSSIBLE_KINDS
     _content_type = S1P
-    write_pattern = "{load_name}{repeat_num:0>2}"
+    write_pattern = "{load_name}{run_num:0>2}"
 
     @classmethod
     def typestr(cls, name: str) -> str:
         return cls.__name__ + re.match(cls.pattern, name).groupdict()["load_name"]
 
-    def __init__(self, path, *, run_num=None, **kwargs):
+    def __init__(self, path, *, repeat_num=None, **kwargs):
         super().__init__(path, **kwargs)
 
-        self.run_num = run_num or self._get_max_run_num()
-        self.repeat_num = int(self._match_dict["repeat_num"])
+        self.repeat_num = repeat_num or self._get_max_repeat_num()
+        self.run_num = int(self._match_dict["run_num"])
 
     @cached_property
     def children(self) -> Dict[str, S1P]:
         """Filenames of S1P measurements used in this observation."""
         return {
-            name.lower(): S1P(self.path / f"{name}{self.run_num:>02}.s1p")
+            name.lower(): S1P(self.path / f"{name}{self.repeat_num:>02}.s1p")
             for name in self.STANDARD_NAMES
         }
 
     def __getattr__(self, item):
         try:
-            return super().__getattr__(item)
-        except AttributeError as e:
-            try:
-                return self.children[item]
-            except KeyError:
-                raise e
+            return self.children[item]
+        except KeyError:
+            raise AttributeError(
+                f"{item} is not an attribute of {self.__class__.__name__}"
+            )
 
     @cached_property
     def filenames(self) -> Tuple[Path]:
@@ -883,15 +886,18 @@ class _S11SubDir(_DataContainer):
                 ok = False
         return ok
 
-    def _get_max_run_num(self):
-        return max(
-            int(re.match(S1P.pattern, fl.name).group("run_num"))
-            for fl in self.active_contents
-        )
+    def _get_max_repeat_num(self) -> int:
+        if self.active_contents:
+            return max(
+                int(re.match(S1P.pattern, fl.name).group("repeat_num"))
+                for fl in self.active_contents
+            )
+        else:
+            return 0
 
     @property
-    def max_run_num(self):
-        return self._get_max_run_num()
+    def max_repeat_num(self) -> int:
+        return self._get_max_repeat_num()
 
     @classmethod
     def _check_file_consistency(cls, path: Path) -> bool:
@@ -900,20 +906,20 @@ class _S11SubDir(_DataContainer):
     @classmethod
     def _get_filename_parameters(cls, dct: dict):
         out = {}
-        if "repeat_num" not in dct:
-            out["repeat_num"] = 1
+        if "run_num" not in dct:
+            out["run_num"] = 1
         return out
 
 
 class LoadS11(_S11SubDir):
     STANDARD_NAMES = ["Open", "Short", "Match", "External"]
-    pattern = r"(?P<load_name>%s)(?P<repeat_num>\d{2})$" % (
+    pattern = r"(?P<load_name>%s)(?P<run_num>\d{2})$" % (
         "|".join(LOAD_ALIASES.values())
     )
     known_patterns = (
         f"(?P<load_name>{'|'.join(LOAD_MAPPINGS.keys())})$",
         f"(?P<load_name>{'|'.join(LOAD_ALIASES.values())})$",
-        r"(?P<load_name>%s)(?P<repeat_num>\d{1})$" % ("|".join(LOAD_ALIASES.values())),
+        r"(?P<load_name>%s)(?P<run_num>\d{1})$" % ("|".join(LOAD_ALIASES.values())),
     )
 
     known_substitutions = (
@@ -942,7 +948,7 @@ class LoadS11(_S11SubDir):
 
 
 class AntSimS11(LoadS11):
-    pattern = r"(?P<load_name>%s)(?P<repeat_num>\d{2})$" % (
+    pattern = r"(?P<load_name>%s)(?P<run_num>\d{2})$" % (
         "|".join(ANTENNA_SIMULATORS.keys())
     )
     known_patterns = (
@@ -960,7 +966,7 @@ class AntSimS11(LoadS11):
 
 
 class SwitchingState(_S11SubDir):
-    pattern = r"(?P<load_name>SwitchingState)(?P<repeat_num>\d{2})$"
+    pattern = r"(?P<load_name>SwitchingState)(?P<run_num>\d{2})$"
     known_patterns = ("(?P<load_name>SwitchingState)",)
 
     STANDARD_NAMES = [
@@ -975,7 +981,7 @@ class SwitchingState(_S11SubDir):
 
 
 class ReceiverReading(_S11SubDir):
-    pattern = r"(?P<load_name>ReceiverReading)(?P<repeat_num>\d{2})$"
+    pattern = r"(?P<load_name>ReceiverReading)(?P<run_num>\d{2})$"
     STANDARD_NAMES = ["Open", "Short", "Match", "ReceiverReading"]
     known_substitutions = (("ReceiverReadings", "ReceiverReading"),)
     known_patterns = ("(?P<load_name>ReceiverReading)",)
@@ -1012,111 +1018,143 @@ class S11Dir(_DataContainer):
         path : str or Path
             Top-level directory of the S11 measurements.
         repeat_num : int or dict, optional
-            If int, the repeat num of any applicable sub-directories to use.
-            If dict, each key specifies either SwitchingState or ReceiverReading
-            and the repeat_num to use for that.
-            By default, will find the last repeat.
+            If int, the repeat num of all the standards to use (typically one or two).
+            Otherwise, specified as a dict per-load. By default, use the highest repeat
+            number available.
         run_num : int or dict, optional
-            If int, the run num of any applicable sub-directories to use.
-            Any given sub-directory uses the same run_num for all files, but each
-            sub-directory can use different run_nums
-            If dict, each key specifies any of the sub-dir names
-            and the repeat_num to use for that.
-            By default, will find the last repeat.
+            If int, the run num to use for all loads. If dict, specify which run num
+            to use for each load. By default, use the highest run for each available
+            load. **Note:** if using this for calibration, the run number must match
+            the run number of the spectra and resistance.
+
         """
         super().__init__(path, **kwargs)
 
-        rep_nums = {}
+        run_num = run_num or {}
+        run_nums = {}
         for name in (
             ["switching_state", "receiver_reading"]
-            + list(LOAD_ALIASES.keys())
+            + list(self.available_load_names)
             + list(self.get_simulator_names(self.path))
         ):
             try:
-                if type(repeat_num) == int:
-                    rep_nums[name] = repeat_num
-                elif repeat_num is None:
-                    rep_nums[name] = self._get_highest_rep_num(
-                        self.path, utils.snake_to_camel(name)
-                    )
-                else:
-                    rep_nums[name] = repeat_num.get(
+                if isinstance(run_num, int):
+                    run_nums[name] = run_num
+                elif isinstance(run_num, dict):
+                    run_nums[name] = run_num.get(
                         name,
-                        self._get_highest_rep_num(
+                        self._get_highest_run_num(
                             self.path, utils.snake_to_camel(name)
                         ),
                     )
-            except ValueError:
-                # Probably no load of that kind in the directory. That's fine.
+                else:
+                    raise ValueError("run_num must be an int or dict.")
+            except FileNotFoundError:
+                # that's fine, it's probably switching_state or receiver_Reading
                 pass
 
-        if type(run_num) == int or run_num is None:
-            run_nums = {
-                **{"switching_state": run_num, "receiver_reading": run_num},
-                **{name: run_num for name in LOAD_ALIASES.values()},
+        if repeat_num is None or isinstance(repeat_num, int):
+            rep_nums = {
+                **{"switching_state": repeat_num, "receiver_reading": repeat_num},
+                **{name: repeat_num for name in LOAD_ALIASES.values()},
             }
         else:
-            run_nums = dict(run_num)
+            rep_nums = dict(repeat_num)
 
-        logger.debug(
-            f"Highest rep_num for switching state: {self._get_highest_rep_num(self.path, 'SwitchingState')}"
-        )
+        if "switching_state" in run_nums:
+            self.switching_state = SwitchingState(
+                self.path / f"SwitchingState{run_nums['switching_state']:>02}",
+                repeat_num=rep_nums.get("switching_state", None),
+            )
 
-        self.switching_state = SwitchingState(
-            self.path / f"SwitchingState{rep_nums['switching_state']:>02}",
-            run_num=run_nums.get("switching_state", None),
-        )
-        self.receiver_reading = ReceiverReading(
-            self.path / f"ReceiverReading{rep_nums['receiver_reading']:>02}",
-            run_num=run_nums.get("receiver_reading", None),
-        )
+        if "receiver_reading" in run_nums:
+            self.receiver_reading = ReceiverReading(
+                self.path / f"ReceiverReading{run_nums['receiver_reading']:>02}",
+                repeat_num=rep_nums.get("receiver_reading", None),
+            )
 
-        for name, load in LOAD_ALIASES.items():
+        for name in self.available_load_names:
+            load = LOAD_ALIASES[name]
             setattr(
                 self,
                 name,
                 LoadS11(
-                    self.path / f"{load}{rep_nums[name]:>02}",
-                    run_num=run_nums.get(load, run_nums.get(name, None)),
+                    self.path / f"{load}{run_nums[name]:>02}",
+                    repeat_num=rep_nums.get(load, rep_nums.get(name, None)),
                 ),
             )
 
         self.simulators = {}
         for name in self.get_simulator_names(path):
             self.simulators[name] = AntSimS11(
-                self.path / f"{name}{rep_nums[name]:>02}",
-                run_num=run_nums.get(name, None),
+                self.path / f"{name}{run_nums[name]:>02}",
+                repeat_num=rep_nums.get(name, None),
             )
+
+    @property
+    def available_load_names(self):
+        return self.get_available_load_names(self.path)
+
+    @classmethod
+    def get_available_load_names(cls, path):
+        fls = utils.get_active_files(path)
+        return {
+            LOAD_ALIASES.inverse[fl.name[:-2]]
+            for fl in fls
+            if any(fl.name.startswith(k) for k in LOAD_ALIASES.inverse)
+        }
 
     @property
     def load_names(self):
         return tuple(LOAD_ALIASES.keys())
 
     @property
-    def run_num(self):
+    def repeat_num(self):
         """Dictionary specifying run numbers for each load."""
-        return {
-            k: getattr(self, k).run_num
-            for k in list(LOAD_ALIASES.keys()) + ["switching_state", "receiver_reading"]
-        }
+        out = {k: getattr(self, k).repeat_num for k in list(self.available_load_names)}
+
+        try:
+            out["switching_state"] = self.switching_state.repeat_num
+        except AttributeError:
+            pass
+
+        try:
+            out["receiver_reading"] = self.receiver_reading.repeat_num
+        except AttributeError:
+            pass
+
+        out.update({k: v.repeat_num for k, v in self.simulators.items()})
+        return out
 
     @property
-    def repeat_num(self):
-        return {
-            k: getattr(self, k).repeat_num
-            for k in list(LOAD_ALIASES.keys()) + ["switching_state", "receiver_reading"]
-        }
+    def run_num(self):
+        out = {k: getattr(self, k).run_num for k in list(self.available_load_names)}
+        try:
+            out["switching_state"] = self.switching_state.run_num
+        except AttributeError:
+            pass
+
+        try:
+            out["receiver_reading"] = self.receiver_reading.run_num
+        except AttributeError:
+            pass
+
+        out.update({k: v.run_num for k, v in self.simulators.items()})
+        return out
 
     @classmethod
-    def _get_highest_rep_num(cls, path, kind):
+    def _get_highest_run_num(cls, path, kind):
         fls = utils.get_active_files(path)
         fls = [fl for fl in fls if kind in str(fl)]
-        rep_nums = [int(str(fl)[-2:]) for fl in fls]
-        return max(rep_nums)
+        if not fls:
+            raise FileNotFoundError(f"No S11 measurements found for {kind}")
 
-    def get_highest_rep_num(self, kind: str):
+        run_nums = [int(str(fl)[-2:]) for fl in fls]
+        return max(run_nums)
+
+    def get_highest_run_num(self, kind: str):
         """Get the highest repeat number for this kind."""
-        return self._get_highest_rep_num(self.path, kind)
+        return self._get_highest_run_num(self.path, kind)
 
     @classmethod
     def _check_all_files_there(cls, path: Path) -> bool:
@@ -1158,8 +1196,8 @@ class S11Dir(_DataContainer):
 
 class CalibrationObservation(_DataContainer):
     pattern = re.compile(
-        r"^Receiver(?P<rcv_num>\d{2})_(?P<temp>\d{2})C_(?P<year>\d{4})_(?P<month>\d{2})_(?P<day>\d{2})_"
-        r"(?P<freq_low>\d{3})_to_(?P<freq_hi>\d{3})MHz$"
+        r"^Receiver(?P<rcv_num>\d{2})_(?P<temp>\d{2})C_(?P<year>\d{4})_(?P<month>\d{2})_("
+        r"?P<day>\d{2})_(?P<freq_low>\d{3})_to_(?P<freq_hi>\d{3})MHz$"
     )
 
     known_patterns = (
@@ -1173,7 +1211,11 @@ class CalibrationObservation(_DataContainer):
             r"_to_(?P<freq_hi>\d{3})_MHz$"
         ),
     )
-    write_pattern = "Receiver{rcv_num:0>2}_{temp:>02}C_{year:>04}_{month:0>2}_{day:0>2}_{freq_low:0>3}_to_{freq_hi:0>3}MHz"
+    write_pattern = (
+        "Receiver{rcv_num:0>2}_{temp:>02}C_{year:>04}_{month:0>2}_{day:0>2}_"
+        "{freq_low:0>3}_to_{freq_hi:0>3}MHz"
+    )
+
     _content_type = {
         "S11": S11Dir,
         "Spectra": Spectra,
@@ -1187,7 +1229,7 @@ class CalibrationObservation(_DataContainer):
         self,
         path: [str, Path],
         run_num: [int, dict, None] = None,
-        repeat_num: [int, None] = None,
+        repeat_num: [int, dict, None] = None,
         include_previous: bool = True,
         compile_from_def: bool = True,
         spectra_kwargs: Optional[dict] = None,
@@ -1210,13 +1252,13 @@ class CalibrationObservation(_DataContainer):
         ambient_temp : int, {15, 25, 35}
             The ambient temperature of the lab measurements.
         run_num : int or dict, optional
-            If an integer, the run number to use for all measurements. If None, by default
-            uses the last run for each measurement. If a dict, it should specify the
-            run number for each applicable measurement.
+            If an integer, the run number to use for all loads. If None, by default
+            uses the last run for each load. If a dict, it should specify the
+            run number for each load.
         repeat_num : int or dict, optional
-            If an integer, the repeat number to use for all measurements. If None, by default
-            uses the last run for each measurement. If a dict, it should specify the
-            repeat number for each applicable measurement.
+            If an integer, the repeat number to use for all S11 standards measurements,
+            for all loads. If None, by default uses the last repeat (typically 02) for
+            each load. If a dict, it should specify the repeat number for each load.
         fix : bool, optional
             Whether to attempt fixing filenames and the file structure in the observation
             for simple known error cases. Typically it is better to explicitly call
@@ -1263,30 +1305,18 @@ class CalibrationObservation(_DataContainer):
         self.freq_low = int(self._groups["freq_low"])
         self.freq_high = int(self._groups["freq_hi"])
 
-        if type(run_num) == int or run_num is None:
-            run_nums = {"Spectra": run_num, "Resistance": run_num, "S11": run_num}
-        else:
-            run_nums = dict(run_num)
-
         spectra_kwargs = spectra_kwargs or {}
         resistance_kwargs = resistance_kwargs or {}
         s11_kwargs = s11_kwargs or {}
 
         self.spectra = Spectra(
-            self.path / "Spectra",
-            run_num=run_nums.get("Spectra", None),
-            **spectra_kwargs,
+            self.path / "Spectra", run_num=run_num, **spectra_kwargs,
         )
         self.resistance = Resistances(
-            self.path / "Resistance",
-            run_num=run_nums.get("Resistance", None),
-            **resistance_kwargs,
+            self.path / "Resistance", run_num=run_num, **resistance_kwargs,
         )
         self.s11 = S11Dir(
-            self.path / "S11",
-            run_num=run_nums.get("S11", None),
-            repeat_num=repeat_num,
-            **s11_kwargs,
+            self.path / "S11", run_num=run_num, repeat_num=repeat_num, **s11_kwargs,
         )
 
         self.simulator_names = self.get_simulator_names(self.path)
@@ -1403,7 +1433,7 @@ class CalibrationObservation(_DataContainer):
             return {}
 
         with open(definition_file, "r") as fl:
-            definition = yaml.load(fl, Loader=yaml.FullLoader)
+            definition = yaml.load(fl, Loader=yaml.FullLoader) or {}
 
         allowed_keys = {
             "root_obs_dir": str,
@@ -1415,7 +1445,9 @@ class CalibrationObservation(_DataContainer):
                 "resistance_m": {"01": float, "02": float, "03": float},
                 "resistance_f": {"01": float, "02": float, "03": float},
             },
-            "defaults": {"resistance": dict, "spectra": dict, "s11": dict},
+            "defaults": {"run": dict, "repeat": dict},
+            "purpose": str,
+            "history": str,
         }
 
         def _check_grp(defn, allowed):
@@ -1537,7 +1569,7 @@ class CalibrationObservation(_DataContainer):
         return set(names)
 
     def read_all(self):
-        """Read all spectra and resistance files. Usually a bad idea."""
+        """Read all spectra and resistance files into memory. Usually a bad idea."""
         self.spectra.read_all()
         self.resistance.read_all()
 
@@ -1582,9 +1614,6 @@ class CalibrationObservation(_DataContainer):
         path : Path
             The path (absolute or relative to current directory) to the observation (not
             the definition file).
-        ambient_temp : str, optional
-            Either '15C', '25C' or '35C'. Actual measurements will be found in a folder
-            of this name under ``path``.
         include_previous : bool, optional
             Whether to by default "include" the previous observation (if any can be
             found). This means that observation will be used to supplement this one if
@@ -1778,11 +1807,7 @@ class CalibrationObservation(_DataContainer):
     @property
     def run_num(self):
         """Dictionary specifying run numbers for each component"""
-        return {
-            "S11": self.s11.run_num,
-            "Spectra": self.spectra.run_num,
-            "Resistance": self.resistance.run_num,
-        }
+        return self.s11.run_num
 
     @property
     def list_of_files(self):

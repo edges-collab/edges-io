@@ -401,6 +401,10 @@ class _HDF5Group:
                     f" Valid keys: {self.keys()}"
                 )
             elif isinstance(fl[item], h5py.Group):
+                if not isinstance(self.structure[item], dict):
+                    raise HDF5StructureValidationError(
+                        f"item {item} has structure {self.structure[item]}, but must be dict."
+                    )
                 out = _HDF5Group(
                     self.filename, self.structure[item], self.group_path + "." + item
                 )

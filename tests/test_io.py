@@ -240,8 +240,17 @@ def test_io_partial(datadir: Path):
     calobs = io.CalibrationObservation(
         obs, include_previous=False, spectra_kwargs={"filetype": "acq"}
     )
-    assert calobs.spectra.ambient is None  # simply nothing there
-    assert calobs.spectra.short is None  # wrong format
+    assert not hasattr(calobs.spectra, "ambient")  # simply nothing there
+    assert not hasattr(calobs.spectra, "short")  # wrong format
+
+
+def test_repeat_num_zero(tmpdir: Path, caplog):
+    open = tmpdir / "Open00.s1p"
+    open.touch()
+
+    io.S1P(open)
+    print(caplog.records)
+    assert "The file Open00.s1p has a repeat_num (00) less than one" in caplog.messages
 
 
 ### read testing

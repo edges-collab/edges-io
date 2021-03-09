@@ -31,7 +31,7 @@ files:
     long:
     hot_load:
   s11:
-    # Each of these should point to a directory, and have a run number
+    # Each of these should point to a directory, and have a repeat number
     ambient: ['/path/to/S11/Ambient01', 1]
     hot_load: ['/path/to/different/S11/HotLoad02', 2]
     open: ['/path/to/S11/Open01', 1]

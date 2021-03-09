@@ -1,7 +1,7 @@
 ===========================================
 EDGES Calibration File Structure Definition
 ===========================================
-**VERSION:** v1.1.0
+**VERSION:** v2.0.0
 
 This document is based on
 `memo #113 "Receiver calibration procedure document" <http://loco.lab.asu.edu/loco-memos/edges_reports/tom_20180523_Calibration_Steps.pdf>`_,
@@ -57,14 +57,18 @@ present (including none)::
                 {Ambient|HotLoad|LongCableOpen|LongCableShorted}_<NN>_YYYY_DDD_HH_MM_SS_lab.<h5|acq|mat|npz>
                 <AntSimX>_<NN>_YYYY_DDD_HH_MM_SS_lab.{h5|acq|mat|npz}
             S11/
-                ReceiverReading<RR>/
-                    {ReceiverReading|Open|Short|Match}<NN>.s1p
-                SwitchingState<RR>/
-                    {Open|Short|Match|ExternalOpen|ExternalShort|ExternalMatch}<NN>.s1p
-                {LongCableOpen|LongCableShort|Ambient|HotLoad}<RR>/
-                    {Open|Short|Match|External}<NN>.s1p
-                <AntSimX><RR>/
-                    {Open|Short|Match|External}<NN>.s1p
+                ReceiverReading<NN>/
+                    {ReceiverReading|Open|Short|Match}<RR>.s1p
+                SwitchingState<NN>/
+                    {Open|Short|Match|ExternalOpen|ExternalShort|ExternalMatch}<RR>.s1p
+                {LongCableOpen|LongCableShort|Ambient|HotLoad}<NN>/
+                    {Open|Short|Match|External}<RR>.s1p
+                <AntSimX><NN>/
+                    {Open|Short|Match|External}<RR>.s1p
+
+**Note:** the various occurrences of ``<NN>`` here signify the "run number". Each load
+(Ambient/HotLoad/...) may have a unique run number greater than zero, however, the run
+number for that load is then the same between resistance, spectra and s11.
 
 We will go through each format in more detail below to identify any vague points and
 also describe the metadata of each entry.
@@ -106,42 +110,41 @@ or directory will be flagged as an **error** (besides global exceptions defined 
 
 Each subdirectory contains a number of ``.s1p`` format files. We define explicitly
 which files may be contained in each directory below. Nevertheless, we here
-emphasise that the format of these files contains a single entry ``<NN>``, called
-the "run number", which identifies a chronological ordering of when the data was taken.
+emphasise that the format of these files contains a single entry ``<RR>``, called
+the "repeat number", which identifies a chronological ordering of when the data was taken,
+within a single hook-up.
 It is an integer, and the entries in any given directory for any given file kind must
-start at one and increment by one. There may be an arbitrary number of run numbers for
-any given directory and file kind.
+start at one and increment by one. There may be an arbitrary number of repeat numbers for
+any given load and standard.
 
-**Note:** only a single run number for all *standards* (open, short, match etc.) within
+**Note:** only a single repeat number for all *standards* (open, short, match etc.) within
 a given *load* (Ambient, SwitchingState etc.) can be *used*. It is never acceptable to
 use for example ``Ambient/Open01.s1p`` and ``Ambient/Short02.s1p`` together (though they
 can both exist). Thus, an incomplete set of s1p files for a given run number is flagged
 as en *error* -- these files should be removed, or defined with an ``.invalid`` suffix.
-Similarly, mixing the same run number for the same load between different *observations*
-is not allowed.
 
 Contents Format:
-    * ``ReceiverReading<RR>/``
-        - ``<RR>``: the "repeat number" of the observation. An integer. Lowest value
+    * ``ReceiverReading<NN>/``
+        - ``<NN>``: the "run number" of the observation. An integer. Lowest value
           *must* be ``01``, and it must increment by unity. Any number of directories
           may be present. Each represents a repetition of the entire measurement.
-        - Contains ``ReceiverReading<NN>.s1p``, ``Short<NN>.s1p``, ``Open<NN>.s1p``
-          and ``Match<NN>.s1p``. See notes on ``<NN>`` above. Each corresponds to the
+        - Contains ``ReceiverReading<RR>.s1p``, ``Short<RR>.s1p``, ``Open<RR>.s1p``
+          and ``Match<RR>.s1p``. See notes on ``<RR>`` above. Each corresponds to the
           measurement of a different standard.
-    * ``SwitchingState<RR>/``
-        - ``<RR>``: See note for ``ReceiverReading<RR>``.
-        - Contains ``{Open|Short|Match|ExternalOpen|ExternalShort|ExternalMatch}<NN>.s1p``.
+    * ``SwitchingState<NN>/``
+        - ``<NN>``: See note for ``ReceiverReading<NN>``.
+        - Contains ``{Open|Short|Match|ExternalOpen|ExternalShort|ExternalMatch}<RR>.s1p``.
           These are again all measurements of different internal/external standards. Again,
-          see notes on ``<NN>`` above.
-    * ``{Ambient|HotLoad|LongCableOpen|LongCableShort}<RR>/``
+          see notes on ``<RR>`` above.
+    * ``{Ambient|HotLoad|LongCableOpen|LongCableShort}<NN>/``
         - *All* of these options *must* be present. They represent the S11 measurements
           of the four calibration loads. Repeat number must be greater or equal to one.
-        - Each contains *all* of ``{External|Short|Open|Match}<NN>.s1p``.
-    * ``[AntSim<X>]<RR>/``
+        - Each contains *all* of ``{External|Short|Open|Match}<RR>.s1p``.
+    * ``[AntSim<X>]<NN>/``
         - Any number of Antenna Simulators *may* be present (up to 9). If present, ``X``
           identifies the simulator (an integer from 1-9).
         - The contents of an antenna simulation are the same as a Load. All of:
-          ``{External|Short|Open|Match}<NN>.s1p``.
+          ``{External|Short|Open|Match}<RR>.s1p``.
         - Repeat number must be greater or equal one.
 
 
@@ -190,6 +193,12 @@ which correspond to:
 * ``MAJOR``: backwards-incompatible change. A change such that the reader itself must
   be changed in order to give the same results, or not error. In this case, all
   observations on disk will require updating.
+
+v2.0.0
+~~~~~~
+* Fixed a bug in the documentation, in which "run number" and "repeat number" were swapped
+  for the S11. Also added a clarifying note that only one run number per load is allowed
+  for all kinds of measurements (spectra/resistance/s11).
 
 v1.1.0
 ~~~~~~

@@ -211,16 +211,16 @@ each reading takes of order a minute. Thus, multiple readings of these measureme
 be taken -- and typically are taken. Inside the ``S11`` folder exist a folder for each
 of the main loads (or sources), in which are measurements of the four standards (``open``,
 ``short``, ``match`` and ``external``). Each of these standards can be measured multiple
-times, and so each file has the format ``<standard-name><run-num>.s1p``, where ``run-num``
+times, and so each file has the format ``<standard-name><rep-num>.s1p``, where ``rep-num``
 goes from 1 - 99. However, each of the standards for a load is measured one after the
 other on the same connection (i.e. there is no disconnection between them, to avoid
 issues with different connection characteristics between the standards). Thus, one can't
-choose to use run number 1 for ``open`` and run number 2 for ``short`` for the ``Ambient``
-source. For a given source, all standards used must be of the same run number (but multiple
+choose to use repeat number 01 for ``open`` and repeat number 2 for ``short`` for the ``Ambient``
+source. For a given source, all standards used must be of the same repeat number (but multiple
 runs can *exist* for the source).
 Besides the S11's of the sources, we also need measurements of the LNA reflections, and
 the internal switch. These exist in the folders ``ReceiverReadingXX`` and ``SwitchingStateXX``
-respectively. Here the ``XX`` correspond to what we call a "repeat" number, which
+respectively. Here the ``XX`` correspond to what we call a "run" number, which
 correspond to a complete re-measuring of the standards at different points in the
 observation process. An arbitrary number of these can be performed (up to 99), but only
 one is required.
