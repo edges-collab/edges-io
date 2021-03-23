@@ -10,4 +10,4 @@ finally:
 
 from . import h5, io
 from .h5 import HDF5Object, HDF5RawSpectrum, HDF5StructureError
-from .io import S1P, Spectrum
+from .io import S1P, FieldSpectrum, Spectrum

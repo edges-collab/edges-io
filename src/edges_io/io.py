@@ -314,25 +314,10 @@ class _SpectrumOrResistance(_DataFile):
         )
 
 
-class Spectrum(_SpectrumOrResistance):
-    """
-    Class representing an observed spectrum.
-
-    Standard initialization takes a filename which will be read directly (as long as it
-    is in one of the supported formats). Initialization via :func:`from_load` will
-    attempt to find a file with the default naming scheme of the database.
-
-    Supported formats: h5, acq, mat
-
-    Examples
-    --------
-    >>> spec = Spectrum.from_load("Ambient", ".")
-    >>> spec.file_format
-    h5
-    >>> spectra = spec.read()
-    """
-
-    supported_formats = ["h5", "acq", "mat"]
+class FieldSpectrum:
+    def __init__(self, path: [str, Path]):
+        self.path = Path(path)
+        assert self.path.exists()
 
     @cached_property
     def file_format(self) -> str:
@@ -340,7 +325,7 @@ class Spectrum(_SpectrumOrResistance):
         return self.path.suffix[1:]
 
     @cached_property
-    def data(self) -> [HDF5RawSpectrum, List[HDF5RawSpectrum]]:
+    def data(self) -> HDF5RawSpectrum:
         """A view of the data in the file as a HDF5Object.
 
         If the file is an ACQ file, it will be read completely into memory and cast
@@ -373,6 +358,47 @@ class Spectrum(_SpectrumOrResistance):
 
         meta = anc.meta
         return spectra, freq_anc, time_anc, meta
+
+
+class Spectrum(_SpectrumOrResistance):
+    """
+    Class representing an observed spectrum.
+
+    Standard initialization takes a filename which will be read directly (as long as it
+    is in one of the supported formats). Initialization via :func:`from_load` will
+    attempt to find a file with the default naming scheme of the database.
+
+    Supported formats: h5, acq, mat
+
+    Examples
+    --------
+    >>> spec = Spectrum.from_load("Ambient", ".")
+    >>> spec.file_format
+    h5
+    >>> spectra = spec.read()
+    """
+
+    supported_formats = ["h5", "acq", "mat"]
+
+    @cached_property
+    def _raw_spec(self):
+        return FieldSpectrum(self.path)
+
+    @cached_property
+    def file_format(self) -> str:
+        """The file format of the data to be read."""
+        return self._raw_spec.file_format
+
+    @cached_property
+    def data(self) -> [HDF5RawSpectrum, List[HDF5RawSpectrum]]:
+        """A view of the data in the file as a HDF5Object.
+
+        If the file is an ACQ file, it will be read completely into memory and cast
+        into the same format as a :class:`~h5.HDF5Object` so that the API is the same.
+
+        If the number of files is more than one, `data` will be a list of objects.
+        """
+        return self._raw_spec.data
 
 
 class Resistance(_SpectrumOrResistance):
