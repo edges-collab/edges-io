@@ -317,7 +317,8 @@ class _SpectrumOrResistance(_DataFile):
 class FieldSpectrum:
     def __init__(self, path: [str, Path]):
         self.path = Path(path)
-        assert self.path.exists()
+        if not self.path.exists():
+            raise IOError(f"{self.path} does not exist!")
 
     @cached_property
     def file_format(self) -> str:

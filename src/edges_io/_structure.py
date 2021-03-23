@@ -204,7 +204,7 @@ class _DataContainer(_ObsNode):
 
     @classmethod
     def _check_self(cls, path: Path, **kwargs) -> Tuple[Path, Optional[dict]]:
-        logger.structure(f"Checking {cls.__name__} folder contents format at {path}.")
+        logger._structure(f"Checking {cls.__name__} folder contents format at {path}.")
         return super()._check_self(path, **kwargs)
 
     @classmethod

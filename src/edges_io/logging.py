@@ -73,7 +73,7 @@ class ColoredLogger(logging.Logger):
         self.addHandler(console)
         return
 
-    def structure(self, msg, *args, **kwargs):
+    def _structure(self, msg, *args, **kwargs):
         if self.isEnabledFor(logging.STRUCTURE):
             self._log(logging.STRUCTURE, msg, args, **kwargs)
 

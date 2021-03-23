@@ -3,6 +3,7 @@ import contextlib
 import h5py
 import numpy as np
 import warnings
+from abc import ABCMeta, abstractmethod
 from datetime import datetime
 from pathlib import Path
 
@@ -22,7 +23,111 @@ class HDF5StructureExtraKey(HDF5StructureError):
 
 
 @attr.s
-class HDF5Object:
+class _HDF5Part(metaclass=ABCMeta):
+    filename = attr.ib(default=None, converter=lambda x: x if x is None else Path(x))
+    group_path = attr.ib(default="", converter=str)
+
+    def __attrs_post_init__(self):
+        self.__memcache__ = {}
+
+    @contextlib.contextmanager
+    def open(self) -> h5py.Group:
+        """Context manager for opening up the file.
+
+        Yields
+        ------
+        grp : :class:`h5py.Group`
+            The h5py Group corresponding to this instance.
+        """
+        if not self.filename:
+            raise IOError(
+                "This object has no associated file. You can define one with the write() method."
+            )
+
+        fl = h5py.File(self.filename, "r")
+        grp = fl
+
+        if self.group_path:
+            for bit in self.group_path.split("."):
+                grp = grp[bit]
+
+        yield grp
+
+        fl.close()
+
+    def __contains__(self, item):
+        return item in list(self.keys())
+
+    def __getitem__(self, item):
+        if item in self.__memcache__:
+            return self.__memcache__[item]
+
+        with self.open() as fl:
+            if item in ("attrs", "meta"):
+                out = dict(fl.attrs)
+                for k, v in out.items():
+                    if isinstance(v, str) and v == "none":
+                        out[k] = None
+            elif item not in fl:
+                raise KeyError(
+                    f"'{item}' is not a valid part of {self.__class__.__name__}."
+                    f" Valid keys: {self.keys()}"
+                )
+            elif isinstance(fl[item], h5py.Group):
+                if not isinstance(self._structure[item], dict):
+                    raise HDF5StructureValidationError(
+                        f"item {item} has structure {self._structure[item]}, but must be dict."
+                    )
+
+                if self.group_path:
+                    gp = self.group_path + "."
+                else:
+                    gp = ""
+
+                out = _HDF5Group(
+                    filename=self.filename,
+                    structure=self._structure[item],
+                    group_path=gp + item,
+                )
+
+            elif isinstance(fl[item], h5py.Dataset):
+                out = fl[item][...]
+            else:
+                raise NotImplementedError("that item is not supported yet.")
+
+        # Save the key to the cache.
+        self.__memcache__[item] = out
+
+        return out
+
+    def keys(self):
+        with self.open() as fl:
+            yield from fl.keys()
+
+    def items(self):
+        for k in self.keys():
+            yield k, self[k]
+
+    def clear(self, keys=None):
+        """Clear all items from memory loaded from file."""
+        if keys is None:
+            self.__memcache__ = {}
+        else:
+            for key in keys:
+                del self.__memcache__[key]
+
+    def cached_keys(self):
+        """All of the keys that have already been read into cache."""
+        return self.__memcache__.keys()
+
+    @property
+    def meta(self):
+        """Metadata of the object."""
+        return self["meta"]
+
+
+@attr.s
+class HDF5Object(_HDF5Part):
     """
     An object that provides a transparent wrapper of a HDF5 file.
 
@@ -44,12 +149,10 @@ class HDF5Object:
         Over-ride the class attribute requiring all the structure to exist in file.
     require_no_extra : bool, optional
         Over-ride the class attribute requiring no extra data to exist in file.
-    lazy : bool, optional
-        Whether to be lazy in loading the data in the file into the structure.
 
     Notes
     -----
-    With ``lazy=True``, accessing data is very similar to just using the `h5py.File`,
+    Accessing data is very similar to just using the `h5py.File`,
     except that the object is able to check the structure of the file, and is slightly
     more convenient.
 
@@ -58,27 +161,19 @@ class HDF5Object:
 
         with obj.open() as fl:
             val = fl.attrs['key']
-
     """
 
-    _structure = None
     _require_no_extra = False
     default_root = Path(".")
+    _structure = None
 
-    filename = attr.ib(default=None, converter=lambda x: x if x is None else Path(x))
     require_no_extra = attr.ib(default=_require_no_extra, converter=bool)
-    lazy = attr.ib(default=True, converter=bool)
 
     def __attrs_post_init__(self):
-        self.__memcache__ = {}
+        super().__attrs_post_init__()
 
         if self.filename and self.filename.exists():
             self.check(self.filename, self.require_no_extra)
-
-        if not self.lazy:
-            self.load_all(self.filename)
-
-        self.__fl_inst = None
 
     @classmethod
     def from_data(cls, data, validate=True, **kwargs):
@@ -101,108 +196,6 @@ class HDF5Object:
 
         inst.__memcache__ = data
         return inst
-
-    @contextlib.contextmanager
-    def open(self, mode: str = "r") -> h5py.File:
-        """Context manager to open the file.
-
-        Parameters
-        ----------
-        mode : str
-            The read/write mode to open the file in.
-
-        Yields
-        ------
-        fl : `h5py.File` instance
-            An instance of the open file.
-        """
-        if not self.filename:
-            raise IOError(
-                "this object has no associated file. You can define one with the write() method."
-            )
-
-        if not self.__fl_inst or self.__fl_inst.mode != mode:
-            self.__fl_inst = h5py.File(self.filename, mode=mode)
-
-        yield self.__fl_inst
-
-        self.__fl_inst.close()
-        self.__fl_inst = None
-
-    def load(self, key: str) -> [dict, h5py.Dataset, h5py.Group]:
-        """Load key from file into memory and keep it cached in memory.
-
-        Parameters
-        ----------
-        key : str
-            The key to load in.
-
-        Returns
-        -------
-        out : dict, :class:`h5py.Group` or :class:`h5py.Dataset`
-            The dataset or group of such datasets that were loaded.
-
-        Notes
-        -----
-        If you would like to load in a key further down the
-        heirarchy *without* loading in everything above it (i.e. just getting that
-        particular bit of memory mapped in), then use item-getting to get to the
-        parent of this key. This will load *everything* into memory below the given key.
-
-        Examples
-        --------
-        Consider the object
-
-        >>> h5obj = HDF5Object("filename.h5")
-
-        which has a top-level dataset called "top-level". To load in this dataset to
-        memory:
-
-        >>> top_level = h5obj.load('top-level')
-
-        You can use the ``top_level`` array, or access the same memory in a fast way
-        via
-
-        >>> h5obj['top-level']  # returns array from memory (rather than loading from file)
-
-        Now, consider a group at the top level called "group", under which is a dataset
-        called ``dataset`` and another dataset called ``superfluous`` (which we don't
-        need right now). To load ``dataset`` into memory without loading ``superfluous``,
-        use
-
-        >>> dataset = h5obj['group'].load('dataset')
-
-        Alternatively, if you just want to load the whole group in and have access to
-        both datasets from memory:
-
-        >>> group = h5obj.load('group')
-        >>> dataset = group['dataset']
-        """
-        # Load up this key into memory.
-        # This checks the memcache first.
-        out = self[key]
-        try:
-            # If the key was a group, it hasn't loaded any data yet, so load that.
-            out.load_all()
-        except AttributeError:
-            pass
-
-        # Save the key to the cache.
-        if key not in self.__memcache__:
-            self.__memcache__[key] = out
-        return out
-
-    def load_all(self, filename=None):
-        if filename and not self.filename:
-            self.filename = filename
-
-        filename = filename or self.filename
-
-        if not filename:
-            raise ValueError("You need to provide a filename to load!")
-
-        for k in self._structure.keys():
-            self.load(k)
 
     @classmethod
     def _get_extra_meta(cls):
@@ -302,130 +295,12 @@ class HDF5Object:
                 else:
                     warnings.warn(f"{e}. Filename={filename}. ")
 
-    def __contains__(self, item):
-        return item in list(self.keys())
-
-    def __getitem__(self, item):
-        if item in self.__memcache__:
-            return self.__memcache__[item]
-
-        with self.open() as fl:
-            if item in ("attrs", "meta"):
-                out = dict(fl.attrs)
-                for k, v in out.items():
-                    if isinstance(v, str) and v == "none":
-                        out[k] = None
-            elif item not in fl:
-                raise KeyError(
-                    f"'{item}' is not a valid part of {self.__class__.__name__}."
-                    f" Valid keys: {self.keys()}"
-                )
-            elif isinstance(fl[item], h5py.Group):
-                out = _HDF5Group(self.filename, self._structure[item], item)
-
-                # If it's a group, we *do* want to add it to cache, since otherwise
-                # its own cache is lost.
-                self.__memcache__[item] = out
-            elif isinstance(fl[item], h5py.Dataset):
-                out = fl[item][...]
-            else:
-                raise NotImplementedError("that item is not supported yet.")
-
-        return out
-
-    def keys(self):
-        with self.open() as fl:
-            yield from fl.keys()
-
-    def items(self):
-        for k in self.keys():
-            yield k, self[k]
-
-    def clear(self):
-        """Clear all items from memory loaded from file."""
-        self.__memcache__ = {}
-
 
 @attr.s
-class _HDF5Group:
+class _HDF5Group(_HDF5Part):
     """Similar to HDF5Object, but pointing to a Group within it."""
 
-    filename = attr.ib(converter=Path, validator=lambda x, att, val: val.exists())
-    structure = attr.ib(converter=dict)
-    group_path = attr.ib(converter=str)
-    lazy = attr.ib(default=True, converter=bool)
-
-    def __attrs_post_init__(self):
-        self.__memcache__ = {}
-
-        if not self.lazy:
-            self.load_all()
-
-    def load(self, key: str):
-        return HDF5Object.load(self, key)
-
-    def load_all(self):
-        """Read the whole file into memory at once."""
-        for k in self.structure:
-            self.load(k)
-
-    @contextlib.contextmanager
-    def open(self) -> h5py.Group:
-        """Context manager for opening up the file and getting this group.
-
-        Yields
-        ------
-        grp : :class:`h5py.Group`
-            The h5py Group corresponding to this instance.
-        """
-        fl = h5py.File(self.filename, "r")
-        grp = fl
-
-        for bit in self.group_path.split("."):
-            grp = grp[bit]
-
-        yield grp
-
-        fl.close()
-
-    def __getitem__(self, item):
-        if item in self.__memcache__:
-            return self.__memcache__[item]
-
-        with self.open() as fl:
-            if item in ("attrs", "meta"):
-                out = dict(fl.attrs)
-            elif item not in fl:
-                raise KeyError(
-                    f"'{item}' is not a valid part of {self.__class__.__name__}."
-                    f" Valid keys: {self.keys()}"
-                )
-            elif isinstance(fl[item], h5py.Group):
-                if not isinstance(self.structure[item], dict):
-                    raise HDF5StructureValidationError(
-                        f"item {item} has structure {self.structure[item]}, but must be dict."
-                    )
-                out = _HDF5Group(
-                    self.filename, self.structure[item], self.group_path + "." + item
-                )
-            elif isinstance(fl[item], h5py.Dataset):
-                out = fl[item][...]
-            else:
-                raise NotImplementedError("that item is not supported yet.")
-
-        return out
-
-    def keys(self):
-        with self.open() as grp:
-            yield from grp.keys()
-
-    def items(self):
-        for k in self.keys():
-            yield k, self[k]
-
-    def clear(self):
-        """Clear all items that are loaded into memory from the file."""
-        self.__memcache__ = {}
+    _structure = attr.ib(factory=dict, converter=dict)
 
 
 class HDF5RawSpectrum(HDF5Object):

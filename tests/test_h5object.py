@@ -50,19 +50,11 @@ def test_h5_open(fastspec_spectrum_fl):
         assert "spectra" in obj.keys()
 
 
-def test_load_all_no_fname(fastspec_data):
+def test_write_no_fname(fastspec_data):
     obj = HDF5RawSpectrum.from_data(fastspec_data)
-    with pytest.raises(ValueError):
-        obj.load_all()
 
     with pytest.raises(ValueError):
         obj.write()
-
-
-def test_load_all(fastspec_spectrum_fl):
-    obj = HDF5RawSpectrum(fastspec_spectrum_fl)
-    obj.load_all()
-    assert "spectra" in obj.__memcache__
 
 
 def test_access_nonexistent(fastspec_spectrum_fl):
@@ -108,7 +100,8 @@ def test_read_group_meta(fastspec_spectrum_fl):
 
 def test_clear(fastspec_spectrum_fl):
     obj = HDF5RawSpectrum(fastspec_spectrum_fl)
-    obj.load_all()
+    obj["spectra"]["p0"]
+
     assert "p0" in obj.__memcache__["spectra"].__memcache__
     obj["spectra"].clear()
     assert "p0" not in obj.__memcache__["spectra"].__memcache__
