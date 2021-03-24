@@ -11,6 +11,7 @@ def check_obj(obj):
     assert "spectra" in obj
     assert "freq_ancillary" in obj
     assert "time_ancillary" in obj
+    assert "start" in obj.meta
 
     # Look at an item
     b = obj["spectra"]["Q"]

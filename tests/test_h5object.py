@@ -105,7 +105,8 @@ def test_clear(fastspec_spectrum_fl):
     assert "p0" in obj.__memcache__["spectra"].__memcache__
     obj["spectra"].clear()
     assert "p0" not in obj.__memcache__["spectra"].__memcache__
-    obj.clear()
+
+    obj.clear(["spectra"])
     assert "spectra" not in obj.__memcache__
 
 
@@ -132,3 +133,22 @@ def test_bad_existing_h5(tmpdir: Path):
 
     with pytest.raises(HDF5StructureValidationError):
         Bad(tmpdir / "bad.h5")
+
+
+def test_h5_hierarchical(tmpdir: Path):
+    class Example(HDF5Object):
+        _structure = {
+            "this": {"that": {"the_other": {"key": lambda x: x.shape == (10,)}}}
+        }
+
+    ex = Example.from_data({"this": {"that": {"the_other": {"key": np.zeros(10)}}}})
+
+    assert ex["this"]["that"]["the_other"]["key"].shape == (10,)
+
+    ex.write(tmpdir / "tmp_hierarchical.h5")
+
+    ex2 = Example(tmpdir / "tmp_hierarchical.h5")
+
+    assert ex2["this"]["that"]["the_other"]["key"].shape == (10,)
+
+    assert isinstance(ex2.meta, dict)

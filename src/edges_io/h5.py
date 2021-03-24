@@ -79,11 +79,7 @@ class _HDF5Part(metaclass=ABCMeta):
                         f"item {item} has structure {self._structure[item]}, but must be dict."
                     )
 
-                if self.group_path:
-                    gp = self.group_path + "."
-                else:
-                    gp = ""
-
+                gp = self.group_path + "." if self.group_path else ""
                 out = _HDF5Group(
                     filename=self.filename,
                     structure=self._structure[item],
@@ -175,9 +171,23 @@ class HDF5Object(_HDF5Part):
         if self.filename and self.filename.exists():
             self.check(self.filename, self.require_no_extra)
 
+    def __init_subclass__(cls, **kwargs):
+        super().__init_subclass__()
+        if "meta" not in cls._structure:
+            cls._structure["meta"] = {}
+
+        for k, v in cls._get_extra_meta().items():
+            if k not in cls._structure["meta"]:
+                cls._structure["meta"][k] = None
+
     @classmethod
     def from_data(cls, data, validate=True, **kwargs):
         inst = cls(**kwargs)
+
+        if "meta" not in data:
+            data["meta"] = {}
+
+        data["meta"].update(cls._get_extra_meta())
 
         if validate:
             false_if_extra = kwargs.get("require_no_extra", cls._require_no_extra)
@@ -245,6 +255,10 @@ class HDF5Object(_HDF5Part):
                     )
 
         to_write = self.__memcache__
+
+        if "meta" not in to_write:
+            to_write["meta"] = {}
+
         to_write["meta"].update(self._get_extra_meta())
 
         if not filename.parent.exists():
