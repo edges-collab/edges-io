@@ -29,6 +29,7 @@ class _HDF5Part(metaclass=ABCMeta):
 
     def __attrs_post_init__(self):
         self.__memcache__ = {}
+        self.__fl_inst = None
 
     @contextlib.contextmanager
     def open(self) -> h5py.Group:
@@ -44,8 +45,9 @@ class _HDF5Part(metaclass=ABCMeta):
                 "This object has no associated file. You can define one with the write() method."
             )
 
-        fl = h5py.File(self.filename, "r")
-        grp = fl
+        if self.__fl_inst is None:
+            self.__fl_inst = h5py.File(self.filename, "r")
+        grp = self.__fl_inst
 
         if self.group_path:
             for bit in self.group_path.split("."):
@@ -53,7 +55,8 @@ class _HDF5Part(metaclass=ABCMeta):
 
         yield grp
 
-        fl.close()
+        self.__fl_inst.close()
+        self.__fl_inst = None
 
     def __contains__(self, item):
         return item in list(self.keys())
