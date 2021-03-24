@@ -2,6 +2,14 @@
 Changelog
 =========
 
+v2.0.0
+======
+Changed
+-------
+* Removed ``.load`` and ``.load_all`` methods from ``HDF5Object`` so that the interface
+  between the object and its sub-groups are more identical. Note that *everything* now
+  caches when accessed, but can be explicitly removed from the cache at will.
+
 v0.5.0
 ======
 Added
