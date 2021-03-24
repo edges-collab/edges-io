@@ -40,14 +40,7 @@ class _HDF5Part(metaclass=ABCMeta):
         grp : :class:`h5py.Group`
             The h5py Group corresponding to this instance.
         """
-        if not self.filename:
-            raise IOError(
-                "This object has no associated file. You can define one with the write() method."
-            )
-
-        if self.__fl_inst is None:
-            self.__fl_inst = h5py.File(self.filename, "r")
-        grp = self.__fl_inst
+        grp = self._fl_instance
 
         if self.group_path:
             for bit in self.group_path.split("."):
@@ -55,8 +48,17 @@ class _HDF5Part(metaclass=ABCMeta):
 
         yield grp
 
-        self.__fl_inst.close()
-        self.__fl_inst = None
+    @property
+    def _fl_instance(self):
+        if not self.filename:
+            raise IOError(
+                "This object has no associated file. You can define one with the write() method."
+            )
+
+        if self.__fl_inst is None:
+            self.__fl_inst = h5py.File(self.filename, "r")
+
+        return self.__fl_inst
 
     def __contains__(self, item):
         return item in list(self.keys())
