@@ -24,7 +24,6 @@ def fastspec_data():
         "stop": 0,
         "site": "simulated",
         "instrument": "mid",
-        "switch_io_port": 57360,
         "switch_delay": 0.5,
         "input_channel": 1,
         "voltage_range": 0,

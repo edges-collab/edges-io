@@ -50,19 +50,11 @@ def test_h5_open(fastspec_spectrum_fl):
         assert "spectra" in obj.keys()
 
 
-def test_load_all_no_fname(fastspec_data):
+def test_write_no_fname(fastspec_data):
     obj = HDF5RawSpectrum.from_data(fastspec_data)
-    with pytest.raises(ValueError):
-        obj.load_all()
 
     with pytest.raises(ValueError):
         obj.write()
-
-
-def test_load_all(fastspec_spectrum_fl):
-    obj = HDF5RawSpectrum(fastspec_spectrum_fl)
-    obj.load_all()
-    assert "spectra" in obj.__memcache__
 
 
 def test_access_nonexistent(fastspec_spectrum_fl):
@@ -108,11 +100,13 @@ def test_read_group_meta(fastspec_spectrum_fl):
 
 def test_clear(fastspec_spectrum_fl):
     obj = HDF5RawSpectrum(fastspec_spectrum_fl)
-    obj.load_all()
+    obj["spectra"]["p0"]
+
     assert "p0" in obj.__memcache__["spectra"].__memcache__
     obj["spectra"].clear()
     assert "p0" not in obj.__memcache__["spectra"].__memcache__
-    obj.clear()
+
+    obj.clear(["spectra"])
     assert "spectra" not in obj.__memcache__
 
 
@@ -139,3 +133,22 @@ def test_bad_existing_h5(tmpdir: Path):
 
     with pytest.raises(HDF5StructureValidationError):
         Bad(tmpdir / "bad.h5")
+
+
+def test_h5_hierarchical(tmpdir: Path):
+    class Example(HDF5Object):
+        _structure = {
+            "this": {"that": {"the_other": {"key": lambda x: x.shape == (10,)}}}
+        }
+
+    ex = Example.from_data({"this": {"that": {"the_other": {"key": np.zeros(10)}}}})
+
+    assert ex["this"]["that"]["the_other"]["key"].shape == (10,)
+
+    ex.write(tmpdir / "tmp_hierarchical.h5")
+
+    ex2 = Example(tmpdir / "tmp_hierarchical.h5")
+
+    assert ex2["this"]["that"]["the_other"]["key"].shape == (10,)
+
+    assert isinstance(ex2.meta, dict)
