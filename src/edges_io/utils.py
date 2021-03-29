@@ -134,3 +134,7 @@ def isfloatish(x):
 
 def isstringish(x):
     return isinstance(x, (str, bytes))
+
+
+def isnumeric(x):
+    return isinstance(x, (int, float, np.number))
