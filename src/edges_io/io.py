@@ -1488,7 +1488,7 @@ class CalibrationObservation(_DataContainer):
             },
             "defaults": {"run": dict, "repeat": dict},
             "purpose": str,
-            "history": str,
+            "history": list,
         }
 
         def _check_grp(defn, allowed):
