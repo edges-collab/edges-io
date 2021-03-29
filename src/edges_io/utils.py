@@ -1,4 +1,5 @@
 import datetime
+import numpy as np
 import os
 import shutil
 from pathlib import Path
@@ -121,3 +122,15 @@ def get_file_list(top_level: Path, filter=None, ignore=None):
 
 def snake_to_camel(word: str):
     return "".join(w[0].upper() + w[1:] for w in word.split("_"))
+
+
+def isintish(x):
+    return isinstance(x, (int, np.int, np.int64))
+
+
+def isfloatish(x):
+    return isinstance(x, (float, np.float, np.float64, np.float32))
+
+
+def isstringish(x):
+    return isinstance(x, (str, bytes))
