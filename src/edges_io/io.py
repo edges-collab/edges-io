@@ -1469,26 +1469,40 @@ class CalibrationObservation(_DataContainer):
             "prefer": list,
             "invalid": list,
             "measurements": {
-                "resistance_m": {"01": float, "02": float, "03": float},
-                "resistance_f": {"01": float, "02": float, "03": float},
+                "resistance_m": {
+                    1: float,
+                    2: float,
+                    3: float,
+                    "01": float,
+                    "02": float,
+                    "03": float,
+                },
+                "resistance_f": {
+                    1: float,
+                    2: float,
+                    3: float,
+                    "01": float,
+                    "02": float,
+                    "03": float,
+                },
             },
             "defaults": {"run": dict, "repeat": dict},
             "purpose": str,
-            "history": str,
+            "history": list,
         }
 
         def _check_grp(defn, allowed):
             for k, v in defn.items():
                 if k not in allowed:
                     logger.warning(
-                        f"Key {k} found in definitions.yaml, but is not a known keyword."
+                        f"Key {k} found in definition.yaml, but is not a known keyword."
                     )
                 elif isinstance(allowed[k], dict):
                     # Recurse into sub-dictionaries.
                     _check_grp(v, allowed[k])
                 elif not isinstance(v, allowed[k]):
                     logger.error(
-                        f"Key {k} has wrong type in definitions.yaml. Should be {allowed[k]}, got {type(v)}."
+                        f"Key {k} has wrong type in definition.yaml. Should be {allowed[k]}, got {type(v)}."
                     )
 
         _check_grp(definition, allowed_keys)

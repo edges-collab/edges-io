@@ -7,7 +7,7 @@ from abc import ABCMeta, abstractmethod
 from datetime import datetime
 from pathlib import Path
 
-from . import __version__
+from . import __version__, utils
 
 
 class HDF5StructureError(Exception):
@@ -327,27 +327,46 @@ class HDF5RawSpectrum(HDF5Object):
 
     _structure = {
         "meta": {
-            "fastspec_version": "optional",
-            "start": "optional",
-            "stop": "optional",
-            "site": "optional",
-            "instrument": "optional",
-            "switch_delay": "optional",
-            "input_channel": "optional",
-            "voltage_range": "optional",
-            "samples_per_accumulation": "optional",
-            "acquisition_rate": "optional",
-            "num_channels": "optional",
-            "num_taps": "optional",
-            "window_function_id": "optional",
-            "num_fft_threads": "optional",
-            "num_fft_buffers": "optional",
-            "stop_cycles": "optional",
-            "stop_seconds": "optional",
+            "fastspec_version": utils.isstringish,
+            "start": utils.isintish,
+            "stop": utils.isintish,
+            "site": utils.isstringish,
+            "instrument": utils.isstringish,
+            "switch_delay": utils.isfloatish,
+            "input_channel": utils.isintish,
+            "voltage_range": utils.isnumeric,
+            "samples_per_accumulation": utils.isintish,
+            "acquisition_rate": utils.isnumeric,
+            "num_channels": utils.isintish,
+            "num_taps": utils.isintish,
+            "window_function_id": utils.isintish,
+            "num_fft_threads": utils.isintish,
+            "num_fft_buffers": utils.isintish,
+            "stop_cycles": utils.isintish,
+            "stop_seconds": utils.isfloatish,
             "stop_time": "optional",
-            "edges_io_version": "optional",
-            "object_name": "optional",
-            "write_time": "optional",
+            "edges_io_version": utils.isstringish,
+            "object_name": utils.isstringish,
+            "write_time": utils.isstringish,
+            "show": "optional",  # From here down, we just include them as optional for backwards compat.
+            "hide": "optional",
+            "kill": "optional",
+            "help": "optional",
+            "inifile": "optional",
+            "datadir": "optional",
+            "output_file": "optional",
+            "switch_io_port": "optional",
+            "samples_per_transfer": "optional",
+            "show_plots": "optional",
+            "plot_bin": "optional",
+            "resolution": "optional",
+            "temperature": "optional",
+            "nblk": "optional",
+            "nfreq": "optional",
+            "freq_min": "optional",
+            "freq_max": "optional",
+            "freq_res": "optional",
+            "n_file_lines": "optional",
         },
         "spectra": {
             "p0": lambda x: (x.ndim == 2 and x.dtype == float),
