@@ -279,7 +279,12 @@ class HDF5Object(_HDF5Part):
             if k == "meta" and k not in grp:
                 k = "attrs"
 
-            if k not in grp and k != "attrs" and v != "optional":
+            if (
+                k not in grp
+                and k != "attrs"
+                and v != "optional"
+                and not getattr(v, "optional", False)
+            ):
                 raise TypeError(f"Non-optional key '{k}' not in {grp}")
             elif k == "attrs":
                 if isinstance(grp, (h5py.Group, h5py.File)):

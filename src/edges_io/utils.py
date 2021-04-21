@@ -125,6 +125,7 @@ def snake_to_camel(word: str):
 
 
 def optional(fnc):
+    fnc.optional = True
     return lambda x: x is None or fnc(x)
 
 
