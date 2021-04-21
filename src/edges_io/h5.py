@@ -288,7 +288,7 @@ class HDF5Object(_HDF5Part):
                     cls._checkgrp(grp[k], v)
             elif isinstance(v, dict):
                 cls._checkgrp(grp[k], v)
-            elif not (v is None or v == "optional" or v(grp[k])):
+            elif not (v is None or v == "optional" or v(grp.get(k, None))):
                 raise HDF5StructureValidationError(
                     f"key {k} in {grp} failed its validation. Type: {type(grp[k])}"
                 )
@@ -327,23 +327,23 @@ class HDF5RawSpectrum(HDF5Object):
 
     _structure = {
         "meta": {
-            "fastspec_version": utils.isstringish,
-            "start": utils.isintish,
-            "stop": utils.isintish,
-            "site": utils.isstringish,
-            "instrument": utils.isstringish,
-            "switch_delay": utils.isfloatish,
-            "input_channel": utils.isintish,
-            "voltage_range": utils.isnumeric,
-            "samples_per_accumulation": utils.isintish,
-            "acquisition_rate": utils.isnumeric,
-            "num_channels": utils.isintish,
-            "num_taps": utils.isintish,
-            "window_function_id": utils.isintish,
-            "num_fft_threads": utils.isintish,
-            "num_fft_buffers": utils.isintish,
-            "stop_cycles": utils.isintish,
-            "stop_seconds": utils.isfloatish,
+            "fastspec_version": utils.optional(utils.isstringish),
+            "start": utils.optional(utils.isintish),
+            "stop": utils.optional(utils.isintish),
+            "site": utils.optional(utils.isstringish),
+            "instrument": utils.optional(utils.isstringish),
+            "switch_delay": utils.optional(utils.isfloatish),
+            "input_channel": utils.optional(utils.isintish),
+            "voltage_range": utils.optional(utils.isnumeric),
+            "samples_per_accumulation": utils.optional(utils.isintish),
+            "acquisition_rate": utils.optional(utils.isnumeric),
+            "num_channels": utils.optional(utils.isintish),
+            "num_taps": utils.optional(utils.isintish),
+            "window_function_id": utils.optional(utils.isintish),
+            "num_fft_threads": utils.optional(utils.isintish),
+            "num_fft_buffers": utils.optional(utils.isintish),
+            "stop_cycles": utils.optional(utils.isintish),
+            "stop_seconds": utils.optional(utils.isfloatish),
             "stop_time": "optional",
             "edges_io_version": utils.isstringish,
             "object_name": utils.isstringish,
