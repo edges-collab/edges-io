@@ -1,5 +1,6 @@
 import pytest
 
+import dill as pickle
 import h5py
 import inspect
 import numpy as np
@@ -120,6 +121,15 @@ def test_getitem(fastspec_spectrum_fl):
 
     with pytest.raises(KeyError):
         obj["not_existent"]
+
+
+def test_pickling(fastspec_spectrum_fl):
+    obj = HDF5RawSpectrum(fastspec_spectrum_fl)
+    # ensure we load up the file instance
+    obj._fl_instance
+
+    # see if we can still pickle it...
+    pickle.dumps(obj)
 
 
 def test_bad_existing_h5(tmpdir: Path):
