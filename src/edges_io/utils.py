@@ -125,8 +125,11 @@ def snake_to_camel(word: str):
 
 
 def optional(fnc):
-    fnc.optional = True
-    return lambda x: x is None or fnc(x)
+    def outfnc(x):
+        return x is None or fnc(x)
+
+    outfnc.optional = True
+    return outfnc
 
 
 def isintish(x):
