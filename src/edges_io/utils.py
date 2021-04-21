@@ -124,6 +124,10 @@ def snake_to_camel(word: str):
     return "".join(w[0].upper() + w[1:] for w in word.split("_"))
 
 
+def optional(fnc):
+    return lambda x: x is None or fnc(x)
+
+
 def isintish(x):
     return isinstance(x, (int, np.int, np.int64))
 
