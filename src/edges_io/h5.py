@@ -63,9 +63,8 @@ class _HDF5Part(metaclass=ABCMeta):
     def __getstate__(self):
         """Prepare class for pickling. HDF5 files are not pickleable!"""
         return {
-            key: val
+            key: (val if not key.endswith("__fl_inst") else None)
             for key, val in self.__dict__.items()
-            if not key.endswith("__fl_inst")
         }
 
     def __contains__(self, item):
