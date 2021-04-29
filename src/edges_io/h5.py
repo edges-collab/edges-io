@@ -60,6 +60,13 @@ class _HDF5Part(metaclass=ABCMeta):
 
         return self.__fl_inst
 
+    def __getstate__(self):
+        """Prepare class for pickling. HDF5 files are not pickleable!"""
+        return {
+            key: (val if not key.endswith("__fl_inst") else None)
+            for key, val in self.__dict__.items()
+        }
+
     def __contains__(self, item):
         return item in list(self.keys())
 
@@ -279,7 +286,12 @@ class HDF5Object(_HDF5Part):
             if k == "meta" and k not in grp:
                 k = "attrs"
 
-            if k not in grp and k != "attrs" and v != "optional":
+            if (
+                k not in grp
+                and k != "attrs"
+                and v != "optional"
+                and not getattr(v, "optional", False)
+            ):
                 raise TypeError(f"Non-optional key '{k}' not in {grp}")
             elif k == "attrs":
                 if isinstance(grp, (h5py.Group, h5py.File)):
