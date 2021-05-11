@@ -1472,8 +1472,14 @@ class CalibrationObservation(_DataContainer):
             "prefer": list,
             "invalid": list,
             "measurements": {
-                "resistance_m": dict(tuple((i, float) for i in range(99)) + tuple((f"{i:02}", float) for i in range(99))),
-                "resistance_f": dict(tuple((i, float) for i in range(99)) + tuple((f"{i:02}", float) for i in range(99))),
+                "resistance_m": dict(
+                    tuple((i, float) for i in range(99))
+                    + tuple((f"{i:02}", float) for i in range(99))
+                ),
+                "resistance_f": dict(
+                    tuple((i, float) for i in range(99))
+                    + tuple((f"{i:02}", float) for i in range(99))
+                ),
             },
             "defaults": {"run": dict, "repeat": dict},
             "purpose": str,
