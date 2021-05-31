@@ -1316,9 +1316,12 @@ class CalibrationObservation(_DataContainer):
                 f"proceed with caution! Reason: '{self.definition['entirely_invalid']}'"
             )
 
+        # the original input path, so we have access to it later. Otherwise
+        # we might just have a temporary directory.
+        self.original_path = Path(path)
+
         if compile_from_def:
             self._tmpdir, name = self.compile_obs_from_def(path, include_previous)
-
             path = Path(self._tmpdir.name) / name
 
         super().__init__(path, **kwargs)
@@ -1469,22 +1472,14 @@ class CalibrationObservation(_DataContainer):
             "prefer": list,
             "invalid": list,
             "measurements": {
-                "resistance_m": {
-                    1: float,
-                    2: float,
-                    3: float,
-                    "01": float,
-                    "02": float,
-                    "03": float,
-                },
-                "resistance_f": {
-                    1: float,
-                    2: float,
-                    3: float,
-                    "01": float,
-                    "02": float,
-                    "03": float,
-                },
+                "resistance_m": dict(
+                    tuple((i, float) for i in range(99))
+                    + tuple((f"{i:02}", float) for i in range(99))
+                ),
+                "resistance_f": dict(
+                    tuple((i, float) for i in range(99))
+                    + tuple((f"{i:02}", float) for i in range(99))
+                ),
             },
             "defaults": {"run": dict, "repeat": dict},
             "purpose": str,
