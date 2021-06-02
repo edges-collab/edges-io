@@ -221,7 +221,7 @@ class _SpectrumOrResistance(_DataFile):
                 f"The load specified [{load}] is not one of the options available."
             )
 
-        files = list(direc.glob(f"{load}_??_????_???_??_??_??_lab.*"))
+        files = sorted(direc.glob(f"{load}_??_????_???_??_??_??_lab.*"))
 
         if not files:
             raise utils.LoadExistError(
@@ -229,10 +229,7 @@ class _SpectrumOrResistance(_DataFile):
                 f"Found files: {list(files)}."
             )
 
-        if filetype:
-            filetype = [filetype]
-        else:
-            filetype = cls.supported_formats
+        filetype = [filetype] if filetype else cls.supported_formats
 
         # Use any format so long as it is supported
         rfiles = []
