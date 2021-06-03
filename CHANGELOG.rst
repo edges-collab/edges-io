@@ -2,6 +2,11 @@
 Changelog
 =========
 
+v2.3.1
+======
+
+First version on PyPI!
+
 v2.0.0
 ======
 Changed
