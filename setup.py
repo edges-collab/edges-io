@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """
     Setup file for edges_io.
     Use setup.cfg to configure your project.

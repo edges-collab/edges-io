@@ -51,7 +51,7 @@ class _HDF5Part(metaclass=ABCMeta):
     @property
     def _fl_instance(self):
         if not self.filename:
-            raise IOError(
+            raise OSError(
                 "This object has no associated file. You can define one with the write() method."
             )
 
