@@ -88,7 +88,7 @@ def _ask_to_rm(fl: Path) -> Optional[Path]:
     elif reply == "n":
         return fl
     else:
-        raise IOError("Something went very wrong.")
+        raise OSError("Something went very wrong.")
 
 
 class FileStructureError(Exception):
