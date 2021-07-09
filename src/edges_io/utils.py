@@ -4,13 +4,13 @@ import os
 import shutil
 from pathlib import Path
 from rich.console import Console
-from typing import List, Optional
+from typing import List, Optional, Union
 
 IGNORABLE = (".old", ".ignore", ".invalid", ".output")
 console = Console()
 
 
-def get_active_files(path: [str, Path]) -> List[Path]:
+def get_active_files(path: Union[str, Path]) -> List[Path]:
     path = Path(path)
     if not path.is_dir():
         raise ValueError(f"{path} is not a directory!")
