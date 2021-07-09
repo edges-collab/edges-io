@@ -2,6 +2,11 @@
 Changelog
 =========
 
+v2.3.7
+======
+
+A whole bunch of minor updates just to get the auto-deployment working...
+
 v2.3.1
 ======
 
