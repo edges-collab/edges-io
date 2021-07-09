@@ -52,7 +52,7 @@ class _SpectrumOrResistance(_DataFile):
     )
 
     pattern = (
-        r"(?P<load_name>%s|%s)" % (load_pattern, antsim_pattern)
+        fr"(?P<load_name>{load_pattern}|{antsim_pattern})"
         + r"_(?P<run_num>\d{2})_(?P<year>\d{4})_(?P<day>\d{3})_("
         r"?P<hour>\d{2})_(?P<minute>\d{2})_(?P<second>\d{2})_lab.(?P<file_format>\w{2,"
         r"3})$"
@@ -76,7 +76,7 @@ class _SpectrumOrResistance(_DataFile):
             r"1,2})_(?P<second>\d{1,2}).(?P<file_format>\w{2,3})$"
         ),
         (
-            "^(?P<load_name>{})".format(_loadname_pattern)
+            f"^(?P<load_name>{_loadname_pattern})"
             + r"(?P<run_num>\d{1,2})_25C_(?P<month>\d{1,"
             r"2})_(?P<day>\d{1,2})_(?P<year>\d\d\d\d)_("
             r"?P<hour>\d{1,2})_(?P<minute>\d{1,"
@@ -315,7 +315,7 @@ class FieldSpectrum:
     def __init__(self, path: [str, Path]):
         self.path = Path(path)
         if not self.path.exists():
-            raise IOError(f"{self.path} does not exist!")
+            raise OSError(f"{self.path} does not exist!")
 
     @cached_property
     def file_format(self) -> str:
@@ -425,7 +425,7 @@ class Resistance(_SpectrumOrResistance):
 
     @classmethod
     def read_csv(cls, path: Path) -> Tuple[np.ndarray, Dict]:
-        with open(path, "r", errors="ignore") as fl:
+        with open(path, errors="ignore") as fl:
             if fl.readline().startswith("FLUKE"):
                 return cls.read_old_style_csv(path)
             else:
@@ -470,7 +470,7 @@ class Resistance(_SpectrumOrResistance):
 
     @classmethod
     def read_old_style_csv_header(cls, path: Path):
-        with open(path, "r", errors="ignore") as fl:
+        with open(path, errors="ignore") as fl:
             if not fl.readline().startswith("FLUKE"):
                 return {}, 0
 
@@ -506,7 +506,7 @@ class Resistance(_SpectrumOrResistance):
         header, nheader_lines = cls.read_old_style_csv_header(path)
         nlines = int(header["Total readings"])
 
-        with open(path, "r", errors="ignore") as fl:
+        with open(path, errors="ignore") as fl:
             # Get past the header.
             for i in range(nheader_lines):
                 next(fl)
@@ -817,7 +817,7 @@ class S1P(_DataFile):
     def _get_kind(path_filename):
         # identifying the format
 
-        with open(path_filename, "r") as d:
+        with open(path_filename) as d:
             comment_rows = 0
             flag = None
             for line in d.readlines():
@@ -842,7 +842,7 @@ class S1P(_DataFile):
                     comment_rows += 1
 
         if flag is None:
-            raise IOError(f"The file {path_filename} has incorrect format.")
+            raise OSError(f"The file {path_filename} has incorrect format.")
 
         #  loading data
         d = np.genfromtxt(path_filename, skip_header=comment_rows)
@@ -1337,13 +1337,20 @@ class CalibrationObservation(_DataContainer):
         s11_kwargs = s11_kwargs or {}
 
         self.spectra = Spectra(
-            self.path / "Spectra", run_num=run_num, **spectra_kwargs,
+            self.path / "Spectra",
+            run_num=run_num,
+            **spectra_kwargs,
         )
         self.resistance = Resistances(
-            self.path / "Resistance", run_num=run_num, **resistance_kwargs,
+            self.path / "Resistance",
+            run_num=run_num,
+            **resistance_kwargs,
         )
         self.s11 = S11Dir(
-            self.path / "S11", run_num=run_num, repeat_num=repeat_num, **s11_kwargs,
+            self.path / "S11",
+            run_num=run_num,
+            repeat_num=repeat_num,
+            **s11_kwargs,
         )
 
         self.simulator_names = self.get_simulator_names(self.path)
@@ -1354,7 +1361,7 @@ class CalibrationObservation(_DataContainer):
         obs_yaml = Path(obs_yaml)
         assert obs_yaml.exists(), f"{obs_yaml} does not exist!"
 
-        with open(obs_yaml, "r") as fl:
+        with open(obs_yaml) as fl:
             obs_yaml_data = yaml.load(fl, Loader=yaml.FullLoader)
 
         root = obs_yaml_data["root"]
@@ -1459,7 +1466,7 @@ class CalibrationObservation(_DataContainer):
         if not definition_file.exists():
             return {}
 
-        with open(definition_file, "r") as fl:
+        with open(definition_file) as fl:
             definition = yaml.load(fl, Loader=yaml.FullLoader) or {}
 
         allowed_keys = {

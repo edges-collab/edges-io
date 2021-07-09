@@ -95,7 +95,7 @@ def _get_chunk_pos_and_size(fname, start_time, end_time=None, n_hours=None):
     )
 
     line = "0000:000:00:00"
-    with open(fname, "r") as fl:
+    with open(fname) as fl:
         # Get our starting position in the file.
         while line and line[:14] < start_time:
             line = fl.readline()
@@ -162,7 +162,7 @@ def read_weather_file(
         * ``frontend_temp``: temperature of the frontend (K)
         * ``lna_temp``: temperature of the LNA (K).
     """
-    with open(weather_file, "r") as fl:
+    with open(weather_file) as fl:
         if _NEW_WEATHER_PATTERN.match(fl.readline()) is not None:
             pattern = _NEW_WEATHER_PATTERN
         else:
@@ -186,7 +186,7 @@ def read_weather_file(
 
     weather = np.zeros(n_lines, dtype)
 
-    with open(weather_file, "r") as fl:
+    with open(weather_file) as fl:
         # Go back to the starting position of the day, and read in each line of the day.
         fl.seek(start_line)
 
@@ -206,7 +206,10 @@ def read_weather_file(
             )
 
             if pattern == _NEW_WEATHER_PATTERN:
-                w = w + (match["frontend_temp"], match["lna_temp"],)
+                w = w + (
+                    match["frontend_temp"],
+                    match["lna_temp"],
+                )
             else:
                 w = w + (np.nan, np.nan)
 
@@ -277,7 +280,7 @@ def read_thermlog_file(
         ],
     )
 
-    with open(filename, "r") as fl:
+    with open(filename) as fl:
         fl.seek(start_line)
 
         matches = _parse_lines(fl.read(nchar), _THERMLOG_PATTERN)

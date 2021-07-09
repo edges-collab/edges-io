@@ -229,7 +229,7 @@ class _DataContainer(_ObsNode):
     @classmethod
     def check_contents(cls, path: [str, Path], fix=False) -> bool:
         """Abstract method for checking whether the contents of this container are in
-         the correct format for the DB"""
+        the correct format for the DB"""
         # Check that everything that *is* there has correct format.
         path = Path(path)
         ok_selves = cls._check_contents_selves(path, fix=fix)
