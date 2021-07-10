@@ -2,6 +2,11 @@
 Changelog
 =========
 
+v2.3.9
+======
+
+Try again to get this on PyPI... grrr :-(
+
 v2.3.7
 ======
 
