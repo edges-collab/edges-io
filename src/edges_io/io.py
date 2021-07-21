@@ -517,7 +517,7 @@ class Resistance(_SpectrumOrResistance):
 
             def float_from_kohm(x):
                 x = x.decode("utf-8")
-                kohm = "kohm" in x
+                kohm = "KOhm" in x
                 y = float(x.split(" ")[0])
                 return y * 1000 if kohm else y
 
