@@ -514,10 +514,10 @@ class Resistance(_SpectrumOrResistance):
             s = StringIO("".join([next(fl) for i in range(nlines - 1)]))
 
             # Determine whether the file is in KOhm
-            
+
             def float_from_kohm(x):
                 x = x.decode("utf-8")
-                kohm = 'kohm' in x
+                kohm = "KOhm" in x
                 y = float(x.split(" ")[0])
                 return y * 1000 if kohm else y
 
