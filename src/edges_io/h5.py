@@ -317,12 +317,18 @@ class HDF5Object(_HDF5Part):
         if self.__fl_inst is None or mode == "r+":
             close_it_myself = True
 
-        grp = h5py.File(self.filename, mode) if mode == "r+" else self._fl_instance
+        if mode == "r+":
+            self._fl_instance.close()
+            self.__fl_inst = None
 
-        yield grp
+            fl = h5py.File(self.filename, "r+")
+        else:
+            fl = self._fl_instance
+
+        yield fl
 
         if close_it_myself:
-            grp.close()
+            fl.close()
             self.__fl_inst = None
 
     @property

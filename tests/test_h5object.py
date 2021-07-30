@@ -52,8 +52,6 @@ def test_h5_open(fastspec_spectrum_fl):
 
 
 def test_h5_open_append(fastspec_spectrum_fl):
-    fl = h5py.File(fastspec_spectrum_fl, "r+")
-    fl.close()
     obj = HDF5RawSpectrum(fastspec_spectrum_fl)
     with obj.open("r+") as fl:
         assert "spectra" in fl
