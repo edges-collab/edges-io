@@ -9,6 +9,8 @@ from pathlib import Path
 
 from . import __version__, utils
 
+_ALL_HDF5OBJECTS = {}
+
 
 class HDF5StructureError(Exception):
     pass
@@ -24,8 +26,7 @@ class HDF5StructureExtraKey(HDF5StructureError):
 
 @attr.s
 class _HDF5Part(metaclass=ABCMeta):
-    filename = attr.ib(default=None, converter=lambda x: x if x is None else Path(x))
-    group_path = attr.ib(default="", converter=str)
+    group_path = attr.ib(default="", converter=str, kw_only=True)
 
     def __attrs_post_init__(self):
         self.__memcache__ = {}
@@ -64,11 +65,9 @@ class _HDF5Part(metaclass=ABCMeta):
                         f"item {item} has structure {self._structure[item]}, but must be dict."
                     )
 
-                gp = self.group_path + "." if self.group_path else ""
                 out = _HDF5Group(
-                    filename=self.filename,
                     structure=self._structure[item],
-                    group_path=gp + item,
+                    group_path=self.group_path + f"/{item}",
                     file=self._file,
                 )
 
@@ -149,15 +148,30 @@ class HDF5Object(_HDF5Part):
     default_root = Path(".")
     _structure = None
 
-    require_no_extra = attr.ib(default=_require_no_extra, converter=bool)
+    filename = attr.ib(default=None, converter=attr.converters.optional(Path))
+    require_no_extra = attr.ib(default=_require_no_extra, converter=bool, kw_only=True)
 
     def __attrs_post_init__(self):
         super().__attrs_post_init__()
         self._file = self
         self.__fl_inst = None
 
+        if self.filename:
+            _ALL_HDF5OBJECTS[str(self.filename.absolute())] = self
+
         if self.filename and self.filename.exists():
             self.check(self.filename, self.require_no_extra)
+
+    def __new__(cls, *args, **kwargs):
+        fname = (
+            kwargs["filename"] if "filename" in kwargs else (args[0] if args else None)
+        )
+
+        if fname and str(Path(fname).absolute()) in _ALL_HDF5OBJECTS:
+            return _ALL_HDF5OBJECTS[str(Path(fname).absolute())]
+
+        else:
+            return super().__new__(cls)
 
     def __init_subclass__(cls, **kwargs):
         super().__init_subclass__()
@@ -218,6 +232,7 @@ class HDF5Object(_HDF5Part):
 
         if self.filename is None:
             self.filename = filename
+            _ALL_HDF5OBJECTS[str(self.filename.absolute())] = self
 
         if filename.exists() and not clobber:
             raise FileExistsError(f"file {filename} already exists!")
