@@ -29,36 +29,6 @@ class _HDF5Part(metaclass=ABCMeta):
 
     def __attrs_post_init__(self):
         self.__memcache__ = {}
-        self.__fl_inst = None
-
-    @contextlib.contextmanager
-    def open(self) -> h5py.Group:
-        """Context manager for opening up the file.
-
-        Yields
-        ------
-        grp : :class:`h5py.Group`
-            The h5py Group corresponding to this instance.
-        """
-        grp = self._fl_instance
-
-        if self.group_path:
-            for bit in self.group_path.split("."):
-                grp = grp[bit]
-
-        yield grp
-
-    @property
-    def _fl_instance(self):
-        if not self.filename:
-            raise OSError(
-                "This object has no associated file. You can define one with the write() method."
-            )
-
-        if self.__fl_inst is None:
-            self.__fl_inst = h5py.File(self.filename, "r")
-
-        return self.__fl_inst
 
     def __getstate__(self):
         """Prepare class for pickling. HDF5 files are not pickleable!"""
@@ -66,6 +36,9 @@ class _HDF5Part(metaclass=ABCMeta):
             key: (val if not key.endswith("__fl_inst") else None)
             for key, val in self.__dict__.items()
         }
+
+    def __setstate__(self, d):
+        self.__dict__ = d
 
     def __contains__(self, item):
         return item in list(self.keys())
@@ -83,7 +56,7 @@ class _HDF5Part(metaclass=ABCMeta):
             elif item not in fl:
                 raise KeyError(
                     f"'{item}' is not a valid part of {self.__class__.__name__}."
-                    f" Valid keys: {self.keys()}"
+                    f" Valid keys: {list(self.keys())}"
                 )
             elif isinstance(fl[item], h5py.Group):
                 if not isinstance(self._structure[item], dict):
@@ -96,6 +69,7 @@ class _HDF5Part(metaclass=ABCMeta):
                     filename=self.filename,
                     structure=self._structure[item],
                     group_path=gp + item,
+                    file=self._file,
                 )
 
             elif isinstance(fl[item], h5py.Dataset):
@@ -179,6 +153,8 @@ class HDF5Object(_HDF5Part):
 
     def __attrs_post_init__(self):
         super().__attrs_post_init__()
+        self._file = self
+        self.__fl_inst = None
 
         if self.filename and self.filename.exists():
             self.check(self.filename, self.require_no_extra)
@@ -326,12 +302,70 @@ class HDF5Object(_HDF5Part):
                 else:
                     warnings.warn(f"{e}. Filename={filename}. ")
 
+    @contextlib.contextmanager
+    def open(self, mode="r") -> h5py.Group:
+        """Context manager for opening up the file.
 
-@attr.s
+        Yields
+        ------
+        grp : :class:`h5py.Group`
+            The h5py Group corresponding to this instance.
+        """
+        assert mode in {"r", "r+"}
+
+        close_it_myself = False
+        if self.__fl_inst is None or mode == "r+":
+            close_it_myself = True
+
+        grp = h5py.File(self.filename, mode) if mode == "r+" else self._fl_instance
+
+        yield grp
+
+        if close_it_myself:
+            grp.close()
+            self.__fl_inst = None
+
+    @property
+    def _fl_instance(self):
+        if not self.filename:
+            raise OSError(
+                "This object has no associated file. You can define one with the write() method."
+            )
+
+        if self.__fl_inst is None:
+            self.__fl_inst = h5py.File(self.filename, "r")
+
+        return self.__fl_inst
+
+    def __del__(self):
+        if self.__fl_inst is not None:
+            self.__fl_inst.close()
+
+
+@attr.s(kw_only=True)
 class _HDF5Group(_HDF5Part):
     """Similar to HDF5Object, but pointing to a Group within it."""
 
+    _file = attr.ib()
     _structure = attr.ib(factory=dict, converter=dict)
+
+    @contextlib.contextmanager
+    def open(self, mode="r") -> h5py.Group:
+        """Context manager for opening up the file.
+
+        Yields
+        ------
+        grp : :class:`h5py.Group`
+            The h5py Group corresponding to this instance.
+        """
+        assert mode in {"r", "r+"}
+
+        with self._file.open(mode) as fl:
+            grp = fl
+            for bit in self.group_path.split("."):
+                grp = grp[bit]
+
+            yield grp
 
 
 class HDF5RawSpectrum(HDF5Object):
