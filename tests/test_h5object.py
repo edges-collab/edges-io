@@ -51,6 +51,12 @@ def test_h5_open(fastspec_spectrum_fl):
         assert "spectra" in obj.keys()
 
 
+def test_h5_open_append(fastspec_spectrum_fl):
+    obj = HDF5RawSpectrum(fastspec_spectrum_fl)
+    with obj.open("r+") as fl:
+        assert "spectra" in fl
+
+
 def test_write_no_fname(fastspec_data):
     obj = HDF5RawSpectrum.from_data(fastspec_data)
 

@@ -2,6 +2,14 @@
 Changelog
 =========
 
+v2.4.0
+======
+
+Added
+-----
+* Ability to open ``HDF5Object`` instances' files as writeable, so as to append extra data
+  to them.
+
 v2.3.9
 ======
 
