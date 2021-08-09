@@ -4,6 +4,7 @@ import dill as pickle
 import h5py
 import inspect
 import numpy as np
+import yaml
 from copy import deepcopy
 from pathlib import Path
 
@@ -12,6 +13,7 @@ from edges_io.h5 import (
     HDF5RawSpectrum,
     HDF5StructureExtraKey,
     HDF5StructureValidationError,
+    register_h5type,
 )
 
 
@@ -168,3 +170,32 @@ def test_h5_hierarchical(tmpdir: Path):
     assert ex2["this"]["that"]["the_other"]["key"].shape == (10,)
 
     assert isinstance(ex2.meta, dict)
+
+
+def test_yaml_attrs(tmpdir: Path):
+    class MyObj:
+        def __init__(self, a):
+            self.a = a
+
+    def _myobj_yaml_constructor(loader: yaml.SafeLoader, node: yaml.nodes.MappingNode):
+        mapping = loader.construct_mapping(node, deep=True)
+        return MyObj(**mapping)
+
+    def _myobj_yaml_representer(dumper: yaml.SafeDumper, model: MyObj):
+        model_dct = {"a": model.a}
+        return dumper.represent_mapping("!MyObj", model_dct)
+
+    yaml.FullLoader.add_constructor("!MyObj", _myobj_yaml_constructor)
+    yaml.add_multi_representer(MyObj, _myobj_yaml_representer)
+    register_h5type(MyObj)
+
+    class H5Obj(HDF5Object):
+        _structure = {
+            "meta": {},
+        }
+
+    h5_obj = H5Obj.from_data({"meta": {"myobj": MyObj(a=7)}})
+    h5_obj.write(tmpdir / "my_obj_test.h5")
+    h5_obj_read = H5Obj(tmpdir / "my_obj_test.h5")
+    assert isinstance(h5_obj_read.meta["myobj"], MyObj)
+    assert h5_obj_read.meta["myobj"].a == 7
