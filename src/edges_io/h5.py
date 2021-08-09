@@ -3,6 +3,7 @@ import contextlib
 import h5py
 import numpy as np
 import warnings
+import yaml
 from abc import ABCMeta, abstractmethod
 from datetime import datetime
 from pathlib import Path
@@ -54,6 +55,15 @@ class _HDF5Part(metaclass=ABCMeta):
                 for k, v in out.items():
                     if isinstance(v, str) and v == "none":
                         out[k] = None
+                    elif isinstance(v, str) and any(
+                        tag in v
+                        for tag in yaml.FullLoader.yaml_constructors
+                        if tag is not None
+                    ):
+                        for tag in yaml.FullLoader.yaml_constructors:
+                            if tag is not None and tag in v:
+                                out[k] = yaml.load(v, Loader=yaml.FullLoader)
+
             elif item not in fl:
                 raise KeyError(
                     f"'{item}' is not a valid part of {self.__class__.__name__}."
@@ -147,6 +157,7 @@ class HDF5Object(_HDF5Part):
     _require_no_extra = False
     default_root = Path(".")
     _structure = None
+    _yaml_types = set()
 
     filename = attr.ib(default=None, converter=attr.converters.optional(Path))
     require_no_extra = attr.ib(default=_require_no_extra, converter=bool, kw_only=True)
@@ -248,6 +259,10 @@ class HDF5Object(_HDF5Part):
                             v = "none"
                         elif isinstance(v, Path):
                             v = str(v)
+                        elif any(isinstance(v, cls) for cls in self._yaml_types):
+                            for cls in self._yaml_types:
+                                if isinstance(v, cls):
+                                    v = yaml.dump(v)
 
                         grp[k] = v
 
@@ -453,3 +468,8 @@ class HDF5RawSpectrum(HDF5Object):
             "data_drops": "optional",
         },
     }
+
+
+def register_h5type(cls):
+    HDF5Object._yaml_types.add(cls)
+    return cls

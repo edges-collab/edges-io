@@ -1,6 +1,15 @@
 =========
 Changelog
 =========
+v2.5.0
+======
+
+Added
+-----
+
+* Ability to register types as "YAML", so that they can be read from the HDF5 ``attrs``
+  (or "meta") as native types via YAML. This works both ways (i.e. read and write) as
+  long as a constructor/representer is defined for the object in YAML.
 
 v2.4.0
 ======
