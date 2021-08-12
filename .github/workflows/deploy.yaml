@@ -21,7 +21,6 @@ jobs:
         # Ensure full history is gotten.
         with:
           fetch-depth: 0
-          persist-credentials: false
       - name: Get New Version
         id: bump
         uses: mathieudutour/github-tag-action@v5.6
