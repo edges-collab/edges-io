@@ -33,7 +33,7 @@ jobs:
     name: Deploy
     runs-on: ubuntu-latest
     needs: bump-version
-    if: contains(needs.bump-version.outputs, 'new_version')
+    if: needs.bump-version.outputs.new_version != null
     steps:
       - uses: actions/checkout@master
       # https://github.com/ansible/pylibssh/blob/1e7b17f/.github/workflows/build-test-n-publish.yml#L146-L151
