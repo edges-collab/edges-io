@@ -24,7 +24,6 @@ jobs:
           python -m pip install setuptools_scm
           python setup.py --version
       - name: Create setuptools_scm env variable
-        if: github.ref != 'refs/heads/master'
         shell: bash
         run: |
           wget https://gist.github.com/plaplant/0902f09e59166bac742bbd554f3cd2f9/raw/make_dev_version.sh -O ../make_dev_version.sh
