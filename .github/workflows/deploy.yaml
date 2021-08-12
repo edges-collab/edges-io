@@ -45,16 +45,16 @@ jobs:
         uses: actions/setup-python@v2
         with:
           python-version: 3.x
-      - name: Install build
-        run: |
-          python -m pip install build
-          python -m pip install setuptools_scm
-          python setup.py --version
       - name: Create setuptools_scm env variable
         shell: bash
         run: |
           version=${{ needs.bump-version.outputs.new_version }}
           echo "SETUPTOOLS_SCM_PRETEND_VERSION=$version" >> $GITHUB_ENV
+      - name: Install build
+        run: |
+          python -m pip install build
+          python -m pip install setuptools_scm
+          python setup.py --version
       - name: Build a binary wheel and a source tarball
         run: python -m build
       - name: Publish distribution 📦 to PyPI
