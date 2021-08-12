@@ -1,5 +1,8 @@
 name: Deploy
-on: push
+on:
+  push:
+    tags-ignore:
+      - 'v*'
 
 jobs:
   bump-version:
@@ -66,7 +69,7 @@ jobs:
     name: Deploy
     runs-on: ubuntu-latest
     if: github.ref == 'refs/heads/master'
-    needs: bump-versoin
+    needs: bump-version
     steps:
       - uses: actions/checkout@master
       # https://github.com/ansible/pylibssh/blob/1e7b17f/.github/workflows/build-test-n-publish.yml#L146-L151
