@@ -23,7 +23,7 @@ jobs:
           fetch-depth: 0
       - name: Get New Version
         id: bump
-        uses: mathieudutour/github-tag-action@v5.6
+        uses: mathieudutour/github-tag-action@v5.5
         env:
           GITHUB_TOKEN: ${{ secrets.BUMP_VERSION }}
         with:
