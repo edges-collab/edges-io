@@ -12,7 +12,7 @@ jobs:
       new_version: ${{ steps.bump.outputs.new_version }}
       new_tag: ${{ steps.bump.outputs.new_tag }}
       previous_tag: ${{ steps.bump.outputs.previous_tag }}
-      prevoius_version: ${{ steps.bump.outputs.previous_version }}
+      previous_version: ${{ steps.bump.outputs.previous_version }}
       release_type: ${{ steps.bump.outputs.release_type }}
       changelog: ${{ steps.bump.outputs.changelog }}
 
@@ -33,12 +33,8 @@ jobs:
     name: Deploy
     runs-on: ubuntu-latest
     needs: bump-version
-    if: needs.bump-version.outputs.new_version != 'undefined'
+    if: contains(needs.bump-version.outputs, 'new_version')
     steps:
-      - name: Dump Needs context
-        env:
-          NEEDS_CONTEXT: ${{ toJSON(needs.bump-version.outputs) }}
-        run: echo "$NEEDS_CONTEXT"
       - uses: actions/checkout@master
       # https://github.com/ansible/pylibssh/blob/1e7b17f/.github/workflows/build-test-n-publish.yml#L146-L151
       - name: Set up Python
