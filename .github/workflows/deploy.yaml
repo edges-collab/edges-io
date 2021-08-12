@@ -35,6 +35,10 @@ jobs:
     needs: bump-version
     if: needs.bump-version.outputs.new_version != 'undefined'
     steps:
+      - name: Dump Needs context
+        env:
+          NEEDS_CONTEXT: ${{ toJSON(needs.bump-version.outputs) }}
+        run: echo "$NEEDS_CONTEXT"
       - uses: actions/checkout@master
       # https://github.com/ansible/pylibssh/blob/1e7b17f/.github/workflows/build-test-n-publish.yml#L146-L151
       - name: Set up Python
@@ -46,10 +50,10 @@ jobs:
           python -m pip install build
           python -m pip install setuptools_scm
           python setup.py --version
-      - name: Create setuptools_scm env variable (dev)
+      - name: Create setuptools_scm env variable
         shell: bash
         run: |
-          version={{ needs.bump-version.outputs.new_version}}
+          version=${{ needs.bump-version.outputs.new_version }}
           echo "SETUPTOOLS_SCM_PRETEND_VERSION=$version" >> $GITHUB_ENV
       - name: Build a binary wheel and a source tarball
         run: python -m build
