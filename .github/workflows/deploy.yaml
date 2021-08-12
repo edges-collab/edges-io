@@ -25,7 +25,7 @@ jobs:
         id: bump
         uses: mathieudutour/github-tag-action@v5.6
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.BUMP_VERSION }}
         with:
           default_bump: false
 
