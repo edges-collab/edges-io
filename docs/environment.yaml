@@ -8,11 +8,16 @@ dependencies:
   - nbsphinx
   - numpydoc
   - sphinx>=2.0
-  - numpy
-  - scipy
   - h5py
-  - pyyaml
+  - python==3.9
   - pip:
+    - numpy
+    - scipy
+    - read_acq
+    - cached_property
     - bidict
+    - pyyaml
     - rich
-    - sphinx-rtd-theme
+    - attrs
+    - toml
+    - dill

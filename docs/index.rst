@@ -9,7 +9,6 @@ Contents
    License <license>
    Authors <authors>
    Changelog <changelog>
-   tutorials
    reference/index
    structure
 

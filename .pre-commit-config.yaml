@@ -1,4 +1,4 @@
-exclude: '^docs/conf.py|^tests/test_data/*'
+exclude: '^docs/conf.py|^tests/test_data/'
 
 repos:
 - repo: git://github.com/pre-commit/pre-commit-hooks
@@ -36,17 +36,17 @@ repos:
       - flake8-ownership
 
 - repo: https://github.com/psf/black
-  rev: 21.5b2
+  rev: 21.7b0
   hooks:
   - id: black
 
 - repo: https://github.com/timothycrosley/isort
-  rev: 5.8.0
+  rev: 5.9.3
   hooks:
   - id: isort
 
 - repo: https://github.com/pre-commit/pygrep-hooks
-  rev: v1.8.0
+  rev: v1.9.0
   hooks:
     - id: rst-backticks
     - id: rst-directive-colons
@@ -56,10 +56,10 @@ repos:
 #   hooks:
 #   - id: rst-linter
 -   repo: https://github.com/asottile/pyupgrade
-    rev: v2.19.1
+    rev: v2.23.3
     hooks:
     -   id: pyupgrade
-        args: [--py36-plus]
+        args: [--py38-plus]
 
 - repo: https://github.com/commitizen-tools/commitizen
   rev: v2.18.0
