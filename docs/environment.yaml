@@ -7,10 +7,12 @@ dependencies:
   - ipython
   - nbsphinx
   - numpydoc
-  - sphinx>=2.0
+  - sphinx>=4.0
   - h5py
   - python==3.9
+  - sphinx_rtd_theme
   - pip:
+    - sphinx_click
     - numpy
     - scipy
     - read_acq
