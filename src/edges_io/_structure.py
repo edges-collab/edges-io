@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import os
 import re
 import shutil
@@ -47,7 +49,7 @@ class _ObsNode(ABC):
         return cls.check_self(path, fix)
 
     @classmethod
-    def check_self(cls, path: [str, Path], fix: bool) -> Tuple[Path, Optional[dict]]:
+    def check_self(cls, path: str | Path, fix: bool) -> tuple[Path, dict | None]:
         path = Path(path)
         path, match = cls._check_self(path, fix=fix)
         if match is not None:
@@ -55,9 +57,7 @@ class _ObsNode(ABC):
         return path, match
 
     @classmethod
-    def _check_self(
-        cls, path: Path, *, fix: bool = False
-    ) -> Tuple[Path, Optional[dict]]:
+    def _check_self(cls, path: Path, *, fix: bool = False) -> tuple[Path, dict | None]:
 
         if not path.exists():
             logger.error(f"The path {path} does not exist!")
@@ -105,9 +105,7 @@ class _ObsNode(ABC):
         return {}
 
     @classmethod
-    def _fix(
-        cls, root: Path, basename: str
-    ) -> Tuple[Optional[Path], Optional[re.Match]]:
+    def _fix(cls, root: Path, basename: str) -> tuple[Path | None, re.Match | None]:
         """Auto-fix a basename."""
 
         # First try simple substitutions
@@ -177,7 +175,7 @@ class _ObsNode(ABC):
                 return root / basename, None
 
     @classmethod
-    def _validate_match(cls, match: Dict[str, str], filename: str):
+    def _validate_match(cls, match: dict[str, str], filename: str):
         pass
 
 
@@ -195,7 +193,7 @@ class _DataFile(_ObsNode):
     """
 
     @classmethod
-    def _check_self(cls, path: Path, **kwargs) -> Tuple[Path, Optional[dict]]:
+    def _check_self(cls, path: Path, **kwargs) -> tuple[Path, dict | None]:
         return super()._check_self(path, **kwargs)
 
 
@@ -203,7 +201,7 @@ class _DataContainer(_ObsNode):
     _content_type = None
 
     @classmethod
-    def _check_self(cls, path: Path, **kwargs) -> Tuple[Path, Optional[dict]]:
+    def _check_self(cls, path: Path, **kwargs) -> tuple[Path, dict | None]:
         logger._structure(f"Checking {cls.__name__} folder contents format at {path}.")
         return super()._check_self(path, **kwargs)
 
@@ -227,7 +225,7 @@ class _DataContainer(_ObsNode):
         return path, match
 
     @classmethod
-    def check_contents(cls, path: [str, Path], fix=False) -> bool:
+    def check_contents(cls, path: str | Path, fix=False) -> bool:
         """Abstract method for checking whether the contents of this container are in
         the correct format for the DB"""
         # Check that everything that *is* there has correct format.
@@ -252,7 +250,7 @@ class _DataContainer(_ObsNode):
         return True
 
     @classmethod
-    def _check_contents_selves(cls, path: Path, fix=False) -> Tuple[bool, Path]:
+    def _check_contents_selves(cls, path: Path, fix=False) -> tuple[bool, Path]:
         fls = utils.get_active_files(path)
 
         # Start off with a clean slate for this function.

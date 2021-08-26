@@ -3,6 +3,8 @@ This module defines the overall file structure and internal contents of the
 calibration observations. It does *not* implement any algorithms/methods on that data,
 making it easier to separate the algorithms from the data checking/reading.
 """
+from __future__ import annotations
+
 import logging
 import numpy as np
 import re
@@ -164,7 +166,7 @@ class _SpectrumOrResistance(_DataFile):
         return out
 
     @classmethod
-    def _validate_match(cls, match: Dict[str, str], filename: str):
+    def _validate_match(cls, match: dict[str, str], filename: str):
         if int(match["run_num"]) < 1:
             logger.error(f"The run_num for {filename} is less than one!")
         if not (2010 <= int(match["year"]) <= 2030):
@@ -191,8 +193,8 @@ class _SpectrumOrResistance(_DataFile):
         cls,
         load: str,
         direc: [str, Path],
-        run_num: Optional[int] = None,
-        filetype: Optional[str] = None,
+        run_num: int | None = None,
+        filetype: str | None = None,
     ):
         """
         Initialize the object in a simple way.
@@ -388,7 +390,7 @@ class Spectrum(_SpectrumOrResistance):
         return self._raw_spec.file_format
 
     @cached_property
-    def data(self) -> [HDF5RawSpectrum, List[HDF5RawSpectrum]]:
+    def data(self) -> HDF5RawSpectrum | list[HDF5RawSpectrum]:
         """A view of the data in the file as a HDF5Object.
 
         If the file is an ACQ file, it will be read completely into memory and cast
@@ -424,7 +426,7 @@ class Resistance(_SpectrumOrResistance):
         return "csv"
 
     @classmethod
-    def read_csv(cls, path: Path) -> Tuple[np.ndarray, Dict]:
+    def read_csv(cls, path: Path) -> tuple[np.ndarray, dict]:
         with open(path, errors="ignore") as fl:
             if fl.readline().startswith("FLUKE"):
                 return cls.read_old_style_csv(path)
@@ -444,7 +446,7 @@ class Resistance(_SpectrumOrResistance):
             return data, meta
 
     @classmethod
-    def read_new_style_csv(cls, path: [str, Path]) -> Tuple[np.ndarray, Dict]:
+    def read_new_style_csv(cls, path: [str, Path]) -> tuple[np.ndarray, dict]:
         data = np.genfromtxt(
             path,
             skip_header=1,
@@ -497,7 +499,7 @@ class Resistance(_SpectrumOrResistance):
         return out, nheader_lines
 
     @classmethod
-    def read_old_style_csv(cls, path) -> Tuple[np.ndarray, Dict]:
+    def read_old_style_csv(cls, path) -> tuple[np.ndarray, dict]:
         # Weirdly, some old-style files use KOhm, and some just use Ohm.
 
         # These files have bad encoding, which we can ignore. This means we have to
@@ -578,7 +580,7 @@ class Resistance(_SpectrumOrResistance):
         return self.read()[1]
 
     @classmethod
-    def _get_filename_params_from_contents(cls, path: Path) -> Dict:
+    def _get_filename_params_from_contents(cls, path: Path) -> dict:
         meta, _ = cls.read_old_style_csv_header(path)
 
         if not meta:
@@ -602,8 +604,8 @@ class _SpectraOrResistanceFolder(_DataContainer):
         self,
         path: [str, Path],
         *,
-        run_num: Optional[Union[int, Dict[str, int]]] = None,
-        filetype: Optional[str] = None,
+        run_num: int | dict[str, int] | None = None,
+        filetype: str | None = None,
         **kwargs,
     ):
         """Collection of spectra in an observation"""
@@ -777,7 +779,7 @@ class S1P(_DataFile):
         return self.read(self.path)[1]
 
     @classmethod
-    def _validate_match(cls, match: Dict[str, str], filename: str):
+    def _validate_match(cls, match: dict[str, str], filename: str):
         if int(match["repeat_num"]) < 1:
             logger.error(
                 f"The file {filename} has a repeat_num ({match['repeat_num']}) less than one"
@@ -872,7 +874,7 @@ class _S11SubDir(_DataContainer):
         self.run_num = int(self._match_dict["run_num"])
 
     @cached_property
-    def children(self) -> Dict[str, S1P]:
+    def children(self) -> dict[str, S1P]:
         """Filenames of S1P measurements used in this observation."""
         return {
             name.lower(): S1P(self.path / f"{name}{self.repeat_num:>02}.s1p")
@@ -888,7 +890,7 @@ class _S11SubDir(_DataContainer):
             )
 
     @cached_property
-    def filenames(self) -> Tuple[Path]:
+    def filenames(self) -> tuple[Path]:
         """Filenames of S1P measurements used in this observation."""
         return tuple(val.path for val in self.children.values())
 
@@ -1029,10 +1031,10 @@ class S11Dir(_DataContainer):
 
     def __init__(
         self,
-        path: [str, Path],
+        path: str | Path,
         *,
-        repeat_num: [None, int, dict] = None,
-        run_num: [None, int, dict] = None,
+        repeat_num: int | dict | None = None,
+        run_num: int | dict | None = None,
         **kwargs,
     ):
         """Class representing the entire S11 subdirectory of an observation
@@ -1251,14 +1253,14 @@ class CalibrationObservation(_DataContainer):
 
     def __init__(
         self,
-        path: [str, Path],
-        run_num: [int, dict, None] = None,
-        repeat_num: [int, dict, None] = None,
+        path: str | Path,
+        run_num: int | dict | None = None,
+        repeat_num: int | dict | None = None,
         include_previous: bool = True,
         compile_from_def: bool = True,
-        spectra_kwargs: Optional[dict] = None,
-        s11_kwargs: Optional[dict] = None,
-        resistance_kwargs: Optional[dict] = None,
+        spectra_kwargs: dict | None = None,
+        s11_kwargs: dict | None = None,
+        resistance_kwargs: dict | None = None,
         **kwargs,
     ):
         """
@@ -1286,7 +1288,7 @@ class CalibrationObservation(_DataContainer):
         fix : bool, optional
             Whether to attempt fixing filenames and the file structure in the observation
             for simple known error cases. Typically it is better to explicitly call
-            :method:`check_self` and :method:`check_contents` if you want to perform
+            :meth:`check_self` and :meth:`check_contents` if you want to perform
             fixes.
         include_previous : bool, optional
             Whether to by default include the previous observation in the same directory
@@ -1523,7 +1525,7 @@ class CalibrationObservation(_DataContainer):
         return super()._check_self(path, **kwargs)
 
     @classmethod
-    def _validate_match(cls, match: Dict[str, str], filename: str):
+    def _validate_match(cls, match: dict[str, str], filename: str):
         groups = match
         if int(groups["rcv_num"]) < 1:
             logger.error(f"Unknown receiver number: {groups['rcv_num']}")
@@ -1614,7 +1616,7 @@ class CalibrationObservation(_DataContainer):
         self.resistance.read_all()
 
     @classmethod
-    def get_base_files(cls, path: Path, with_notes=False) -> List[Path]:
+    def get_base_files(cls, path: Path, with_notes=False) -> list[Path]:
         """Get a list of valid files in this observation.
 
         Takes into account the definition.yaml if it exists.
@@ -1778,7 +1780,7 @@ class CalibrationObservation(_DataContainer):
     @classmethod
     def match_path(
         cls, path: Path, root: Path = Path()
-    ) -> Tuple[Union[_DataFile, _DataContainer]]:
+    ) -> tuple[_DataFile | _DataContainer]:
         """Give a path relative to the root, determine its describing class.
 
         Examples

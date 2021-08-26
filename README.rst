@@ -6,6 +6,9 @@ edges-io
     :target: https://travis-ci.org/edges-collab/edges-io
 .. image:: https://codecov.io/gh/edges-collab/edges-io/branch/master/graph/badge.svg
   :target: https://codecov.io/gh/edges-collab/edges-io
+.. image:: https://readthedocs.org/projects/edges-io/badge/?version=latest
+  :target: https://edges-io.readthedocs.io/en/latest/?badge=latest
+  :alt: Documentation Status
 
 **Module for reading EDGES data and working with EDGES databases.**
 
