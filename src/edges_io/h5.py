@@ -161,6 +161,7 @@ class HDF5Object(_HDF5Part):
 
     filename = attr.ib(default=None, converter=attr.converters.optional(Path))
     require_no_extra = attr.ib(default=_require_no_extra, converter=bool, kw_only=True)
+    validate: bool = attr.ib(default=True, kw_only=True, converter=bool)
 
     def __attrs_post_init__(self):
         super().__attrs_post_init__()
@@ -170,7 +171,7 @@ class HDF5Object(_HDF5Part):
         if self.filename:
             _ALL_HDF5OBJECTS[str(self.filename.absolute())] = self
 
-        if self.filename and self.filename.exists():
+        if self.filename and self.filename.exists() and self.validate:
             self.check(self.filename, self.require_no_extra)
 
     def __new__(cls, *args, **kwargs):
