@@ -1,7 +1,9 @@
 import attr
 import contextlib
 import h5py
+import logging
 import numpy as np
+import psutil
 import warnings
 import yaml
 from abc import ABCMeta, abstractmethod
@@ -9,6 +11,8 @@ from datetime import datetime
 from pathlib import Path
 
 from . import __version__, utils
+
+logger = logging.getLogger(__name__)
 
 _ALL_HDF5OBJECTS = {}
 
@@ -156,10 +160,10 @@ class HDF5Object(_HDF5Part):
 
     _require_no_extra = False
     default_root = Path(".")
-    _structure = None
+    _structure = {}
     _yaml_types = set()
 
-    filename = attr.ib(default=None, converter=attr.converters.optional(Path))
+    filename: Path = attr.ib(default=None, converter=attr.converters.optional(Path))
     require_no_extra = attr.ib(default=_require_no_extra, converter=bool, kw_only=True)
     validate: bool = attr.ib(default=True, kw_only=True, converter=bool)
 
@@ -324,6 +328,11 @@ class HDF5Object(_HDF5Part):
         if not cls._structure:
             return True
 
+        pr = psutil.Process()
+        logger.debug(
+            f"Memory Before Checking HDF5 File: {pr.memory_info().rss / 1024**2} MB"
+        )
+
         with h5py.File(filename, "r") as fl:
             try:
                 cls._checkgrp(fl, cls._structure)
@@ -332,6 +341,10 @@ class HDF5Object(_HDF5Part):
                     raise e
                 else:
                     warnings.warn(f"{e}. Filename={filename}. ")
+
+        logger.debug(
+            f"Memory After Checking HDF5 File: {pr.memory_info().rss / 1024**2} MB"
+        )
 
     @contextlib.contextmanager
     def open(self, mode="r") -> h5py.Group:
