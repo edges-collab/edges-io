@@ -1802,7 +1802,8 @@ class CalibrationObservation(_DataContainer):
         }
 
         pre_level = logger.level
-        logger.handlers[0].setLevel(100)  # Temporarily disable stdout handler
+        if logger.handlers:
+            logger.handlers[0].setLevel(100)  # Temporarily disable stdout handler
 
         # Add a string buffer handler that can capture the error messages.
         msg_buffer = StringIO()
@@ -1842,7 +1843,8 @@ class CalibrationObservation(_DataContainer):
             raise e
         finally:
             logger.removeHandler(handler)
-            logger.handlers[0].setLevel(pre_level)
+            if logger.handlers:
+                logger.handlers[0].setLevel(pre_level)
 
         return parts
 
