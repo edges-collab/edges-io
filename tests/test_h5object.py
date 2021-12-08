@@ -204,7 +204,8 @@ def test_yaml_attrs(tmpdir: Path):
     assert h5_obj_read.meta["myobj"].a == 7
 
 
-def test_memory_leakage_same_file(fastspec_spectrum_fl):
+@pytest.mark.parametrize("copyfile", [True, False])
+def test_memory_leakage(fastspec_spectrum_fl, copyfile, tmpdir):
     pr = psutil.Process()
 
     print(_ALL_HDF5OBJECTS)
@@ -214,7 +215,12 @@ def test_memory_leakage_same_file(fastspec_spectrum_fl):
 
     meminfo = [pr.memory_info().rss]
     for i in range(5):
-        obj = HDF5RawSpectrum(fastspec_spectrum_fl)
+        if copyfile:
+            newfile = tmpdir / f"new{i}.h5"
+            shutil.copy(fastspec_spectrum_fl, newfile)
+            obj = HDF5RawSpectrum(newfile)
+        else:
+            obj = HDF5RawSpectrum(fastspec_spectrum_fl)
 
         mem = 0
         for item in ["p0", "p1", "p2", "Q"]:
@@ -225,31 +231,3 @@ def test_memory_leakage_same_file(fastspec_spectrum_fl):
         if i > 0:
             # Ensure memory is the same for each loop (i.e. previous object is cleared)
             assert meminfo[-1] - meminfo[-2] < mem / 4
-
-
-def test_memory_leakage_diff_file(tmpdir, fastspec_spectrum_fl: Path):
-    pr = psutil.Process()
-
-    meminfo = [pr.memory_info().rss]
-    for i in range(5):
-        newfile = tmpdir / f"new{i}.h5"
-        shutil.copy(fastspec_spectrum_fl, newfile)
-
-        obj = HDF5RawSpectrum(newfile)
-
-        # Make sure memory grows....
-        obj["spectra"]["p0"]
-        obj["spectra"]["p1"]
-        obj["spectra"]["p2"]
-        obj["spectra"]["Q"]
-
-        mem = 4 * obj["spectra"]["p0"].size * 8
-
-        meminfo.append(pr.memory_info().rss)
-
-        if i > 0:
-            # Ensure memory is the same for each loop (i.e. previous object is cleared)
-            assert meminfo[-1] - meminfo[-2] < mem / 4
-        else:
-            # Make sure that the object has memory allocated in it.
-            assert meminfo[1] - meminfo[0] >= mem
