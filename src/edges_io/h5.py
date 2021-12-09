@@ -1,14 +1,19 @@
 import attr
 import contextlib
 import h5py
+import logging
 import numpy as np
+import psutil
 import warnings
+import weakref
 import yaml
 from abc import ABCMeta, abstractmethod
 from datetime import datetime
 from pathlib import Path
 
 from . import __version__, utils
+
+logger = logging.getLogger(__name__)
 
 _ALL_HDF5OBJECTS = {}
 
@@ -156,20 +161,20 @@ class HDF5Object(_HDF5Part):
 
     _require_no_extra = False
     default_root = Path(".")
-    _structure = None
+    _structure = {}
     _yaml_types = set()
 
-    filename = attr.ib(default=None, converter=attr.converters.optional(Path))
+    filename: Path = attr.ib(default=None, converter=attr.converters.optional(Path))
     require_no_extra = attr.ib(default=_require_no_extra, converter=bool, kw_only=True)
     validate: bool = attr.ib(default=True, kw_only=True, converter=bool)
 
     def __attrs_post_init__(self):
         super().__attrs_post_init__()
-        self._file = self
+        self._file = weakref.ref(self)
         self.__fl_inst = None
 
         if self.filename:
-            _ALL_HDF5OBJECTS[str(self.filename.absolute())] = self
+            _ALL_HDF5OBJECTS[str(self.filename.absolute())] = weakref.ref(self)
 
         if self.filename and self.filename.exists() and self.validate:
             self.check(self.filename, self.require_no_extra)
@@ -180,10 +185,14 @@ class HDF5Object(_HDF5Part):
         )
 
         if fname and str(Path(fname).absolute()) in _ALL_HDF5OBJECTS:
-            return _ALL_HDF5OBJECTS[str(Path(fname).absolute())]
+            out = _ALL_HDF5OBJECTS[str(Path(fname).absolute())]()
 
-        else:
-            return super().__new__(cls)
+            # If the object has been deleted, then its weakref has died, and will return
+            # None. In that case, we create it again.
+            if out is not None:
+                return out
+
+        return super().__new__(cls)
 
     def __init_subclass__(cls, **kwargs):
         super().__init_subclass__()
@@ -244,7 +253,7 @@ class HDF5Object(_HDF5Part):
 
         if self.filename is None:
             self.filename = filename
-            _ALL_HDF5OBJECTS[str(self.filename.absolute())] = self
+            _ALL_HDF5OBJECTS[str(self.filename.absolute())] = weakref.ref(self)
 
         if filename.exists() and not clobber:
             raise FileExistsError(f"file {filename} already exists!")
@@ -324,6 +333,11 @@ class HDF5Object(_HDF5Part):
         if not cls._structure:
             return True
 
+        pr = psutil.Process()
+        logger.debug(
+            f"Memory Before Checking HDF5 File: {pr.memory_info().rss / 1024**2} MB"
+        )
+
         with h5py.File(filename, "r") as fl:
             try:
                 cls._checkgrp(fl, cls._structure)
@@ -332,6 +346,10 @@ class HDF5Object(_HDF5Part):
                     raise e
                 else:
                     warnings.warn(f"{e}. Filename={filename}. ")
+
+        logger.debug(
+            f"Memory After Checking HDF5 File: {pr.memory_info().rss / 1024**2} MB"
+        )
 
     @contextlib.contextmanager
     def open(self, mode="r") -> h5py.Group:
@@ -397,7 +415,7 @@ class _HDF5Group(_HDF5Part):
         """
         assert mode in {"r", "r+"}
 
-        with self._file.open(mode) as fl:
+        with self._file().open(mode) as fl:
             grp = fl
             for bit in self.group_path.split("."):
                 grp = grp[bit]
