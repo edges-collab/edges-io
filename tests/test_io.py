@@ -113,9 +113,7 @@ def test_env(tmp_path_factory):
 
 # function to make observation object
 def new_test_obs(testdir):
-    return io.CalibrationObservation(
-        testdir, include_previous=False, compile_from_def=False
-    )
+    return io.CalibrationObservation(testdir)
 
 
 # directory testing
@@ -237,9 +235,7 @@ def test_list_of_files(datadir: Path):
 def test_io_partial(datadir: Path):
     obs = datadir / "Receiver01_25C_2023_11_26_040_to_200MHz"
 
-    calobs = io.CalibrationObservation(
-        obs, include_previous=False, spectra_kwargs={"filetype": "acq"}
-    )
+    calobs = io.CalibrationObservation(obs, spectra_kwargs={"filetype": "acq"})
     assert not hasattr(calobs.spectra, "ambient")  # simply nothing there
     assert not hasattr(calobs.spectra, "short")  # wrong format
 

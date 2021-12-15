@@ -133,11 +133,11 @@ def optional(fnc):
 
 
 def isintish(x):
-    return isinstance(x, (int, np.int, np.int64))
+    return isinstance(x, (int, np.int64))
 
 
 def isfloatish(x):
-    return isinstance(x, (float, np.float, np.float64, np.float32))
+    return isinstance(x, (float, np.float32))
 
 
 def isstringish(x):
