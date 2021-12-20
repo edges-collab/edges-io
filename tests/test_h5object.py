@@ -4,11 +4,14 @@ import dill as pickle
 import h5py
 import inspect
 import numpy as np
+import psutil
+import shutil
 import yaml
 from copy import deepcopy
 from pathlib import Path
 
 from edges_io.h5 import (
+    _ALL_HDF5OBJECTS,
     HDF5Object,
     HDF5RawSpectrum,
     HDF5StructureExtraKey,
@@ -199,3 +202,32 @@ def test_yaml_attrs(tmpdir: Path):
     h5_obj_read = H5Obj(tmpdir / "my_obj_test.h5")
     assert isinstance(h5_obj_read.meta["myobj"], MyObj)
     assert h5_obj_read.meta["myobj"].a == 7
+
+
+@pytest.mark.parametrize("copyfile", [True, False])
+def test_memory_leakage(fastspec_spectrum_fl, copyfile, tmpdir):
+    pr = psutil.Process()
+
+    print(_ALL_HDF5OBJECTS)
+    obj = HDF5RawSpectrum(fastspec_spectrum_fl)
+    obj.clear()  # just in case it's open as a fixture somewhere...
+    print(_ALL_HDF5OBJECTS)
+
+    meminfo = [pr.memory_info().rss]
+    for i in range(5):
+        if copyfile:
+            newfile = tmpdir / f"new{i}.h5"
+            shutil.copy(fastspec_spectrum_fl, newfile)
+            obj = HDF5RawSpectrum(newfile)
+        else:
+            obj = HDF5RawSpectrum(fastspec_spectrum_fl)
+
+        mem = 0
+        for item in ["p0", "p1", "p2", "Q"]:
+            mem += obj["spectra"][item].size * obj["spectra"][item].itemsize
+
+        meminfo.append(pr.memory_info().rss)
+
+        if i > 0:
+            # Ensure memory is the same for each loop (i.e. previous object is cleared)
+            assert meminfo[-1] - meminfo[-2] < mem / 4
