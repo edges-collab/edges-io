@@ -194,10 +194,10 @@ class _SpectrumOrResistance(_DataFile):
     def from_load(
         cls,
         load: str,
-        direc: [str, Path],
+        direc: str | Path,
         run_num: int | None = None,
         filetype: str | None = None,
-    ):
+    ) -> list[_SpectrumOrResistance]:
         """
         Initialize the object in a simple way.
 
@@ -284,7 +284,7 @@ class _SpectrumOrResistance(_DataFile):
         return int(self._match_dict["year"])
 
     @cached_property
-    def days(self) -> int:
+    def day(self) -> int:
         return int(self._match_dict["day"])
 
     @cached_property
@@ -294,25 +294,19 @@ class _SpectrumOrResistance(_DataFile):
         )
 
     @cached_property
-    def hours(self):
+    def hour(self):
         """List of integer hours (one per file) at which data acquisition was begun"""
         return int(self._match_dict["hour"])
 
     @cached_property
-    def minutes(self):
+    def minute(self):
         """List of integer minutes (one per file) at which data acquisition was begun"""
         return int(self._match_dict["minute"])
 
     @cached_property
-    def seconds(self):
+    def second(self):
         """List of integer seconds (one per file) at which data acquisition was begun"""
         return int(self._match_dict["second"])
-
-    def __eq__(self, other):
-        return (
-            other.__class__.__name__ == self.__class__.__name__
-            and self.load_name == other.load_name
-        )
 
 
 @attr.s
@@ -324,13 +318,16 @@ class FieldSpectrum:
         if not val.exists():
             raise OSError(f"{self.path} does not exist!")
 
+        if self.file_format not in ["h5", "acq"]:
+            raise TypeError(f"{self.path} has bad file format, must be h5 or acq")
+
     @cached_property
     def file_format(self) -> str:
         """The file format of the data to be read."""
         return self.path.suffix[1:]
 
     @cached_property
-    def data(self) -> HDF5RawSpectrum:
+    def data(self) -> HDF5RawSpectrum | list[HDF5RawSpectrum]:
         """A view of the data in the file as a HDF5Object.
 
         If the file is an ACQ file, it will be read completely into memory and cast
@@ -855,7 +852,6 @@ class _S11SubDir(_DataContainer):
 
     @repeat_num.default
     def _repnum_default(self):
-        print("DOING THIS")
         return self._get_max_repeat_num()
 
     @cached_property
@@ -1092,7 +1088,7 @@ class S11Dir(_DataContainer):
         if "switching_state" in self._run_nums:
             return SwitchingState(
                 self.path / f"SwitchingState{self._run_nums['switching_state']:>02}",
-                repeat_num=self._rep_nums.get("switching_state", None),
+                repeat_num=self._repeat_nums.get("switching_state", attr.NOTHING),
             )
         else:
             raise AttributeError("switching_state does not exist")
@@ -1102,7 +1098,7 @@ class S11Dir(_DataContainer):
         if "receiver_reading" in self._run_nums:
             return ReceiverReading(
                 self.path / f"ReceiverReading{self._run_nums['receiver_reading']:>02}",
-                repeat_num=self._rep_nums.get("receiver_reading", None),
+                repeat_num=self._repeat_nums.get("receiver_reading", attr.NOTHING),
             )
         else:
             raise AttributeError("receiver_reading does not exist")
@@ -1124,7 +1120,7 @@ class S11Dir(_DataContainer):
         return {
             name: AntSimS11(
                 self.path / f"{name}{self._run_nums[name]:>02}",
-                repeat_num=self._repeat_nums.get(name, None),
+                repeat_num=self._repeat_nums.get(name, attr.NOTHING),
             )
             for name in self.get_simulator_names(self.path)
         }
@@ -1314,11 +1310,11 @@ class CalibrationObservation(_DataContainer):
         # Note that we need to keep the actual _tmpdir object around otherwise it gets
         # cleaned up!
 
-        definition = self.check_definition(self._path)
+        definition = self.check_definition(self.original_path)
 
         if definition.get("entirely_invalid", False):
             logger.warning(
-                f"Observation {self._path} is marked as invalid -- "
+                f"Observation {self.original_path} is marked as invalid -- "
                 f"proceed with caution! Reason: '{self.definition['entirely_invalid']}'"
             )
 
