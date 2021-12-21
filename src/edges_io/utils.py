@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import datetime
 import numpy as np
 import os
@@ -10,7 +12,28 @@ IGNORABLE = (".old", ".ignore", ".invalid", ".output")
 console = Console()
 
 
-def get_active_files(path: Union[str, Path]) -> List[Path]:
+def _pth_resolve(pth: str | Path):
+    return Path(pth).resolve()
+
+
+def make_symlink_tree(files: dict[str, Path], symdir, obs_name):
+
+    for fl, fl_abs in files.items():
+        sym_path = Path(symdir.name) / obs_name / fl
+
+        # Here we make all the directories, that all have to be symlinks, otherwise
+        # objects whose path is to a directory don't equate.
+        prnts = list(sym_path.parents)
+        for i, ppp in enumerate(prnts[::-1]):
+            if not ppp.exists():
+                sl_to = fl_abs.parents[len(sym_path.parents) - i - 1]
+                ppp.symlink_to(sl_to)
+
+        if not sym_path.exists():
+            sym_path.symlink_to(fl_abs)
+
+
+def get_active_files(path: str | Path) -> list[Path]:
     path = Path(path)
     if not path.is_dir():
         raise ValueError(f"{path} is not a directory!")
@@ -39,7 +62,7 @@ def ymd_to_jd(y, m, d):
     ).days + 1
 
 
-def _ask_to_rm(fl: Path) -> Optional[Path]:
+def _ask_to_rm(fl: Path) -> Path | None:
     reply = "z"
     while reply not in "yniopm":
         reply = (

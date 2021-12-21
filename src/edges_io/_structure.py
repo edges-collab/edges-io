@@ -27,7 +27,7 @@ class _ObsNode(ABC):
     pattern: str = ""
     write_pattern: str = ""
 
-    _path: str | Path = attr.ib(converter=Path)
+    _path: str | Path = attr.ib(converter=utils._pth_resolve)
     check: bool = attr.ib(default=True, kw_only=True, converter=bool)
     fix: bool = attr.ib(default=False, kw_only=True, converter=bool)
     _log_level: int = attr.ib(default=40, converter=int)

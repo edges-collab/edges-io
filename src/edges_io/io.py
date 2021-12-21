@@ -16,6 +16,7 @@ import warnings
 import yaml
 from bidict import bidict
 from cached_property import cached_property
+from copy import copy
 from datetime import datetime
 from io import StringIO
 from pathlib import Path
@@ -688,9 +689,6 @@ class _SpectraOrResistanceFolder(_DataContainer):
             out[name], meta[name] = getattr(self, name).read()
         return out
 
-    def __eq__(self, other):
-        return self.__class__.__name__ == other.__class__.__name__
-
 
 @attr.s
 class Spectra(_SpectraOrResistanceFolder):
@@ -835,12 +833,6 @@ class S1P(_DataFile):
 
         return d, flag
 
-    def __eq__(self, other):
-        return (
-            self.__class__.__name__ == other.__class__.__name__
-            and self.kind == other.kind
-        )
-
 
 @attr.s
 class _S11SubDir(_DataContainer):
@@ -947,12 +939,6 @@ class LoadS11(_S11SubDir):
     def load_name(self) -> str:
         return LOAD_ALIASES.inverse.get(
             self._match_dict["load_name"], self._match_dict["load_name"]
-        )
-
-    def __eq__(self, other):
-        return (
-            self.__class__.__name__ == other.__class__.__name__
-            and self.load_name == other.load_name
         )
 
     @classmethod
@@ -1229,9 +1215,6 @@ class S11Dir(_DataContainer):
             for fl in fls
             if any(fl.name.startswith(k) for k in ANTENNA_SIMULATORS)
         }
-
-    def __eq__(self, other):
-        return self.__class__.__name__ == other.__class__.__name__
 
 
 @attr.s
@@ -1673,7 +1656,7 @@ class CalibrationObservation(_DataContainer):
     @classmethod
     def compile_obs_from_def(
         cls, path: Path, include_previous=True
-    ) -> [tempfile.TemporaryDirectory, str]:
+    ) -> tempfile.TemporaryDirectory | str:
         """Make a tempdir containing pointers to relevant files built from a definition.
 
         Takes a definition file (YAML format) from a particular Observation, and uses
@@ -1799,11 +1782,7 @@ class CalibrationObservation(_DataContainer):
         # Now make a full symlink directory with these files.
         symdir = tempfile.TemporaryDirectory()
 
-        for fl, fl_abs in files.items():
-            sym_path = Path(symdir.name) / obs_name / fl
-            if not sym_path.parent.exists():
-                sym_path.parent.mkdir(parents=True)
-            sym_path.symlink_to(fl_abs)
+        utils.make_symlink_tree(files, symdir, obs_name)
 
         return symdir, obs_name
 
