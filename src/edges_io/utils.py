@@ -13,10 +13,10 @@ IGNORABLE = (".old", ".ignore", ".invalid", ".output")
 console = Console()
 
 
-def make_symlink_tree(files: dict[str, Path], symdir, obs_name):
+def make_symlink_tree(files: dict[str, Path], symdir: Path, obs_name):
 
     for fl, fl_abs in files.items():
-        sym_path = Path(symdir.name) / obs_name / fl
+        sym_path = symdir / obs_name / fl
 
         # Here we make all the directories, that all have to be symlinks, otherwise
         # objects whose path is to a directory don't equate.

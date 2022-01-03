@@ -1314,7 +1314,7 @@ class CalibrationObservation(_DataContainer):
         cls, path: str | Path, include_previous: bool = True, **kwargs
     ) -> CalibrationObservation:
         tmpdir, name = cls.compile_obs_from_def(path, include_previous)
-        new_path = Path(tmpdir.name) / name
+        new_path = tmpdir / name
         return cls(new_path, tmpdir=tmpdir, original_path=path, **kwargs)
 
     @property
@@ -1656,7 +1656,7 @@ class CalibrationObservation(_DataContainer):
     @classmethod
     def compile_obs_from_def(
         cls, path: Path, include_previous=True
-    ) -> tempfile.TemporaryDirectory | str:
+    ) -> tuple[Path, str]:
         """Make a tempdir containing pointers to relevant files built from a definition.
 
         Takes a definition file (YAML format) from a particular Observation, and uses
@@ -1785,10 +1785,13 @@ class CalibrationObservation(_DataContainer):
             with open(path / "definition.yaml") as fl:
                 stuff += fl.read()
         hsh = hash(stuff)
+        dirname = f"calobs_{hsh}"
 
-        symdir = tempfile.TemporaryDirectory(prefix="calobs_" + str(hsh))
+        symdir = Path(tempfile.gettempdir()) / dirname
 
-        utils.make_symlink_tree(files, symdir, obs_name)
+        if not symdir.exists():
+            symdir.mkdir()
+            utils.make_symlink_tree(files, symdir, obs_name)
 
         return symdir, obs_name
 

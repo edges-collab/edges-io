@@ -155,8 +155,10 @@ class _ObsNode(ABC):
 
                     if match is None:
                         logger.warning(
-                            f"New name '{str(new_path.relative_to(root))}' is not correctly formatted either!"
+                            f"New name '{new_path.relative_to(root)}' is not correctly "
+                            "formatted either!"
                         )
+
                     else:
                         logger.success(f"Successfully moved to '{new_path.name}'")
                 else:
@@ -178,12 +180,11 @@ class _ObsNode(ABC):
 
             match = re.search(cls.pattern, new_name)
 
-            if match is not None:
-                logger.success(f"\tSuccessfully converted to {new_name}")
-                shutil.move(root / basename, new_path)
-                return new_path, match
-            else:
+            if match is None:
                 return root / basename, None
+            logger.success(f"\tSuccessfully converted to {new_name}")
+            shutil.move(root / basename, new_path)
+            return new_path, match
 
     @classmethod
     def _validate_match(cls, match: dict[str, str], filename: str):
