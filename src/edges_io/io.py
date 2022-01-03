@@ -1779,8 +1779,14 @@ class CalibrationObservation(_DataContainer):
         _include_extra(include, prefer=False)
         _include_extra(prefer, prefer=True)
 
-        # Now make a full symlink directory with these files.
-        symdir = tempfile.TemporaryDirectory()
+        stuff = f"{path}_{include_previous}"
+        if (path / "definition.yaml").exists():
+            # Now make a full symlink directory with these files.
+            with open(path / "definition.yaml") as fl:
+                stuff += fl.read()
+        hsh = hash(stuff)
+
+        symdir = tempfile.TemporaryDirectory(prefix="calobs_" + str(hsh))
 
         utils.make_symlink_tree(files, symdir, obs_name)
 

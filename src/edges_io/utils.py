@@ -4,16 +4,13 @@ import datetime
 import numpy as np
 import os
 import shutil
+from itertools import islice
 from pathlib import Path
 from rich.console import Console
 from typing import List, Optional, Union
 
 IGNORABLE = (".old", ".ignore", ".invalid", ".output")
 console = Console()
-
-
-def _pth_resolve(pth: str | Path):
-    return Path(pth).resolve()
 
 
 def make_symlink_tree(files: dict[str, Path], symdir, obs_name):
@@ -23,14 +20,10 @@ def make_symlink_tree(files: dict[str, Path], symdir, obs_name):
 
         # Here we make all the directories, that all have to be symlinks, otherwise
         # objects whose path is to a directory don't equate.
-        prnts = list(sym_path.parents)
-        for i, ppp in enumerate(prnts[::-1]):
-            if not ppp.exists():
-                sl_to = fl_abs.parents[len(sym_path.parents) - i - 1]
-                ppp.symlink_to(sl_to)
+        if not sym_path.parent.exists():
+            sym_path.parent.mkdir(parents=True)
 
-        if not sym_path.exists():
-            sym_path.symlink_to(fl_abs)
+        sym_path.symlink_to(fl_abs)
 
 
 def get_active_files(path: str | Path) -> list[Path]:
