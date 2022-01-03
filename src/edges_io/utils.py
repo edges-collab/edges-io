@@ -1,7 +1,10 @@
+from __future__ import annotations
+
 import datetime
 import numpy as np
 import os
 import shutil
+from itertools import islice
 from pathlib import Path
 from rich.console import Console
 from typing import List, Optional, Union
@@ -10,7 +13,20 @@ IGNORABLE = (".old", ".ignore", ".invalid", ".output")
 console = Console()
 
 
-def get_active_files(path: Union[str, Path]) -> List[Path]:
+def make_symlink_tree(files: dict[str, Path], symdir: Path, obs_name):
+
+    for fl, fl_abs in files.items():
+        sym_path = symdir / obs_name / fl
+
+        # Here we make all the directories, that all have to be symlinks, otherwise
+        # objects whose path is to a directory don't equate.
+        if not sym_path.parent.exists():
+            sym_path.parent.mkdir(parents=True)
+
+        sym_path.symlink_to(fl_abs)
+
+
+def get_active_files(path: str | Path) -> list[Path]:
     path = Path(path)
     if not path.is_dir():
         raise ValueError(f"{path} is not a directory!")
@@ -39,7 +55,7 @@ def ymd_to_jd(y, m, d):
     ).days + 1
 
 
-def _ask_to_rm(fl: Path) -> Optional[Path]:
+def _ask_to_rm(fl: Path) -> Path | None:
     reply = "z"
     while reply not in "yniopm":
         reply = (
@@ -133,11 +149,11 @@ def optional(fnc):
 
 
 def isintish(x):
-    return isinstance(x, (int, np.int, np.int64))
+    return isinstance(x, (int, np.int64))
 
 
 def isfloatish(x):
-    return isinstance(x, (float, np.float, np.float64, np.float32))
+    return isinstance(x, (float, np.float32))
 
 
 def isstringish(x):

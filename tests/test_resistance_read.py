@@ -46,19 +46,3 @@ def test_resistance_read_old(datadir: Path):
     assert len(r.resistance.dtype.names) == 11
     assert len(r.ancillary) == 0
     assert not np.any(np.isnan(r.resistance["load_resistance"]))
-
-
-def test_resistance_read_no_store(datadir: Path):
-    fl = (
-        datadir / "Receiver01_25C_2019_11_26_040_to_200MHz/Resistance"
-        "/Ambient_01_2019_329_16_02_35_lab.csv"
-    )
-
-    r = Resistance(fl, store_data=False)
-
-    # Should warn that we're not storing the data.
-    with pytest.warns(UserWarning):
-        r.resistance
-
-    with pytest.warns(UserWarning):
-        r.ancillary

@@ -113,9 +113,7 @@ def test_env(tmp_path_factory):
 
 # function to make observation object
 def new_test_obs(testdir):
-    return io.CalibrationObservation(
-        testdir, include_previous=False, compile_from_def=False
-    )
+    return io.CalibrationObservation(testdir)
 
 
 # directory testing
@@ -237,9 +235,7 @@ def test_list_of_files(datadir: Path):
 def test_io_partial(datadir: Path):
     obs = datadir / "Receiver01_25C_2023_11_26_040_to_200MHz"
 
-    calobs = io.CalibrationObservation(
-        obs, include_previous=False, spectra_kwargs={"filetype": "acq"}
-    )
+    calobs = io.CalibrationObservation(obs, spectra_kwargs={"filetype": "acq"})
     assert not hasattr(calobs.spectra, "ambient")  # simply nothing there
     assert not hasattr(calobs.spectra, "short")  # wrong format
 
@@ -264,3 +260,57 @@ def test_repeat_num_zero(tmpdir: Path, caplog):
 # test to see if flow, fhigh match file
 
 ### resistance testing
+
+
+def test_spectrum_from_load(datadir, caplog):
+    spec1 = io.Spectrum.from_load(
+        load="ambient",
+        direc=datadir / "Receiver01_25C_2019_11_26_040_to_200MHz" / "Spectra",
+    )
+
+    spec2 = io.Spectrum.from_load(
+        load="Ambient",
+        direc=datadir / "Receiver01_25C_2019_11_26_040_to_200MHz" / "Spectra",
+    )
+
+    assert spec1 == spec2
+
+    with pytest.raises(utils.LoadExistError):
+        io.Spectrum.from_load(
+            load="derp",
+            direc=datadir / "Receiver01_25C_2019_11_26_040_to_200MHz" / "Spectra",
+        )
+
+        assert (
+            "The load specified [derp] is not one of the options available."
+            in caplog.messages
+        )
+
+
+def test_run_num_not_exist(datadir):
+    with pytest.raises(ValueError, match="No Ambient files exist"):
+        io.Spectrum.from_load(
+            load="ambient",
+            direc=datadir / "Receiver01_25C_2019_11_26_040_to_200MHz" / "Spectra",
+            run_num=2,
+        )
+
+
+def test_spec_matches(datadir):
+    spec = io.Spectrum.from_load(
+        load="ambient",
+        direc=datadir / "Receiver01_25C_2019_11_26_040_to_200MHz" / "Spectra",
+    )
+
+    assert spec[0].year == 2019
+    assert spec[0].day == 329
+    assert spec[0].load_name == "ambient"
+    assert spec[0].hour == 23
+    assert spec[0].minute == 1
+    assert spec[0].second == 16
+    assert spec[0].file_format == "acq"
+
+
+def test_field_spectrum_read_bad_suffix(datadir):
+    with pytest.raises(TypeError, match="must be h5 or acq"):
+        io.FieldSpectrum(datadir / "observation.yaml")

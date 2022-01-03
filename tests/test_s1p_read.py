@@ -16,7 +16,7 @@ def test_s1p_read(datadir: Path):
 
 def test_s1_read_db(datadir: Path):
     fl = datadir / "s11_db.s1p"
-    s1p = S1P(fl)
+    s1p = S1P(fl, check=False)
 
     assert np.all(np.iscomplex(s1p.s11))
     assert len(s1p.s11) == len(s1p.freq)

@@ -5,6 +5,7 @@ making it easier to separate the algorithms from the data checking/reading.
 """
 from __future__ import annotations
 
+import attr
 import logging
 import numpy as np
 import re
@@ -15,6 +16,7 @@ import warnings
 import yaml
 from bidict import bidict
 from cached_property import cached_property
+from copy import copy
 from datetime import datetime
 from io import StringIO
 from pathlib import Path
@@ -44,6 +46,7 @@ ANTSIM_REVERSE = {
 }
 
 
+@attr.s
 class _SpectrumOrResistance(_DataFile):
     load_pattern = "|".join(LOAD_ALIASES.values())
     antsim_pattern = "|".join(ANTENNA_SIMULATORS.keys())
@@ -192,10 +195,10 @@ class _SpectrumOrResistance(_DataFile):
     def from_load(
         cls,
         load: str,
-        direc: [str, Path],
+        direc: str | Path,
         run_num: int | None = None,
         filetype: str | None = None,
-    ):
+    ) -> list[_SpectrumOrResistance]:
         """
         Initialize the object in a simple way.
 
@@ -282,7 +285,7 @@ class _SpectrumOrResistance(_DataFile):
         return int(self._match_dict["year"])
 
     @cached_property
-    def days(self) -> int:
+    def day(self) -> int:
         return int(self._match_dict["day"])
 
     @cached_property
@@ -292,32 +295,32 @@ class _SpectrumOrResistance(_DataFile):
         )
 
     @cached_property
-    def hours(self):
+    def hour(self):
         """List of integer hours (one per file) at which data acquisition was begun"""
         return int(self._match_dict["hour"])
 
     @cached_property
-    def minutes(self):
+    def minute(self):
         """List of integer minutes (one per file) at which data acquisition was begun"""
         return int(self._match_dict["minute"])
 
     @cached_property
-    def seconds(self):
+    def second(self):
         """List of integer seconds (one per file) at which data acquisition was begun"""
         return int(self._match_dict["second"])
 
-    def __eq__(self, other):
-        return (
-            other.__class__.__name__ == self.__class__.__name__
-            and self.load_name == other.load_name
-        )
 
-
+@attr.s
 class FieldSpectrum:
-    def __init__(self, path: [str, Path]):
-        self.path = Path(path)
-        if not self.path.exists():
+    path: str | Path = attr.ib(converter=Path)
+
+    @path.validator
+    def _pth_vld(self, att, val):
+        if not val.exists():
             raise OSError(f"{self.path} does not exist!")
+
+        if self.file_format not in ["h5", "acq"]:
+            raise TypeError(f"{self.path} has bad file format, must be h5 or acq")
 
     @cached_property
     def file_format(self) -> str:
@@ -325,7 +328,7 @@ class FieldSpectrum:
         return self.path.suffix[1:]
 
     @cached_property
-    def data(self) -> HDF5RawSpectrum:
+    def data(self) -> HDF5RawSpectrum | list[HDF5RawSpectrum]:
         """A view of the data in the file as a HDF5Object.
 
         If the file is an ACQ file, it will be read completely into memory and cast
@@ -360,6 +363,7 @@ class FieldSpectrum:
         return spectra, freq_anc, time_anc, meta
 
 
+@attr.s
 class Spectrum(_SpectrumOrResistance):
     """
     Class representing an observed spectrum.
@@ -401,6 +405,7 @@ class Spectrum(_SpectrumOrResistance):
         return self._raw_spec.data
 
 
+@attr.s
 class Resistance(_SpectrumOrResistance):
     """An object representing a resistance measurement (and its structure)."""
 
@@ -410,10 +415,6 @@ class Resistance(_SpectrumOrResistance):
         r"^(?P<load_name>%s)" % _SpectrumOrResistance._loadname_pattern
         + r".(?P<file_format>\w{2,3})$",
     )
-
-    def __init__(self, *args, store_data=True, **kwargs):
-        super().__init__(*args, **kwargs)
-        self.store_data = store_data
 
     @classmethod
     def from_load(cls, *args, **kwargs):
@@ -434,16 +435,7 @@ class Resistance(_SpectrumOrResistance):
                 return cls.read_new_style_csv(path)
 
     def read(self):
-        try:
-            return self._data, self._meta
-        except AttributeError:
-            data, meta = self.read_csv(self.path)
-
-            if self.store_data:
-                self._data = data
-                self._meta = meta
-
-            return data, meta
+        return self.read_csv(self.path)
 
     @classmethod
     def read_new_style_csv(cls, path: [str, Path]) -> tuple[np.ndarray, dict]:
@@ -551,33 +543,19 @@ class Resistance(_SpectrumOrResistance):
             )
         return data, {}
 
+    @cached_property
+    def _res_and_anc(self):
+        return self.read()
+
     @property
     def resistance(self):
-        """The resistance measurement in the file.
-
-        Note that this is only cached in memory if `store_data` is True, otherwise
-        the data is re-read from disk each time `resistance` is accessed.
-        """
-        if not self.store_data:
-            warnings.warn(
-                "'resistance' is not being cached -- using it reads the resistance file each time it is accessed!"
-            )
-
-        return self.read()[0]
+        """The resistance measurement in the file."""
+        return self._res_and_anc[0]
 
     @property
     def ancillary(self):
-        """The full raw data from the CSV file.
-
-        Note that this is only cached in memory if `store_data` is True, otherwise
-        the data is re-read from disk each time `resistance` is accessed.
-        """
-        if not self.store_data:
-            warnings.warn(
-                "'ancillary' is not being cached -- using it reads the resistance file each time it is accessed!"
-            )
-
-        return self.read()[1]
+        """The full raw data from the CSV file."""
+        return self._res_and_anc[1]
 
     @classmethod
     def _get_filename_params_from_contents(cls, path: Path) -> dict:
@@ -599,52 +577,56 @@ class Resistance(_SpectrumOrResistance):
         }
 
 
+@attr.s
 class _SpectraOrResistanceFolder(_DataContainer):
-    def __init__(
-        self,
-        path: [str, Path],
-        *,
-        run_num: int | dict[str, int] | None = None,
-        filetype: str | None = None,
-        **kwargs,
-    ):
-        """Collection of spectra in an observation"""
-        super().__init__(path, **kwargs)
+    _run_num: int | dict[str, int] | None = attr.ib(default=None, kw_only=True)
+    filetype: str | None = attr.ib(default=None, kw_only=True)
 
-        if type(run_num) is int or run_num is None:
-            run_nums = {load: run_num for load in LOAD_ALIASES.values()}
+    @cached_property
+    def _run_nums(self) -> dict[str, int | None]:
+        if type(self._run_num) is int or self._run_num is None:
+            return {load: self._run_num for load in LOAD_ALIASES.values()}
         else:
-            run_nums = run_num
+            return self._run_num
 
+    @cached_property
+    def _loads(self) -> dict[str, Spectrum | Resistance]:
+        loads = {}
         for name, load in LOAD_ALIASES.items():
             try:
-                setattr(
-                    self,
-                    name,
-                    self._content_type.from_load(
-                        load, self.path, run_nums.get(load, None), filetype
-                    ),
+                loads[name] = self._content_type.from_load(
+                    load, self.path, self._run_nums.get(load, None), self.filetype
                 )
             except utils.LoadExistError:
                 pass
 
-        # Populate simulators.
-        self.simulators = {}
+        return loads
+
+    def __getattr__(self, item):
+        if item in self._loads:
+            return self._loads[item]
+
+        raise AttributeError(f"{item} does not exist!")
+
+    @cached_property
+    def simulators(self) -> dict[str, Spectrum | Resistance]:
+        sims = {}
         for name in self.get_simulator_names(self.path):
-            self.simulators[name] = self._content_type.from_load(
-                name, self.path, run_nums.get(name, None), filetype
+            sims[name] = self._content_type.from_load(
+                name, self.path, self._run_nums.get(name, None), self.filetype
             )
+        return sims
 
     @property
-    def load_names(self):
+    def load_names(self) -> tuple[str]:
         return tuple(LOAD_ALIASES.keys())
 
     @property
-    def available_load_names(self):
+    def available_load_names(self) -> tuple[str]:
         return tuple(name for name in self.load_names if hasattr(self, name))
 
     @property
-    def run_num(self):
+    def run_num(self) -> dict[str, int]:
         """Dictionary of run numbers for each load"""
         try:
             return {k: getattr(self, k)[0].run_num for k in self.available_load_names}
@@ -664,13 +646,13 @@ class _SpectraOrResistanceFolder(_DataContainer):
         return ok
 
     @classmethod
-    def get_all_load_names(cls, path):
+    def get_all_load_names(cls, path) -> set[str]:
         """Get all load names found in the Spectra directory"""
         fls = utils.get_active_files(path)
         return {fl.name.split("_")[0] for fl in fls}
 
     @classmethod
-    def get_simulator_names(cls, path):
+    def get_simulator_names(cls, path) -> set[str]:
         load_names = cls.get_all_load_names(path)
         return {name for name in load_names if name in ANTENNA_SIMULATORS}
 
@@ -707,10 +689,8 @@ class _SpectraOrResistanceFolder(_DataContainer):
             out[name], meta[name] = getattr(self, name).read()
         return out
 
-    def __eq__(self, other):
-        return self.__class__.__name__ == other.__class__.__name__
 
-
+@attr.s
 class Spectra(_SpectraOrResistanceFolder):
     pattern = "Spectra"
     known_patterns = ("spectra",)
@@ -718,6 +698,7 @@ class Spectra(_SpectraOrResistanceFolder):
     write_pattern = "Spectra"
 
 
+@attr.s
 class Resistances(_SpectraOrResistanceFolder):
     pattern = "Resistance"
     known_patterns = ("resistance",)
@@ -725,6 +706,7 @@ class Resistances(_SpectraOrResistanceFolder):
     write_pattern = "Resistance"
 
 
+@attr.s
 class S1P(_DataFile):
     POSSIBLE_KINDS = [
         "Match",
@@ -851,27 +833,26 @@ class S1P(_DataFile):
 
         return d, flag
 
-    def __eq__(self, other):
-        return (
-            self.__class__.__name__ == other.__class__.__name__
-            and self.kind == other.kind
-        )
 
-
+@attr.s
 class _S11SubDir(_DataContainer):
     STANDARD_NAMES = S1P.POSSIBLE_KINDS
     _content_type = S1P
     write_pattern = "{load_name}{run_num:0>2}"
 
+    repeat_num: int = attr.ib(kw_only=True, converter=int)
+
+    @repeat_num.default
+    def _repnum_default(self):
+        return self._get_max_repeat_num()
+
+    @cached_property
+    def run_num(self) -> int:
+        return int(self._match_dict["run_num"])
+
     @classmethod
     def typestr(cls, name: str) -> str:
         return cls.__name__ + re.match(cls.pattern, name).groupdict()["load_name"]
-
-    def __init__(self, path, *, repeat_num=None, **kwargs):
-        super().__init__(path, **kwargs)
-
-        self.repeat_num = repeat_num or self._get_max_repeat_num()
-        self.run_num = int(self._match_dict["run_num"])
 
     @cached_property
     def children(self) -> dict[str, S1P]:
@@ -937,6 +918,7 @@ class _S11SubDir(_DataContainer):
         return out
 
 
+@attr.s
 class LoadS11(_S11SubDir):
     STANDARD_NAMES = ["Open", "Short", "Match", "External"]
     pattern = r"(?P<load_name>%s)(?P<run_num>\d{2})$" % (
@@ -953,16 +935,10 @@ class LoadS11(_S11SubDir):
         ("LongCableShort_", "LongCableShorted_"),
     )
 
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self.load_name = LOAD_ALIASES.inverse.get(
+    @cached_property
+    def load_name(self) -> str:
+        return LOAD_ALIASES.inverse.get(
             self._match_dict["load_name"], self._match_dict["load_name"]
-        )
-
-    def __eq__(self, other):
-        return (
-            self.__class__.__name__ == other.__class__.__name__
-            and self.load_name == other.load_name
         )
 
     @classmethod
@@ -973,6 +949,7 @@ class LoadS11(_S11SubDir):
         return out
 
 
+@attr.s
 class AntSimS11(LoadS11):
     pattern = r"(?P<load_name>%s)(?P<run_num>\d{2})$" % (
         "|".join(ANTENNA_SIMULATORS.keys())
@@ -991,6 +968,7 @@ class AntSimS11(LoadS11):
         return out
 
 
+@attr.s
 class SwitchingState(_S11SubDir):
     pattern = r"(?P<load_name>SwitchingState)(?P<run_num>\d{2})$"
     known_patterns = ("(?P<load_name>SwitchingState)",)
@@ -1006,6 +984,7 @@ class SwitchingState(_S11SubDir):
     known_substitutions = (("InternalSwitch", "SwitchingState"),)
 
 
+@attr.s
 class ReceiverReading(_S11SubDir):
     pattern = r"(?P<load_name>ReceiverReading)(?P<run_num>\d{2})$"
     STANDARD_NAMES = ["Open", "Short", "Match", "ReceiverReading"]
@@ -1013,7 +992,26 @@ class ReceiverReading(_S11SubDir):
     known_patterns = ("(?P<load_name>ReceiverReading)",)
 
 
+@attr.s
 class S11Dir(_DataContainer):
+    """Class representing the entire S11 subdirectory of an observation
+
+    Parameters
+    ----------
+    path : str or Path
+        Top-level directory of the S11 measurements.
+    repeat_num : int or dict, optional
+        If int, the repeat num of all the standards to use (typically one or two).
+        Otherwise, specified as a dict per-load. By default, use the highest repeat
+        number available.
+    run_num : int or dict, optional
+        If int, the run num to use for all loads. If dict, specify which run num
+        to use for each load. By default, use the highest run for each available
+        load. **Note:** if using this for calibration, the run number must match
+        the run number of the spectra and resistance.
+
+    """
+
     _content_type = {
         **{load: LoadS11 for load in LOAD_ALIASES.values()},
         **{load: LoadS11 for load in LOAD_MAPPINGS.keys()},
@@ -1029,34 +1027,11 @@ class S11Dir(_DataContainer):
     known_patterns = ("s11",)
     write_pattern = "S11"
 
-    def __init__(
-        self,
-        path: str | Path,
-        *,
-        repeat_num: int | dict | None = None,
-        run_num: int | dict | None = None,
-        **kwargs,
-    ):
-        """Class representing the entire S11 subdirectory of an observation
+    _repeat_num: int | dict = attr.ib(default=attr.Factory(dict))
+    _run_num: int | dict | None = attr.ib(default=attr.Factory(dict))
 
-        Parameters
-        ----------
-        path : str or Path
-            Top-level directory of the S11 measurements.
-        repeat_num : int or dict, optional
-            If int, the repeat num of all the standards to use (typically one or two).
-            Otherwise, specified as a dict per-load. By default, use the highest repeat
-            number available.
-        run_num : int or dict, optional
-            If int, the run num to use for all loads. If dict, specify which run num
-            to use for each load. By default, use the highest run for each available
-            load. **Note:** if using this for calibration, the run number must match
-            the run number of the spectra and resistance.
-
-        """
-        super().__init__(path, **kwargs)
-
-        run_num = run_num or {}
+    @cached_property
+    def _run_nums(self) -> dict[str, int]:
         run_nums = {}
         for name in (
             ["switching_state", "receiver_reading"]
@@ -1064,10 +1039,10 @@ class S11Dir(_DataContainer):
             + list(self.get_simulator_names(self.path))
         ):
             try:
-                if isinstance(run_num, int):
-                    run_nums[name] = run_num
-                elif isinstance(run_num, dict):
-                    run_nums[name] = run_num.get(
+                if isinstance(self._run_num, int):
+                    run_nums[name] = self._run_num
+                elif isinstance(self._run_num, dict):
+                    run_nums[name] = self._run_num.get(
                         name,
                         self._get_highest_run_num(
                             self.path, utils.snake_to_camel(name)
@@ -1079,43 +1054,68 @@ class S11Dir(_DataContainer):
                 # that's fine, it's probably switching_state or receiver_Reading
                 pass
 
-        if repeat_num is None or isinstance(repeat_num, int):
-            rep_nums = {
-                **{"switching_state": repeat_num, "receiver_reading": repeat_num},
-                **{name: repeat_num for name in LOAD_ALIASES.values()},
+        return run_nums
+
+    @cached_property
+    def _repeat_nums(self) -> dict[str, int]:
+        if self._repeat_num is None or isinstance(self._repeat_num, int):
+            return {
+                **{
+                    "switching_state": self._repeat_num,
+                    "receiver_reading": self._repeat_num,
+                },
+                **{name: self._repeat_num for name in LOAD_ALIASES.values()},
             }
         else:
-            rep_nums = dict(repeat_num)
+            return dict(self._repeat_num)
 
-        if "switching_state" in run_nums:
-            self.switching_state = SwitchingState(
-                self.path / f"SwitchingState{run_nums['switching_state']:>02}",
-                repeat_num=rep_nums.get("switching_state", None),
+    @cached_property
+    def switching_state(self):
+        if "switching_state" in self._run_nums:
+            return SwitchingState(
+                self.path / f"SwitchingState{self._run_nums['switching_state']:>02}",
+                repeat_num=self._repeat_nums.get("switching_state", attr.NOTHING),
             )
+        else:
+            raise AttributeError("switching_state does not exist")
 
-        if "receiver_reading" in run_nums:
-            self.receiver_reading = ReceiverReading(
-                self.path / f"ReceiverReading{run_nums['receiver_reading']:>02}",
-                repeat_num=rep_nums.get("receiver_reading", None),
+    @cached_property
+    def receiver_reading(self):
+        if "receiver_reading" in self._run_nums:
+            return ReceiverReading(
+                self.path / f"ReceiverReading{self._run_nums['receiver_reading']:>02}",
+                repeat_num=self._repeat_nums.get("receiver_reading", attr.NOTHING),
             )
+        else:
+            raise AttributeError("receiver_reading does not exist")
 
-        for name in self.available_load_names:
-            load = LOAD_ALIASES[name]
-            setattr(
-                self,
-                name,
-                LoadS11(
-                    self.path / f"{load}{run_nums[name]:>02}",
-                    repeat_num=rep_nums.get(load, rep_nums.get(name, None)),
+    @cached_property
+    def _loads(self) -> dict[str, LoadS11]:
+        return {
+            name: LoadS11(
+                self.path / f"{LOAD_ALIASES[name]}{self._run_nums[name]:>02}",
+                repeat_num=self._repeat_nums.get(
+                    LOAD_ALIASES[name], self._repeat_nums.get(name, attr.NOTHING)
                 ),
             )
+            for name in self.available_load_names
+        }
 
-        self.simulators = {}
-        for name in self.get_simulator_names(path):
-            self.simulators[name] = AntSimS11(
-                self.path / f"{name}{run_nums[name]:>02}",
-                repeat_num=rep_nums.get(name, None),
+    @cached_property
+    def simulators(self) -> dict[str, AntSimS11]:
+        return {
+            name: AntSimS11(
+                self.path / f"{name}{self._run_nums[name]:>02}",
+                repeat_num=self._repeat_nums.get(name, attr.NOTHING),
             )
+            for name in self.get_simulator_names(self.path)
+        }
+
+    def __getattr__(self, item):
+        if item in self._loads:
+            return self._loads[item]
+
+        raise AttributeError(f"{item} does not exist!")
 
     @property
     def available_load_names(self):
@@ -1131,11 +1131,11 @@ class S11Dir(_DataContainer):
         }
 
     @property
-    def load_names(self):
+    def load_names(self) -> tuple[str]:
         return tuple(LOAD_ALIASES.keys())
 
     @property
-    def repeat_num(self):
+    def repeat_num(self) -> dict[str, int]:
         """Dictionary specifying run numbers for each load."""
         out = {k: getattr(self, k).repeat_num for k in list(self.available_load_names)}
 
@@ -1153,7 +1153,7 @@ class S11Dir(_DataContainer):
         return out
 
     @property
-    def run_num(self):
+    def run_num(self) -> dict[str, int]:
         out = {k: getattr(self, k).run_num for k in list(self.available_load_names)}
         try:
             out["switching_state"] = self.switching_state.run_num
@@ -1169,7 +1169,7 @@ class S11Dir(_DataContainer):
         return out
 
     @classmethod
-    def _get_highest_run_num(cls, path, kind):
+    def _get_highest_run_num(cls, path, kind) -> int:
         fls = utils.get_active_files(path)
         fls = [fl for fl in fls if kind in str(fl)]
         if not fls:
@@ -1178,7 +1178,7 @@ class S11Dir(_DataContainer):
         run_nums = [int(str(fl)[-2:]) for fl in fls]
         return max(run_nums)
 
-    def get_highest_run_num(self, kind: str):
+    def get_highest_run_num(self, kind: str) -> int:
         """Get the highest repeat number for this kind."""
         return self._get_highest_run_num(self.path, kind)
 
@@ -1208,7 +1208,7 @@ class S11Dir(_DataContainer):
         return True
 
     @classmethod
-    def get_simulator_names(cls, path):
+    def get_simulator_names(cls, path) -> set[str]:
         fls = utils.get_active_files(path)
         return {
             fl.name[:-2]
@@ -1216,11 +1216,38 @@ class S11Dir(_DataContainer):
             if any(fl.name.startswith(k) for k in ANTENNA_SIMULATORS)
         }
 
-    def __eq__(self, other):
-        return self.__class__.__name__ == other.__class__.__name__
 
-
+@attr.s
 class CalibrationObservation(_DataContainer):
+    """
+    A full set of data required to calibrate field observations.
+
+    Incorporates several lower-level objects, such as :class:`Spectrum`,
+    :class:`Resistance` and :class:`S1P` in a seamless way.
+
+    Parameters
+    ----------
+    path : str or Path
+        The path (absolute or relative to current directory) to the top level
+        directory of the observation. This should look something like
+        ``Receiver01_2020_01_01_040_to_200MHz/``.
+    run_num : int or dict, optional
+        If an integer, the run number to use for all loads. If None, by default
+        uses the last run for each load. If a dict, it should specify the
+        run number for each load.
+    repeat_num : int or dict, optional
+        If an integer, the repeat number to use for all S11 standards measurements,
+        for all loads. If None, by default uses the last repeat (typically 02) for
+        each load. If a dict, it should specify the repeat number for each load.
+    include_previous : bool, optional
+        Whether to by default include the previous observation in the same directory
+        to supplement the current one if parts are missing.
+    compile_from_def : bool, optional
+        Whether to attempt compiling a virtual observation from a ``definition.yaml``
+        inside the observation directory. This is the default behaviour, but can
+        be turned off to enforce that the current directory should be used directly.
+    """
+
     pattern = re.compile(
         r"^Receiver(?P<rcv_num>\d{2})_(?P<temp>\d{2})C_(?P<year>\d{4})_(?P<month>\d{2})_("
         r"?P<day>\d{2})_(?P<freq_low>\d{3})_to_(?P<freq_hi>\d{3})MHz$"
@@ -1251,111 +1278,101 @@ class CalibrationObservation(_DataContainer):
         "s11": S11Dir,
     }
 
-    def __init__(
-        self,
-        path: str | Path,
-        run_num: int | dict | None = None,
-        repeat_num: int | dict | None = None,
-        include_previous: bool = True,
-        compile_from_def: bool = True,
-        spectra_kwargs: dict | None = None,
-        s11_kwargs: dict | None = None,
-        resistance_kwargs: dict | None = None,
-        **kwargs,
-    ):
-        """
-        A full set of data required to calibrate field observations.
+    _run_num: int | dict = attr.ib(default=attr.Factory(dict))
+    _repeat_num: int | dict = attr.ib(default=attr.Factory(dict))
+    spectra_kwargs: dict = attr.ib(default=attr.Factory(dict))
+    s11_kwargs: dict = attr.ib(default=attr.Factory(dict))
+    resistance_kwargs: dict = attr.ib(default=attr.Factory(dict))
+    original_path: Path = attr.ib(converter=Path)
+    _tmpdir: Path | None = attr.ib(default=None)
 
-        Incorporates several lower-level objects, such as :class:`Spectrum`,
-        :class:`Resistance` and :class:`S1P` in a seamless way.
-
-        Parameters
-        ----------
-        path : str or Path
-            The path (absolute or relative to current directory) to the top level
-            directory of the observation. This should look something like
-            ``Receiver01_2020_01_01_040_to_200MHz/``.
-        ambient_temp : int, {15, 25, 35}
-            The ambient temperature of the lab measurements.
-        run_num : int or dict, optional
-            If an integer, the run number to use for all loads. If None, by default
-            uses the last run for each load. If a dict, it should specify the
-            run number for each load.
-        repeat_num : int or dict, optional
-            If an integer, the repeat number to use for all S11 standards measurements,
-            for all loads. If None, by default uses the last repeat (typically 02) for
-            each load. If a dict, it should specify the repeat number for each load.
-        fix : bool, optional
-            Whether to attempt fixing filenames and the file structure in the observation
-            for simple known error cases. Typically it is better to explicitly call
-            :meth:`check_self` and :meth:`check_contents` if you want to perform
-            fixes.
-        include_previous : bool, optional
-            Whether to by default include the previous observation in the same directory
-            to supplement the current one if parts are missing.
-        compile_from_def : bool, optional
-            Whether to attempt compiling a virtual observation from a ``definition.yaml``
-            inside the observation directory. This is the default behaviour, but can
-            be turned off to enforce that the current directory should be used directly.
-        log_level : int, optional
-            The file-structure checks can print out a lot of information, which is useful
-            when explicitly performing such checks, but typically not desired when one
-            simply wants to instantiate the object. Default is to only print errors. Set
-            it lower to also print other information.
-        """
+    @cached_property
+    def definition(self) -> dict:
         # Read the definition file, and combine other observations into a single
         # temporary directory if they exist (otherwise, just symlink this full directory)
         # Note that we need to keep the actual _tmpdir object around otherwise it gets
         # cleaned up!
-        self.definition = self.check_definition(Path(path))
 
-        if self.definition.get("entirely_invalid", False):
+        definition = self.check_definition(self.original_path)
+
+        if definition.get("entirely_invalid", False):
             logger.warning(
-                f"Observation {path} is marked as invalid -- "
+                f"Observation {self.original_path} is marked as invalid -- "
                 f"proceed with caution! Reason: '{self.definition['entirely_invalid']}'"
             )
 
+        return definition
+
+    @original_path.default
+    def _original_path_default(self):
         # the original input path, so we have access to it later. Otherwise
         # we might just have a temporary directory.
-        self.original_path = Path(path)
+        return self._path
 
-        if compile_from_def:
-            self._tmpdir, name = self.compile_obs_from_def(path, include_previous)
-            path = Path(self._tmpdir.name) / name
+    @classmethod
+    def from_def(
+        cls, path: str | Path, include_previous: bool = True, **kwargs
+    ) -> CalibrationObservation:
+        tmpdir, name = cls.compile_obs_from_def(path, include_previous)
+        new_path = tmpdir / name
+        return cls(new_path, tmpdir=tmpdir, original_path=path, **kwargs)
 
-        super().__init__(path, **kwargs)
+    @property
+    def receiver_num(self) -> int:
+        return int(self._match_dict["rcv_num"])
 
-        self._groups = self._match_dict
-        self.receiver_num = int(self._groups["rcv_num"])
-        self.ambient_temp = int(self._groups["temp"])
-        self.year = int(self._groups["year"])
-        self.month = int(self._groups["month"])
-        self.day = int(self._groups["day"])
-        self.freq_low = int(self._groups["freq_low"])
-        self.freq_high = int(self._groups["freq_hi"])
+    @property
+    def ambient_temp(self) -> int:
+        return int(self._match_dict["temp"])
 
-        spectra_kwargs = spectra_kwargs or {}
-        resistance_kwargs = resistance_kwargs or {}
-        s11_kwargs = s11_kwargs or {}
+    @property
+    def year(self) -> int:
+        return int(self._match_dict["year"])
 
-        self.spectra = Spectra(
+    @property
+    def month(self) -> int:
+        return int(self._match_dict["month"])
+
+    @property
+    def day(self) -> int:
+        return int(self._match_dict["day"])
+
+    @property
+    def freq_low(self) -> int:
+        return int(self._match_dict["freq_low"])
+
+    @property
+    def freq_high(self) -> int:
+        return int(self._match_dict["freq_hi"])
+
+    @cached_property
+    def spectra(self) -> Spectra:
+        return Spectra(
             self.path / "Spectra",
-            run_num=run_num,
-            **spectra_kwargs,
-        )
-        self.resistance = Resistances(
-            self.path / "Resistance",
-            run_num=run_num,
-            **resistance_kwargs,
-        )
-        self.s11 = S11Dir(
-            self.path / "S11",
-            run_num=run_num,
-            repeat_num=repeat_num,
-            **s11_kwargs,
+            run_num=self._run_num,
+            **self.spectra_kwargs,
         )
 
-        self.simulator_names = self.get_simulator_names(self.path)
+    @cached_property
+    def resistance(self) -> Resistances:
+        return Resistances(
+            self.path / "Resistance",
+            run_num=self._run_num,
+            **self.resistance_kwargs,
+        )
+
+    @cached_property
+    def s11(self) -> S11Dir:
+        return S11Dir(
+            self.path / "S11",
+            run_num=self._run_num,
+            repeat_num=self._repeat_num,
+            **self.s11_kwargs,
+        )
+
+    @cached_property
+    def simulator_names(self):
+        return self.get_simulator_names(self.path)
 
     @classmethod
     def from_observation_yaml(cls, obs_yaml: [str, Path]):
@@ -1415,16 +1432,12 @@ class CalibrationObservation(_DataContainer):
 
             s11_run_nums[key] = run_num
 
-        # To keep the temporary directory from being cleaned up, store it on the class.
-        cls._tmpdir = tmpdir
-
         return cls(
             sympath,
             run_num={"S11": s11_run_nums},
             repeat_num=rep_nums,
             fix=False,
-            include_previous=False,
-            compile_from_def=False,
+            tmpdir=tmpdir,
         )
 
     @classmethod
@@ -1643,7 +1656,7 @@ class CalibrationObservation(_DataContainer):
     @classmethod
     def compile_obs_from_def(
         cls, path: Path, include_previous=True
-    ) -> [tempfile.TemporaryDirectory, str]:
+    ) -> tuple[Path, str]:
         """Make a tempdir containing pointers to relevant files built from a definition.
 
         Takes a definition file (YAML format) from a particular Observation, and uses
@@ -1766,14 +1779,19 @@ class CalibrationObservation(_DataContainer):
         _include_extra(include, prefer=False)
         _include_extra(prefer, prefer=True)
 
-        # Now make a full symlink directory with these files.
-        symdir = tempfile.TemporaryDirectory()
+        stuff = f"{path}_{include_previous}"
+        if (path / "definition.yaml").exists():
+            # Now make a full symlink directory with these files.
+            with open(path / "definition.yaml") as fl:
+                stuff += fl.read()
+        hsh = hash(stuff)
+        dirname = f"calobs_{hsh}"
 
-        for fl, fl_abs in files.items():
-            sym_path = Path(symdir.name) / obs_name / fl
-            if not sym_path.parent.exists():
-                sym_path.parent.mkdir(parents=True)
-            sym_path.symlink_to(fl_abs)
+        symdir = Path(tempfile.gettempdir()) / dirname
+
+        if not symdir.exists():
+            symdir.mkdir()
+            utils.make_symlink_tree(files, symdir, obs_name)
 
         return symdir, obs_name
 
@@ -1849,7 +1867,7 @@ class CalibrationObservation(_DataContainer):
         return parts
 
     @property
-    def run_num(self):
+    def run_num(self) -> dict[str, int]:
         """Dictionary specifying run numbers for each component"""
         return self.s11.run_num
 

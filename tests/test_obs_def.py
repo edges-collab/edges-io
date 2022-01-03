@@ -13,9 +13,11 @@ def test_trivial(datadir: Path):
 
 def test_include(datadir: Path):
     """Test reading in an observation which includes most of another one."""
-    calobs = CalibrationObservation(datadir / "Receiver01_25C_2020_11_26_040_to_200MHz")
+    calobs = CalibrationObservation.from_def(
+        datadir / "Receiver01_25C_2020_11_26_040_to_200MHz"
+    )
 
-    assert "Receiver01_25C_2020_11_26_040_to_200MHz" in os.listdir(calobs._tmpdir.name)
+    assert "Receiver01_25C_2020_11_26_040_to_200MHz" in os.listdir(calobs._tmpdir)
 
     assert "Receiver01_25C_2020_11_26_040_to_200MHz" in str(
         (calobs.path / "Resistance/AntSim4_01_2019_338_16_55_22_lab.csv").resolve()
@@ -36,11 +38,11 @@ def test_include(datadir: Path):
 
 def test_prefer(datadir: Path):
     """Test reading in an observation which _prefers_ another one."""
-    calobs = CalibrationObservation(
+    calobs = CalibrationObservation.from_def(
         datadir / "Receiver01_25C_2021_11_26_040_to_200MHz", include_previous=False
     )
 
-    assert "Receiver01_25C_2021_11_26_040_to_200MHz" in os.listdir(calobs._tmpdir.name)
+    assert "Receiver01_25C_2021_11_26_040_to_200MHz" in os.listdir(calobs._tmpdir)
 
     assert "Receiver01_25C_2020_11_26_040_to_200MHz" in str(
         (calobs.path / "Resistance/AntSim4_01_2019_338_16_55_22_lab.csv").resolve()
@@ -60,9 +62,11 @@ def test_prefer(datadir: Path):
 
 
 def test_default_include(datadir: Path):
-    calobs = CalibrationObservation(datadir / "Receiver01_25C_2019_12_26_040_to_200MHz")
+    calobs = CalibrationObservation.from_def(
+        datadir / "Receiver01_25C_2019_12_26_040_to_200MHz"
+    )
 
-    assert "Receiver01_25C_2019_12_26_040_to_200MHz" in os.listdir(calobs._tmpdir.name)
+    assert "Receiver01_25C_2019_12_26_040_to_200MHz" in os.listdir(calobs._tmpdir)
 
     assert "Receiver01_25C_2019_12_26_040_to_200MHz" in str(
         (calobs.path / "Resistance/AntSim4_01_2019_338_16_55_22_lab.csv").resolve()

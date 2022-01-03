@@ -1,10 +1,12 @@
 from __future__ import annotations
 
+import attr
 import os
 import re
 import shutil
 import subprocess
 from abc import ABC, abstractmethod
+from cached_property import cached_property
 from copy import copy
 from pathlib import Path
 from typing import Dict, Iterable, Optional, Tuple, Union
@@ -13,36 +15,45 @@ from . import utils
 from .logging import logger
 
 
+@attr.s(frozen=True)
 class _ObsNode(ABC):
     """Abstract base class representing a node in a calibration observation.
 
     A node could be a file or a directory.
     """
 
-    known_substitutions = ()
-    known_patterns = ()
-    pattern = ""
-    write_pattern = ""
+    known_substitutions: tuple[str] = ()
+    known_patterns: tuple[str] = ()
+    pattern: str = ""
+    write_pattern: str = ""
 
-    def __init__(
-        self,
-        path: [str, Path],
-        *,
-        check: bool = True,
-        fix: bool = False,
-        log_level: int = 40,
-    ):
+    _path: str | Path = attr.ib(converter=Path)
+    check: bool = attr.ib(default=True, kw_only=True, converter=bool)
+    fix: bool = attr.ib(default=False, kw_only=True, converter=bool)
+    _log_level: int = attr.ib(default=40, converter=int)
 
-        if check:
+    def __attrs_post_init__(self):
+        # Here we just access this to ensure the checks run on instantiation.
+        self._path_and_match_dict
+
+    @cached_property
+    def _path_and_match_dict(self) -> tuple[Path, dict | None]:
+        if self.check:
             pre_level = logger.getEffectiveLevel()
-            logger.setLevel(log_level)
-
-            self.path, self._match_dict = self._run_checks(path, fix)
-
+            logger.setLevel(self._log_level)
+            path, match_dict = self._run_checks(self._path, self.fix)
             logger.setLevel(pre_level)
+            return path, match_dict
         else:
-            self.path = Path(path)
-            self._match_dict = None
+            return self._path, None
+
+    @property
+    def path(self) -> Path:
+        return self._path_and_match_dict[0]
+
+    @property
+    def _match_dict(self) -> dict | None:
+        return self._path_and_match_dict[1]
 
     @classmethod
     def _run_checks(cls, path, fix):
@@ -144,8 +155,10 @@ class _ObsNode(ABC):
 
                     if match is None:
                         logger.warning(
-                            f"New name '{str(new_path.relative_to(root))}' is not correctly formatted either!"
+                            f"New name '{new_path.relative_to(root)}' is not correctly "
+                            "formatted either!"
                         )
+
                     else:
                         logger.success(f"Successfully moved to '{new_path.name}'")
                 else:
@@ -167,18 +180,18 @@ class _ObsNode(ABC):
 
             match = re.search(cls.pattern, new_name)
 
-            if match is not None:
-                logger.success(f"\tSuccessfully converted to {new_name}")
-                shutil.move(root / basename, new_path)
-                return new_path, match
-            else:
+            if match is None:
                 return root / basename, None
+            logger.success(f"\tSuccessfully converted to {new_name}")
+            shutil.move(root / basename, new_path)
+            return new_path, match
 
     @classmethod
     def _validate_match(cls, match: dict[str, str], filename: str):
         pass
 
 
+@attr.s
 class _DataFile(_ObsNode):
     """
     Abstract Object representing a file in a calibration observation.
@@ -197,6 +210,7 @@ class _DataFile(_ObsNode):
         return super()._check_self(path, **kwargs)
 
 
+@attr.s
 class _DataContainer(_ObsNode):
     _content_type = None
 
