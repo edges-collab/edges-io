@@ -778,7 +778,19 @@ class S1P(_DataFile):
         return out
 
     @classmethod
-    def read(cls, path_filename):
+    def read(
+        cls, path_filename: str | Path, all_cols: bool = True
+    ) -> tuple[np.ndarray, np.ndarray]:
+        """Read the .s1p or .s2p formatted files.
+
+        Parameters
+        ----------
+        path_filename
+            The path to the file.
+        all_cols
+            If the file is .s2p, it may have more than just S11, also S12, S21, S22.
+            If so, setting ``all_cols=True`` returns all the S-parameters.
+        """
         d, flag = cls._get_kind(path_filename)
         f = d[:, 0]
 
@@ -791,9 +803,19 @@ class S1P(_DataFile):
                 np.cos((np.pi / 180) * d[:, 2]) + 1j * np.sin((np.pi / 180) * d[:, 2])
             )
         elif flag == "RI":
-            r = d[:, 1] + 1j * d[:, 2]
+            if all_cols and d.shape[1] > 3:
+                r = np.array(
+                    [
+                        d[:, 1] + 1j * d[:, 2],
+                        d[:, 3] + 1j * d[:, 4],
+                        d[:, 5] + 1j * d[:, 6],
+                        d[:, 7] + 1j * d[:, 8],
+                    ]
+                ).T
+            else:
+                r = d[:, 1] + 1j * d[:, 2]
         else:
-            raise Exception("file had no flags set!")
+            raise ValueError("file had no flags set!")
 
         return r, f / 1e6
 

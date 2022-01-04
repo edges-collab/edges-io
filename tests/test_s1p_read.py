@@ -20,3 +20,9 @@ def test_s1_read_db(datadir: Path):
 
     assert np.all(np.iscomplex(s1p.s11))
     assert len(s1p.s11) == len(s1p.freq)
+
+
+def test_s2p_read(datadir: Path):
+    fl = datadir / "example.s2p"
+    s2p, f = S1P.read(fl)
+    assert s2p.shape == (len(f), 4)
