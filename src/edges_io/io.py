@@ -1806,7 +1806,7 @@ class CalibrationObservation(_DataContainer):
             # Now make a full symlink directory with these files.
             with open(path / "definition.yaml") as fl:
                 stuff += fl.read()
-        hsh = hash(stuff)
+        hsh = utils.stable_hash(stuff)
         dirname = f"calobs_{hsh}"
 
         symdir = Path(tempfile.gettempdir()) / dirname
