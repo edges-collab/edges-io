@@ -1900,6 +1900,9 @@ class CalibrationObservation(_DataContainer):
         for name in self.s11.load_names:
             fls += list(getattr(self.s11, name).filenames)
 
+        fls += list(self.s11.receiver_reading.filenames)
+        fls += list(self.s11.switching_state.filenames)
+
         for name in self.spectra.load_names:
             fls += [x.path for x in getattr(self.spectra, name)]
             fls.append(getattr(self.resistance, name).path)
