@@ -1806,7 +1806,7 @@ class CalibrationObservation(_DataContainer):
             # Now make a full symlink directory with these files.
             with open(path / "definition.yaml") as fl:
                 stuff += fl.read()
-        hsh = hash(stuff)
+        hsh = utils.stable_hash(stuff)
         dirname = f"calobs_{hsh}"
 
         symdir = Path(tempfile.gettempdir()) / dirname
@@ -1899,6 +1899,9 @@ class CalibrationObservation(_DataContainer):
         fls = []
         for name in self.s11.load_names:
             fls += list(getattr(self.s11, name).filenames)
+
+        fls += list(self.s11.receiver_reading.filenames)
+        fls += list(self.s11.switching_state.filenames)
 
         for name in self.spectra.load_names:
             fls += [x.path for x in getattr(self.spectra, name)]

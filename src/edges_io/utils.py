@@ -4,6 +4,7 @@ import datetime
 import numpy as np
 import os
 import shutil
+from hashlib import md5
 from itertools import islice
 from pathlib import Path
 from rich.console import Console
@@ -11,6 +12,10 @@ from typing import List, Optional, Union
 
 IGNORABLE = (".old", ".ignore", ".invalid", ".output")
 console = Console()
+
+
+def stable_hash(x) -> str:
+    return md5(str(x).encode()).hexdigest()
 
 
 def make_symlink_tree(files: dict[str, Path], symdir: Path, obs_name):
