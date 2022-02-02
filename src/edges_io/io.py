@@ -1092,24 +1092,38 @@ class S11Dir(_DataContainer):
             return dict(self._repeat_num)
 
     @cached_property
-    def switching_state(self):
-        if "switching_state" in self._run_nums:
-            return SwitchingState(
-                self.path / f"SwitchingState{self._run_nums['switching_state']:>02}",
-                repeat_num=self._repeat_nums.get("switching_state", attr.NOTHING),
-            )
-        else:
+    def switching_states(self) -> tuple[SwitchingState]:
+        if "switching_state" not in self._run_nums:
             raise AttributeError("switching_state does not exist")
 
+        rn = self._run_nums["switching_state"]
+        if isinstance(rn, int):
+            rn = (rn,)
+
+        return tuple(
+            SwitchingState(
+                self.path / f"SwitchingState{rr:>02}",
+                repeat_num=self._repeat_nums.get("switching_state", attr.NOTHING),
+            )
+            for rr in rn
+        )
+
     @cached_property
-    def receiver_reading(self):
-        if "receiver_reading" in self._run_nums:
-            return ReceiverReading(
-                self.path / f"ReceiverReading{self._run_nums['receiver_reading']:>02}",
+    def receiver_readings(self) -> tuple[ReceiverReading]:
+        if "receiver_reading" not in self._run_nums:
+            raise AttributeError("receiver_reading does not exist")
+
+        rn = self._run_nums["receiver_reading"]
+        if isinstance(rn, int):
+            rn = (rn,)
+
+        return tuple(
+            ReceiverReading(
+                self.path / f"ReceiverReading{rr:>02}",
                 repeat_num=self._repeat_nums.get("receiver_reading", attr.NOTHING),
             )
-        else:
-            raise AttributeError("receiver_reading does not exist")
+            for rr in rn
+        )
 
     @cached_property
     def _loads(self) -> dict[str, LoadS11]:
@@ -1162,12 +1176,12 @@ class S11Dir(_DataContainer):
         out = {k: getattr(self, k).repeat_num for k in list(self.available_load_names)}
 
         try:
-            out["switching_state"] = self.switching_state.repeat_num
+            out["switching_state"] = [ss.repeat_num for ss in self.switching_states]
         except AttributeError:
             pass
 
         try:
-            out["receiver_reading"] = self.receiver_reading.repeat_num
+            out["receiver_reading"] = [rr.repeat_num for rr in self.receiver_readings]
         except AttributeError:
             pass
 
@@ -1178,12 +1192,12 @@ class S11Dir(_DataContainer):
     def run_num(self) -> dict[str, int]:
         out = {k: getattr(self, k).run_num for k in list(self.available_load_names)}
         try:
-            out["switching_state"] = self.switching_state.run_num
+            out["switching_state"] = [ss.run_num for ss in self.switching_states]
         except AttributeError:
             pass
 
         try:
-            out["receiver_reading"] = self.receiver_reading.run_num
+            out["receiver_reading"] = [rr.run_num for rr in self.receiver_readings]
         except AttributeError:
             pass
 
@@ -1766,7 +1780,7 @@ class CalibrationObservation(_DataContainer):
                 new_file_parts = {}
                 # Check if the defining classes are the same as any already in there.
                 for inc_fl, kinds in inc_file_parts.items():
-                    if prefer or not any(kinds == k for k in file_parts.values()):
+                    if prefer or all(kinds != k for k in file_parts.values()):
                         if prefer:
                             # First delete the thing that's already there
                             for k, v in list(file_parts.items()):
@@ -1900,8 +1914,8 @@ class CalibrationObservation(_DataContainer):
         for name in self.s11.load_names:
             fls += list(getattr(self.s11, name).filenames)
 
-        fls += list(self.s11.receiver_reading.filenames)
-        fls += list(self.s11.switching_state.filenames)
+        fls += sum((list(rr.filenames) for rr in self.s11.receiver_readings), [])
+        fls += sum((list(rr.filenames) for rr in self.s11.switching_states), [])
 
         for name in self.spectra.load_names:
             fls += [x.path for x in getattr(self.spectra, name)]
