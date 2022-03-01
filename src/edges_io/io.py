@@ -20,7 +20,7 @@ from copy import copy
 from datetime import datetime
 from io import StringIO
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple, Union
+from typing import Dict, List, Optional, Sequence, Tuple, Union
 
 from . import utils
 from ._structure import _DataContainer, _DataFile
@@ -1049,8 +1049,12 @@ class S11Dir(_DataContainer):
     known_patterns = ("s11",)
     write_pattern = "S11"
 
-    _repeat_num: int | dict = attr.ib(default=attr.Factory(dict))
-    _run_num: int | dict | None = attr.ib(default=attr.Factory(dict))
+    _repeat_num: int | Sequence[int] | dict[str, int | Sequence[int]] = attr.ib(
+        default=attr.Factory(dict)
+    )
+    _run_num: int | Sequence[int] | dict[str, int | Sequence[int]] = attr.ib(
+        default=attr.Factory(dict)
+    )
 
     @cached_property
     def _run_nums(self) -> dict[str, int]:
@@ -1080,7 +1084,7 @@ class S11Dir(_DataContainer):
 
     @cached_property
     def _repeat_nums(self) -> dict[str, int]:
-        if self._repeat_num is None or isinstance(self._repeat_num, int):
+        if not isinstance(self._repeat_num, dict):
             return {
                 **{
                     "switching_state": self._repeat_num,
@@ -1089,61 +1093,48 @@ class S11Dir(_DataContainer):
                 **{name: self._repeat_num for name in LOAD_ALIASES.values()},
             }
         else:
-            return dict(self._repeat_num)
+            return self._repeat_num
 
-    @cached_property
-    def switching_states(self) -> tuple[SwitchingState]:
-        if "switching_state" not in self._run_nums:
-            raise AttributeError("switching_state does not exist")
-
-        rn = self._run_nums["switching_state"]
+    def _get_s11_kind(self, name, alias, cls):
+        rn = self._run_nums[name]
         if isinstance(rn, int):
             rn = (rn,)
 
-        return tuple(
-            SwitchingState(
-                self.path / f"SwitchingState{rr:>02}",
-                repeat_num=self._repeat_nums.get("switching_state", attr.NOTHING),
-            )
-            for rr in rn
-        )
+        rep_num = self._repeat_nums.get(alias, self._repeat_nums.get(alias, [None]))
+
+        out = []
+        for rr in rn:
+            for rp in rep_num:
+                if rp is None:
+                    kw = {}
+                else:
+                    kw = {"repeat_num": rp}
+
+            out.append(cls(self.path / f"{alias}{rr:>02}", **kw))
+
+        return tuple(out)
 
     @cached_property
-    def receiver_readings(self) -> tuple[ReceiverReading]:
-        if "receiver_reading" not in self._run_nums:
-            raise AttributeError("receiver_reading does not exist")
+    def switching_state(self) -> tuple[SwitchingState]:
+        return self._get_s11_kind("switching_state", "SwitchingState", SwitchingState)
 
-        rn = self._run_nums["receiver_reading"]
-        if isinstance(rn, int):
-            rn = (rn,)
-
-        return tuple(
-            ReceiverReading(
-                self.path / f"ReceiverReading{rr:>02}",
-                repeat_num=self._repeat_nums.get("receiver_reading", attr.NOTHING),
-            )
-            for rr in rn
+    @cached_property
+    def receiver_reading(self) -> tuple[ReceiverReading]:
+        return self._get_s11_kind(
+            "receiver_reading", "ReceiverReading", ReceiverReading
         )
 
     @cached_property
     def _loads(self) -> dict[str, LoadS11]:
         return {
-            name: LoadS11(
-                self.path / f"{LOAD_ALIASES[name]}{self._run_nums[name]:>02}",
-                repeat_num=self._repeat_nums.get(
-                    LOAD_ALIASES[name], self._repeat_nums.get(name, attr.NOTHING)
-                ),
-            )
+            name: self._get_s11_kind(name, LOAD_ALIASES[name], LoadS11)
             for name in self.available_load_names
         }
 
     @cached_property
     def simulators(self) -> dict[str, AntSimS11]:
         return {
-            name: AntSimS11(
-                self.path / f"{name}{self._run_nums[name]:>02}",
-                repeat_num=self._repeat_nums.get(name, attr.NOTHING),
-            )
+            name: self._get_s11_kind(name, name, AntSimS11)
             for name in self.get_simulator_names(self.path)
         }
 
@@ -1154,55 +1145,43 @@ class S11Dir(_DataContainer):
         raise AttributeError(f"{item} does not exist!")
 
     @property
-    def available_load_names(self):
+    def available_load_names(self) -> tuple[str]:
         return self.get_available_load_names(self.path)
 
     @classmethod
-    def get_available_load_names(cls, path):
+    def get_available_load_names(cls, path) -> tuple[str]:
         fls = utils.get_active_files(path)
-        return {
-            LOAD_ALIASES.inverse[fl.name[:-2]]
-            for fl in fls
-            if any(fl.name.startswith(k) for k in LOAD_ALIASES.inverse)
-        }
+        return tuple(
+            {
+                LOAD_ALIASES.inverse[fl.name[:-2]]
+                for fl in fls
+                if any(fl.name.startswith(k) for k in LOAD_ALIASES.inverse)
+            }
+        )
 
     @property
     def load_names(self) -> tuple[str]:
         return tuple(LOAD_ALIASES.keys())
 
+    def _get_run_repeat_dict(self, kind: str) -> dict[str, list[int]]:
+        out = {}
+        for key in (
+            self.available_load_names
+            + ("switching_state", "receiver_reading")
+            + tuple(self.simulators.keys())
+        ):
+            out[key] = [getattr(x, kind) for x in getattr(self, key)]
+
+        return out
+
     @property
-    def repeat_num(self) -> dict[str, int]:
+    def repeat_num(self) -> dict[str, list[int]]:
         """Dictionary specifying run numbers for each load."""
-        out = {k: getattr(self, k).repeat_num for k in list(self.available_load_names)}
-
-        try:
-            out["switching_state"] = [ss.repeat_num for ss in self.switching_states]
-        except AttributeError:
-            pass
-
-        try:
-            out["receiver_reading"] = [rr.repeat_num for rr in self.receiver_readings]
-        except AttributeError:
-            pass
-
-        out.update({k: v.repeat_num for k, v in self.simulators.items()})
-        return out
+        return self._get_run_repeat_dict("repeat_num")
 
     @property
-    def run_num(self) -> dict[str, int]:
-        out = {k: getattr(self, k).run_num for k in list(self.available_load_names)}
-        try:
-            out["switching_state"] = [ss.run_num for ss in self.switching_states]
-        except AttributeError:
-            pass
-
-        try:
-            out["receiver_reading"] = [rr.run_num for rr in self.receiver_readings]
-        except AttributeError:
-            pass
-
-        out.update({k: v.run_num for k, v in self.simulators.items()})
-        return out
+    def run_num(self) -> dict[str, list[int]]:
+        return self._get_run_repeat_dict("run_num")
 
     @classmethod
     def _get_highest_run_num(cls, path, kind) -> int:
@@ -1215,7 +1194,7 @@ class S11Dir(_DataContainer):
         return max(run_nums)
 
     def get_highest_run_num(self, kind: str) -> int:
-        """Get the highest repeat number for this kind."""
+        """Get the highest run number for this kind."""
         return self._get_highest_run_num(self.path, kind)
 
     @classmethod
@@ -1911,11 +1890,11 @@ class CalibrationObservation(_DataContainer):
     def list_of_files(self):
         """A list of all data files used in this observation."""
         fls = []
-        for name in self.s11.load_names:
-            fls += list(getattr(self.s11, name).filenames)
+        for name in self.s11.available_load_names:
+            fls += sum((list(rr.filenames) for rr in getattr(self.s11, name)), [])
 
-        fls += sum((list(rr.filenames) for rr in self.s11.receiver_readings), [])
-        fls += sum((list(rr.filenames) for rr in self.s11.switching_states), [])
+        fls += sum((list(rr.filenames) for rr in self.s11.receiver_reading), [])
+        fls += sum((list(rr.filenames) for rr in self.s11.switching_state), [])
 
         for name in self.spectra.load_names:
             fls += [x.path for x in getattr(self.spectra, name)]
