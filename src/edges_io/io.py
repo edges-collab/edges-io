@@ -21,6 +21,7 @@ from datetime import datetime
 from io import StringIO
 from pathlib import Path
 from typing import Dict, List, Optional, Sequence, Tuple, Union
+from astropy import units as un
 
 from . import utils
 from ._structure import _DataContainer, _DataFile
@@ -606,6 +607,9 @@ class _SpectraOrResistanceFolder(_DataContainer):
         if item in self._loads:
             return self._loads[item]
 
+        if item in self.simulators:
+            return self.simulators[item]
+        
         raise AttributeError(f"{item} does not exist!")
 
     @cached_property
@@ -817,7 +821,7 @@ class S1P(_DataFile):
         else:
             raise ValueError("file had no flags set!")
 
-        return r, f / 1e6
+        return r, f * un.Hz
 
     @staticmethod
     def _get_kind(path_filename):
@@ -1141,6 +1145,9 @@ class S11Dir(_DataContainer):
     def __getattr__(self, item):
         if item in self._loads:
             return self._loads[item]
+        
+        if item in self.simulators:
+            return self.simulators[item]
 
         raise AttributeError(f"{item} does not exist!")
 
@@ -1390,7 +1397,7 @@ class CalibrationObservation(_DataContainer):
         return self.get_simulator_names(self.path)
 
     @classmethod
-    def from_observation_yaml(cls, obs_yaml: [str, Path]):
+    def from_observation_yaml(cls, obs_yaml: str | Path):
         """Create a CalibrationObservation from a specific YAML format."""
         obs_yaml = Path(obs_yaml)
         assert obs_yaml.exists(), f"{obs_yaml} does not exist!"
@@ -1581,7 +1588,7 @@ class CalibrationObservation(_DataContainer):
             logger.info(f"\t{k}: {v}")
 
     @classmethod
-    def path_to_datetime(cls, path: [str, Path]):
+    def path_to_datetime(cls, path: str | Path):
         pre_level = logger.getEffectiveLevel()
         logger.setLevel(39)
         try:
