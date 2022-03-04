@@ -1,9 +1,10 @@
 """The global configuration for all of edges-analysis."""
-from pathlib import Path
-import yaml
 import contextlib
-import warnings
 import copy
+import warnings
+import yaml
+from pathlib import Path
+
 
 class ConfigurationError(Exception):
     pass
@@ -12,7 +13,7 @@ class ConfigurationError(Exception):
 class Config(dict):
     """Simple over-ride of dict that adds a context manager."""
 
-    _defaults={}
+    _defaults = {}
 
     # The following gives a way to change the keys of defaults over time,
     # and update the base config file.
@@ -69,12 +70,12 @@ class Config(dict):
 
     def _add_to_schema(self, new: dict):
         """Add more keys/defaults to the schema.
-        
+
         Not to be called by users.
         """
         self._defaults.update(new)
         self._migrate()
-        
+
     @contextlib.contextmanager
     def use(self, **kwargs):
         """Context manager for using certain configuration options for a set time."""
@@ -114,10 +115,10 @@ try:
 except FileNotFoundError:
     config = Config()
     config.file_name = _config_filename
-    
+
     try:
         config.write()
     except Exception as e:
         pass
-    
+
 default_config = copy.deepcopy(config)
