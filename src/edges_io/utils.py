@@ -11,7 +11,7 @@ from rich.console import Console
 from typing import List, Optional, Union
 
 IGNORABLE_SUFFIXES = (".old", ".ignore", ".invalid", ".output")
-IGNORABLE_FOLDERS = ("outputs", )
+IGNORABLE_FOLDERS = ("outputs",)
 console = Console()
 
 
@@ -45,7 +45,11 @@ def get_active_files(path: str | Path) -> list[Path]:
     ]
 
     return [
-        fl for fl in fls if fl.suffix not in IGNORABLE_SUFFIXES and fl.name not in ok_extra_files and fl.name not in IGNORABLE_FOLDERS
+        fl
+        for fl in fls
+        if fl.suffix not in IGNORABLE_SUFFIXES
+        and fl.name not in ok_extra_files
+        and fl.name not in IGNORABLE_FOLDERS
     ]
 
 
