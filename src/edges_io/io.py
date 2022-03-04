@@ -1104,7 +1104,9 @@ class S11Dir(_DataContainer):
         if isinstance(rn, int):
             rn = (rn,)
 
-        rep_num = self._repeat_nums.get(alias, self._repeat_nums.get(alias, [None]))
+        rep_num = self._repeat_nums.get(alias, self._repeat_nums.get(name, [None]))
+        if isinstance(rep_num, int):
+            rep_num = (rep_num,)
 
         out = []
         for rr in rn:
@@ -1619,7 +1621,7 @@ class CalibrationObservation(_DataContainer):
         return True
 
     @classmethod
-    def get_simulator_names(cls, path: [str, Path]):
+    def get_simulator_names(cls, path: str | Path):
         # Go through the subdirectories and check their simulators
         path = Path(path)
         dct = {
