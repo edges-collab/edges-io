@@ -14,6 +14,7 @@ import tempfile
 import toml
 import warnings
 import yaml
+from astropy import units as un
 from bidict import bidict
 from cached_property import cached_property
 from copy import copy
@@ -21,7 +22,6 @@ from datetime import datetime
 from io import StringIO
 from pathlib import Path
 from typing import Dict, List, Optional, Sequence, Tuple, Union
-from astropy import units as un
 
 from . import utils
 from ._structure import _DataContainer, _DataFile
@@ -609,7 +609,7 @@ class _SpectraOrResistanceFolder(_DataContainer):
 
         if item in self.simulators:
             return self.simulators[item]
-        
+
         raise AttributeError(f"{item} does not exist!")
 
     @cached_property
@@ -1145,7 +1145,7 @@ class S11Dir(_DataContainer):
     def __getattr__(self, item):
         if item in self._loads:
             return self._loads[item]
-        
+
         if item in self.simulators:
             return self.simulators[item]
 
