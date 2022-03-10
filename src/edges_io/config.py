@@ -118,7 +118,7 @@ except FileNotFoundError:
 
     try:
         config.write()
-    except Exception as e:
+    except Exception:
         pass
 
 default_config = copy.deepcopy(config)

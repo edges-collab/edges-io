@@ -697,7 +697,6 @@ class _SpectraOrResistanceFolder(_DataContainer):
         return out
 
 
-
 @hickleable()
 @attr.s
 class Spectra(_SpectraOrResistanceFolder):

@@ -1,9 +1,10 @@
 import pytest
 
+import hickle
 import logging
 from bidict import bidict
 from pathlib import Path
-import hickle
+
 from edges_io import io, utils
 
 LOAD_ALIASES = bidict(
@@ -112,17 +113,17 @@ def test_env(tmp_path_factory):
 
 
 # function to make observation object
-@pytest.fixture(scope='function')
+@pytest.fixture(scope="function")
 def calio(test_env):
     return io.CalibrationObservation(test_env)
 
 
 def test_bad_dirname_obs(test_env, caplog):
     # test that incorrect directories fail
-    
+
     test_dir = test_env
     base = test_dir.parent
-    
+
     wrong_dir = base / "Receiver_2020_01_01_010_to_200MHz"
     test_dir.rename(wrong_dir)
     with pytest.raises(utils.FileStructureError):
@@ -312,9 +313,9 @@ def test_field_spectrum_read_bad_suffix(datadir):
     with pytest.raises(TypeError, match="must be h5 or acq"):
         io.FieldSpectrum(datadir / "observation.yaml")
 
+
 def test_hickle_roundtrip(calio, tmpdir):
-    hickle.dump(calio, tmpdir / 'tmp-calio.h5')
-    new = hickle.load(tmpdir / 'tmp-calio.h5')
+    hickle.dump(calio, tmpdir / "tmp-calio.h5")
+    new = hickle.load(tmpdir / "tmp-calio.h5")
 
-    assert new==calio
-
+    assert new == calio
