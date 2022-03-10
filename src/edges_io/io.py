@@ -26,7 +26,7 @@ from typing import Dict, List, Optional, Sequence, Tuple, Union
 from . import utils
 from ._structure import _DataContainer, _DataFile
 from .data import DATA_PATH
-from .h5 import HDF5RawSpectrum
+from .h5 import HDF5RawSpectrum, hickleable
 from .logging import logger
 
 with open(DATA_PATH / "calibration_loads.toml") as fl:
@@ -311,6 +311,7 @@ class _SpectrumOrResistance(_DataFile):
         return int(self._match_dict["second"])
 
 
+@hickleable()
 @attr.s
 class FieldSpectrum:
     path: str | Path = attr.ib(converter=Path)
@@ -364,6 +365,7 @@ class FieldSpectrum:
         return spectra, freq_anc, time_anc, meta
 
 
+@hickleable()
 @attr.s
 class Spectrum(_SpectrumOrResistance):
     """
@@ -406,6 +408,7 @@ class Spectrum(_SpectrumOrResistance):
         return self._raw_spec.data
 
 
+@hickleable()
 @attr.s
 class Resistance(_SpectrumOrResistance):
     """An object representing a resistance measurement (and its structure)."""
@@ -694,6 +697,8 @@ class _SpectraOrResistanceFolder(_DataContainer):
         return out
 
 
+
+@hickleable()
 @attr.s
 class Spectra(_SpectraOrResistanceFolder):
     pattern = "Spectra"
@@ -702,6 +707,7 @@ class Spectra(_SpectraOrResistanceFolder):
     write_pattern = "Spectra"
 
 
+@hickleable()
 @attr.s
 class Resistances(_SpectraOrResistanceFolder):
     pattern = "Resistance"
@@ -710,6 +716,7 @@ class Resistances(_SpectraOrResistanceFolder):
     write_pattern = "Resistance"
 
 
+@hickleable()
 @attr.s
 class S1P(_DataFile):
     POSSIBLE_KINDS = [
@@ -860,6 +867,7 @@ class S1P(_DataFile):
         return d, flag
 
 
+@hickleable()
 @attr.s
 class _S11SubDir(_DataContainer):
     STANDARD_NAMES = S1P.POSSIBLE_KINDS
@@ -944,6 +952,7 @@ class _S11SubDir(_DataContainer):
         return out
 
 
+@hickleable()
 @attr.s
 class LoadS11(_S11SubDir):
     STANDARD_NAMES = ["Open", "Short", "Match", "External"]
@@ -975,6 +984,7 @@ class LoadS11(_S11SubDir):
         return out
 
 
+@hickleable()
 @attr.s
 class AntSimS11(LoadS11):
     pattern = r"(?P<load_name>%s)(?P<run_num>\d{2})$" % (
@@ -994,6 +1004,7 @@ class AntSimS11(LoadS11):
         return out
 
 
+@hickleable()
 @attr.s
 class SwitchingState(_S11SubDir):
     pattern = r"(?P<load_name>SwitchingState)(?P<run_num>\d{2})$"
@@ -1010,6 +1021,7 @@ class SwitchingState(_S11SubDir):
     known_substitutions = (("InternalSwitch", "SwitchingState"),)
 
 
+@hickleable()
 @attr.s
 class ReceiverReading(_S11SubDir):
     pattern = r"(?P<load_name>ReceiverReading)(?P<run_num>\d{2})$"
@@ -1018,6 +1030,7 @@ class ReceiverReading(_S11SubDir):
     known_patterns = ("(?P<load_name>ReceiverReading)",)
 
 
+@hickleable()
 @attr.s
 class S11Dir(_DataContainer):
     """Class representing the entire S11 subdirectory of an observation
@@ -1241,6 +1254,7 @@ class S11Dir(_DataContainer):
         }
 
 
+@hickleable()
 @attr.s
 class CalibrationObservation(_DataContainer):
     """

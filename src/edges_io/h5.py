@@ -1,3 +1,4 @@
+from __future__ import annotations
 import attr
 import contextlib
 import h5py
@@ -7,11 +8,11 @@ import psutil
 import warnings
 import weakref
 import yaml
-from abc import ABCMeta, abstractmethod
+from abc import ABCMeta
 from datetime import datetime
 from pathlib import Path
-
 from . import __version__, utils
+from hickle.lookup import LoaderManager, PyContainer
 
 logger = logging.getLogger(__name__)
 
@@ -178,6 +179,9 @@ class HDF5Object(_HDF5Part):
 
         if self.filename and self.filename.exists() and self.validate:
             self.check(self.filename, self.require_no_extra)
+
+    def __getstate__(self):
+        return {a.name: getattr(self, a.name) for a in attr.fields(self.__class__)}
 
     def __new__(cls, *args, **kwargs):
         fname = (
@@ -492,3 +496,91 @@ class HDF5RawSpectrum(HDF5Object):
 def register_h5type(cls):
     HDF5Object._yaml_types.add(cls)
     return cls
+
+
+def hickleable(hkl_str=None, dump_function=None, load_container=None, metadata_keys=None, **kwargs):
+    """Make a class dumpable/loadable by hickle, with sane defaults."""
+
+    def inner(cls):
+
+        if hkl_str is None:
+            hstr = f'!{cls.__module__}.{cls.__name__}!'.encode()
+        else:
+            hstr = hkl_str
+
+        if dump_function is None:
+            def _dump_function(py_obj, h_group, name, **kwargs):
+                ds = h_group.create_group(name)
+
+                if hasattr(py_obj, '__gethstate__'):
+                    state = py_obj.__gethstate__()
+                elif hasattr(py_obj, '__getstate__'):
+                    state = py_obj.__getstate__()
+                else:
+                    state = py_obj.__dict__
+                
+                for k in (metadata_keys or []):
+                    try:
+                        ds.attrs[k] = state.pop(k)
+                    except KeyError:
+                        warnings.warn(f"Ignoring metadata key {k} since it's not in the object.")
+
+                subitems = []
+                for k, v in state.items():
+                    subitems.append((k, v, {}, kwargs))
+
+                return ds, subitems
+        else:
+            _dump_function = dump_function
+
+        if load_container is None:
+            class _load_container(PyContainer):
+                """
+                Valid container classes must be derived from hickle.helpers.PyContainer class
+                """
+
+                def __init__(self,h5_attrs,base_type,object_type):
+                    """
+                    h5_attrs ...... the attrs dictionary attached to the group representing MyClass
+                    base_type ..... byte string naming the loader to be used for restoring MyClass object
+                    py_obj_type ... MyClass class or MyClass subclass object 
+                    """
+
+                    # the optional protected _content parameter of the PyContainer __init__
+                    # method can be used to change the data structure used to store
+                    # the subitems passed to the append method of the PyContainer class
+                    # per default it is set to []
+                    super().__init__(h5_attrs,base_type,object_type,_content = dict())
+
+                def append(self,name,item,h5_attrs): # optional overload
+                    """
+                    in case _content parameter was explicitly set or subitems should be sored 
+                    in specific order or have to be preprocessed before the next item is appended
+                    than this can be done before storing in self._content.
+
+                    name ....... the name identifying subitem item within the parent hdf5.Group
+                    item ....... the object representing the subitem
+                    h5_attrs ... attrs dictionary attached to h5py.Dataset, h5py.Group representing item
+                    """
+                    self._content[name] = item
+
+                def convert(self):
+                    """
+                    called by hickle when all sub items have been appended to MyClass PyContainer
+                    this method must be implemented by MyClass PyContainer.
+                    """
+
+                    # py_obj_type should point to MyClass or any of its subclasses
+                    new_instance = cls.__new__(cls)
+                    new_instance.__dict__.update(self._content)
+                    return new_instance
+        else:
+            _load_container = load_container
+
+        LoaderManager.register_class(
+            cls, hstr, dump_function=_dump_function, container_class=_load_container, **kwargs
+        )
+
+        return cls
+
+    return inner
