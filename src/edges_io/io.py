@@ -58,7 +58,7 @@ class _SpectrumOrResistance(_DataFile):
     )
 
     pattern = (
-        fr"(?P<load_name>{load_pattern}|{antsim_pattern})"
+        rf"(?P<load_name>{load_pattern}|{antsim_pattern})"
         + r"_(?P<run_num>\d{2})_(?P<year>\d{4})_(?P<day>\d{3})_("
         r"?P<hour>\d{2})_(?P<minute>\d{2})_(?P<second>\d{2})_lab.(?P<file_format>\w{2,"
         r"3})$"
@@ -733,10 +733,10 @@ class S1P(_DataFile):
     write_pattern = "{kind}{repeat_num:>02}.s1p"
     known_patterns = (
         r"^(?P<kind>%s)(?P<repeat_num>\d{1}).s1p$" % ("|".join(POSSIBLE_KINDS)),
-        fr"^(?P<kind>{'|'.join(k.lower() for k in POSSIBLE_KINDS)})(?P<repeat_num>\d{2}).s1p$",
-        fr"^(?P<kind>{'|'.join(k.lower() for k in POSSIBLE_KINDS)})(?P<repeat_num>\d{1}).s1p$",
+        rf"^(?P<kind>{'|'.join(k.lower() for k in POSSIBLE_KINDS)})(?P<repeat_num>\d{2}).s1p$",
+        rf"^(?P<kind>{'|'.join(k.lower() for k in POSSIBLE_KINDS)})(?P<repeat_num>\d{1}).s1p$",
         r"^(?P<kind>%s).s1p$" % ("|".join(POSSIBLE_KINDS)),
-        fr"^(?P<kind>{'|'.join(k.lower() for k in POSSIBLE_KINDS)}).s1p$",
+        rf"^(?P<kind>{'|'.join(k.lower() for k in POSSIBLE_KINDS)}).s1p$",
     )
     known_substitutions = (("Ext_", "External"), ("Int_", ""))  # "Internal"
 
