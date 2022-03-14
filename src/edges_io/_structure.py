@@ -150,7 +150,7 @@ class _ObsNode(ABC):
             if new_path is None:
                 logger.success("Successfully removed.")
             elif new_path != (root / basename):
-                if new_path.suffix not in utils.IGNORABLE:
+                if new_path.suffix not in utils.IGNORABLE_SUFFIXES:
                     match = re.search(cls.pattern, str(new_path.relative_to(root)))
 
                     if match is None:
@@ -307,7 +307,7 @@ class _DataContainer(_ObsNode):
                             if new_path is None:
                                 logger.success("Successfully removed.")
                             elif new_path != fl:
-                                if new_path.suffix not in utils.IGNORABLE:
+                                if new_path.suffix not in utils.IGNORABLE_SUFFIXES:
                                     match = re.search(
                                         cls.pattern,
                                         str(new_path.relative_to(fl.parent)),

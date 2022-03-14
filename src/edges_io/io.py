@@ -14,18 +14,19 @@ import tempfile
 import toml
 import warnings
 import yaml
+from astropy import units as un
 from bidict import bidict
 from cached_property import cached_property
 from copy import copy
 from datetime import datetime
 from io import StringIO
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple, Union
+from typing import Dict, List, Optional, Sequence, Tuple, Union
 
 from . import utils
 from ._structure import _DataContainer, _DataFile
 from .data import DATA_PATH
-from .h5 import HDF5RawSpectrum
+from .h5 import HDF5RawSpectrum, hickleable
 from .logging import logger
 
 with open(DATA_PATH / "calibration_loads.toml") as fl:
@@ -57,7 +58,7 @@ class _SpectrumOrResistance(_DataFile):
     )
 
     pattern = (
-        fr"(?P<load_name>{load_pattern}|{antsim_pattern})"
+        rf"(?P<load_name>{load_pattern}|{antsim_pattern})"
         + r"_(?P<run_num>\d{2})_(?P<year>\d{4})_(?P<day>\d{3})_("
         r"?P<hour>\d{2})_(?P<minute>\d{2})_(?P<second>\d{2})_lab.(?P<file_format>\w{2,"
         r"3})$"
@@ -310,6 +311,7 @@ class _SpectrumOrResistance(_DataFile):
         return int(self._match_dict["second"])
 
 
+@hickleable()
 @attr.s
 class FieldSpectrum:
     path: str | Path = attr.ib(converter=Path)
@@ -363,6 +365,7 @@ class FieldSpectrum:
         return spectra, freq_anc, time_anc, meta
 
 
+@hickleable()
 @attr.s
 class Spectrum(_SpectrumOrResistance):
     """
@@ -405,6 +408,7 @@ class Spectrum(_SpectrumOrResistance):
         return self._raw_spec.data
 
 
+@hickleable()
 @attr.s
 class Resistance(_SpectrumOrResistance):
     """An object representing a resistance measurement (and its structure)."""
@@ -606,6 +610,9 @@ class _SpectraOrResistanceFolder(_DataContainer):
         if item in self._loads:
             return self._loads[item]
 
+        if item in self.simulators:
+            return self.simulators[item]
+
         raise AttributeError(f"{item} does not exist!")
 
     @cached_property
@@ -690,6 +697,7 @@ class _SpectraOrResistanceFolder(_DataContainer):
         return out
 
 
+@hickleable()
 @attr.s
 class Spectra(_SpectraOrResistanceFolder):
     pattern = "Spectra"
@@ -698,6 +706,7 @@ class Spectra(_SpectraOrResistanceFolder):
     write_pattern = "Spectra"
 
 
+@hickleable()
 @attr.s
 class Resistances(_SpectraOrResistanceFolder):
     pattern = "Resistance"
@@ -706,6 +715,7 @@ class Resistances(_SpectraOrResistanceFolder):
     write_pattern = "Resistance"
 
 
+@hickleable()
 @attr.s
 class S1P(_DataFile):
     POSSIBLE_KINDS = [
@@ -723,10 +733,10 @@ class S1P(_DataFile):
     write_pattern = "{kind}{repeat_num:>02}.s1p"
     known_patterns = (
         r"^(?P<kind>%s)(?P<repeat_num>\d{1}).s1p$" % ("|".join(POSSIBLE_KINDS)),
-        fr"^(?P<kind>{'|'.join(k.lower() for k in POSSIBLE_KINDS)})(?P<repeat_num>\d{2}).s1p$",
-        fr"^(?P<kind>{'|'.join(k.lower() for k in POSSIBLE_KINDS)})(?P<repeat_num>\d{1}).s1p$",
+        rf"^(?P<kind>{'|'.join(k.lower() for k in POSSIBLE_KINDS)})(?P<repeat_num>\d{2}).s1p$",
+        rf"^(?P<kind>{'|'.join(k.lower() for k in POSSIBLE_KINDS)})(?P<repeat_num>\d{1}).s1p$",
         r"^(?P<kind>%s).s1p$" % ("|".join(POSSIBLE_KINDS)),
-        fr"^(?P<kind>{'|'.join(k.lower() for k in POSSIBLE_KINDS)}).s1p$",
+        rf"^(?P<kind>{'|'.join(k.lower() for k in POSSIBLE_KINDS)}).s1p$",
     )
     known_substitutions = (("Ext_", "External"), ("Int_", ""))  # "Internal"
 
@@ -817,7 +827,7 @@ class S1P(_DataFile):
         else:
             raise ValueError("file had no flags set!")
 
-        return r, f / 1e6
+        return r, f * un.Hz
 
     @staticmethod
     def _get_kind(path_filename):
@@ -856,6 +866,7 @@ class S1P(_DataFile):
         return d, flag
 
 
+@hickleable()
 @attr.s
 class _S11SubDir(_DataContainer):
     STANDARD_NAMES = S1P.POSSIBLE_KINDS
@@ -940,6 +951,7 @@ class _S11SubDir(_DataContainer):
         return out
 
 
+@hickleable()
 @attr.s
 class LoadS11(_S11SubDir):
     STANDARD_NAMES = ["Open", "Short", "Match", "External"]
@@ -971,6 +983,7 @@ class LoadS11(_S11SubDir):
         return out
 
 
+@hickleable()
 @attr.s
 class AntSimS11(LoadS11):
     pattern = r"(?P<load_name>%s)(?P<run_num>\d{2})$" % (
@@ -990,6 +1003,7 @@ class AntSimS11(LoadS11):
         return out
 
 
+@hickleable()
 @attr.s
 class SwitchingState(_S11SubDir):
     pattern = r"(?P<load_name>SwitchingState)(?P<run_num>\d{2})$"
@@ -1006,6 +1020,7 @@ class SwitchingState(_S11SubDir):
     known_substitutions = (("InternalSwitch", "SwitchingState"),)
 
 
+@hickleable()
 @attr.s
 class ReceiverReading(_S11SubDir):
     pattern = r"(?P<load_name>ReceiverReading)(?P<run_num>\d{2})$"
@@ -1014,6 +1029,7 @@ class ReceiverReading(_S11SubDir):
     known_patterns = ("(?P<load_name>ReceiverReading)",)
 
 
+@hickleable()
 @attr.s
 class S11Dir(_DataContainer):
     """Class representing the entire S11 subdirectory of an observation
@@ -1049,8 +1065,12 @@ class S11Dir(_DataContainer):
     known_patterns = ("s11",)
     write_pattern = "S11"
 
-    _repeat_num: int | dict = attr.ib(default=attr.Factory(dict))
-    _run_num: int | dict | None = attr.ib(default=attr.Factory(dict))
+    _repeat_num: int | Sequence[int] | dict[str, int | Sequence[int]] = attr.ib(
+        default=attr.Factory(dict)
+    )
+    _run_num: int | Sequence[int] | dict[str, int | Sequence[int]] = attr.ib(
+        default=attr.Factory(dict)
+    )
 
     @cached_property
     def _run_nums(self) -> dict[str, int]:
@@ -1080,7 +1100,7 @@ class S11Dir(_DataContainer):
 
     @cached_property
     def _repeat_nums(self) -> dict[str, int]:
-        if self._repeat_num is None or isinstance(self._repeat_num, int):
+        if not isinstance(self._repeat_num, dict):
             return {
                 **{
                     "switching_state": self._repeat_num,
@@ -1089,47 +1109,50 @@ class S11Dir(_DataContainer):
                 **{name: self._repeat_num for name in LOAD_ALIASES.values()},
             }
         else:
-            return dict(self._repeat_num)
+            return self._repeat_num
+
+    def _get_s11_kind(self, name, alias, cls):
+        rn = self._run_nums[name]
+        if isinstance(rn, int):
+            rn = (rn,)
+
+        rep_num = self._repeat_nums.get(alias, self._repeat_nums.get(name, [None]))
+        if isinstance(rep_num, int):
+            rep_num = (rep_num,)
+
+        out = []
+        for rr in rn:
+            for rp in rep_num:
+                if rp is None:
+                    kw = {}
+                else:
+                    kw = {"repeat_num": rp}
+
+            out.append(cls(self.path / f"{alias}{rr:>02}", **kw))
+
+        return tuple(out)
 
     @cached_property
-    def switching_state(self):
-        if "switching_state" in self._run_nums:
-            return SwitchingState(
-                self.path / f"SwitchingState{self._run_nums['switching_state']:>02}",
-                repeat_num=self._repeat_nums.get("switching_state", attr.NOTHING),
-            )
-        else:
-            raise AttributeError("switching_state does not exist")
+    def switching_state(self) -> tuple[SwitchingState]:
+        return self._get_s11_kind("switching_state", "SwitchingState", SwitchingState)
 
     @cached_property
-    def receiver_reading(self):
-        if "receiver_reading" in self._run_nums:
-            return ReceiverReading(
-                self.path / f"ReceiverReading{self._run_nums['receiver_reading']:>02}",
-                repeat_num=self._repeat_nums.get("receiver_reading", attr.NOTHING),
-            )
-        else:
-            raise AttributeError("receiver_reading does not exist")
+    def receiver_reading(self) -> tuple[ReceiverReading]:
+        return self._get_s11_kind(
+            "receiver_reading", "ReceiverReading", ReceiverReading
+        )
 
     @cached_property
     def _loads(self) -> dict[str, LoadS11]:
         return {
-            name: LoadS11(
-                self.path / f"{LOAD_ALIASES[name]}{self._run_nums[name]:>02}",
-                repeat_num=self._repeat_nums.get(
-                    LOAD_ALIASES[name], self._repeat_nums.get(name, attr.NOTHING)
-                ),
-            )
+            name: self._get_s11_kind(name, LOAD_ALIASES[name], LoadS11)
             for name in self.available_load_names
         }
 
     @cached_property
     def simulators(self) -> dict[str, AntSimS11]:
         return {
-            name: AntSimS11(
-                self.path / f"{name}{self._run_nums[name]:>02}",
-                repeat_num=self._repeat_nums.get(name, attr.NOTHING),
-            )
+            name: self._get_s11_kind(name, name, AntSimS11)
             for name in self.get_simulator_names(self.path)
         }
 
@@ -1137,58 +1160,49 @@ class S11Dir(_DataContainer):
         if item in self._loads:
             return self._loads[item]
 
+        if item in self.simulators:
+            return self.simulators[item]
+
         raise AttributeError(f"{item} does not exist!")
 
     @property
-    def available_load_names(self):
+    def available_load_names(self) -> tuple[str]:
         return self.get_available_load_names(self.path)
 
     @classmethod
-    def get_available_load_names(cls, path):
+    def get_available_load_names(cls, path) -> tuple[str]:
         fls = utils.get_active_files(path)
-        return {
-            LOAD_ALIASES.inverse[fl.name[:-2]]
-            for fl in fls
-            if any(fl.name.startswith(k) for k in LOAD_ALIASES.inverse)
-        }
+        return tuple(
+            {
+                LOAD_ALIASES.inverse[fl.name[:-2]]
+                for fl in fls
+                if any(fl.name.startswith(k) for k in LOAD_ALIASES.inverse)
+            }
+        )
 
     @property
     def load_names(self) -> tuple[str]:
         return tuple(LOAD_ALIASES.keys())
 
+    def _get_run_repeat_dict(self, kind: str) -> dict[str, list[int]]:
+        out = {}
+        for key in (
+            self.available_load_names
+            + ("switching_state", "receiver_reading")
+            + tuple(self.simulators.keys())
+        ):
+            out[key] = [getattr(x, kind) for x in getattr(self, key)]
+
+        return out
+
     @property
-    def repeat_num(self) -> dict[str, int]:
+    def repeat_num(self) -> dict[str, list[int]]:
         """Dictionary specifying run numbers for each load."""
-        out = {k: getattr(self, k).repeat_num for k in list(self.available_load_names)}
-
-        try:
-            out["switching_state"] = self.switching_state.repeat_num
-        except AttributeError:
-            pass
-
-        try:
-            out["receiver_reading"] = self.receiver_reading.repeat_num
-        except AttributeError:
-            pass
-
-        out.update({k: v.repeat_num for k, v in self.simulators.items()})
-        return out
+        return self._get_run_repeat_dict("repeat_num")
 
     @property
-    def run_num(self) -> dict[str, int]:
-        out = {k: getattr(self, k).run_num for k in list(self.available_load_names)}
-        try:
-            out["switching_state"] = self.switching_state.run_num
-        except AttributeError:
-            pass
-
-        try:
-            out["receiver_reading"] = self.receiver_reading.run_num
-        except AttributeError:
-            pass
-
-        out.update({k: v.run_num for k, v in self.simulators.items()})
-        return out
+    def run_num(self) -> dict[str, list[int]]:
+        return self._get_run_repeat_dict("run_num")
 
     @classmethod
     def _get_highest_run_num(cls, path, kind) -> int:
@@ -1201,7 +1215,7 @@ class S11Dir(_DataContainer):
         return max(run_nums)
 
     def get_highest_run_num(self, kind: str) -> int:
-        """Get the highest repeat number for this kind."""
+        """Get the highest run number for this kind."""
         return self._get_highest_run_num(self.path, kind)
 
     @classmethod
@@ -1239,6 +1253,7 @@ class S11Dir(_DataContainer):
         }
 
 
+@hickleable()
 @attr.s
 class CalibrationObservation(_DataContainer):
     """
@@ -1397,7 +1412,7 @@ class CalibrationObservation(_DataContainer):
         return self.get_simulator_names(self.path)
 
     @classmethod
-    def from_observation_yaml(cls, obs_yaml: [str, Path]):
+    def from_observation_yaml(cls, obs_yaml: str | Path):
         """Create a CalibrationObservation from a specific YAML format."""
         obs_yaml = Path(obs_yaml)
         assert obs_yaml.exists(), f"{obs_yaml} does not exist!"
@@ -1588,7 +1603,7 @@ class CalibrationObservation(_DataContainer):
             logger.info(f"\t{k}: {v}")
 
     @classmethod
-    def path_to_datetime(cls, path: [str, Path]):
+    def path_to_datetime(cls, path: str | Path):
         pre_level = logger.getEffectiveLevel()
         logger.setLevel(39)
         try:
@@ -1619,7 +1634,7 @@ class CalibrationObservation(_DataContainer):
         return True
 
     @classmethod
-    def get_simulator_names(cls, path: [str, Path]):
+    def get_simulator_names(cls, path: str | Path):
         # Go through the subdirectories and check their simulators
         path = Path(path)
         dct = {
@@ -1766,7 +1781,7 @@ class CalibrationObservation(_DataContainer):
                 new_file_parts = {}
                 # Check if the defining classes are the same as any already in there.
                 for inc_fl, kinds in inc_file_parts.items():
-                    if prefer or not any(kinds == k for k in file_parts.values()):
+                    if prefer or all(kinds != k for k in file_parts.values()):
                         if prefer:
                             # First delete the thing that's already there
                             for k, v in list(file_parts.items()):
@@ -1897,11 +1912,11 @@ class CalibrationObservation(_DataContainer):
     def list_of_files(self):
         """A list of all data files used in this observation."""
         fls = []
-        for name in self.s11.load_names:
-            fls += list(getattr(self.s11, name).filenames)
+        for name in self.s11.available_load_names:
+            fls += sum((list(rr.filenames) for rr in getattr(self.s11, name)), [])
 
-        fls += list(self.s11.receiver_reading.filenames)
-        fls += list(self.s11.switching_state.filenames)
+        fls += sum((list(rr.filenames) for rr in self.s11.receiver_reading), [])
+        fls += sum((list(rr.filenames) for rr in self.s11.switching_state), [])
 
         for name in self.spectra.load_names:
             fls += [x.path for x in getattr(self.spectra, name)]
