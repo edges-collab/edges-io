@@ -1,4 +1,6 @@
 """The global configuration for all of edges-analysis."""
+from __future__ import annotations
+
 import contextlib
 import copy
 import warnings
@@ -11,7 +13,11 @@ class ConfigurationError(Exception):
 
 
 class Config(dict):
-    """Simple over-ride of dict that adds a context manager."""
+    """Simple over-ride of dict that adds a context manager.
+
+    Allows to specify extra config options, but ensures that all specified options
+    are defined.
+    """
 
     _defaults = {}
 
@@ -19,53 +25,63 @@ class Config(dict):
     # and update the base config file.
     _aliases = {}
 
-    def __init__(self, *args, **kwargs):
-
+    def __init__(
+        self,
+        path: str | Path | None = None,
+        _loaded_from_file: bool = False,
+        *args,
+        **kwargs,
+    ):
+        self.path = Path(path) if path is not None else None
+        self._loaded_from_file = _loaded_from_file
+        if self._loaded_from_file and (not self.path or not self.path.exists()):
+            raise ValueError("cannot have been loaded from file as it doesn't exist.")
         super().__init__(*args, **kwargs)
-
         self._migrate()
 
     def _migrate(self):
         # Ensure the keys that got read in are the right keys for the current version
 
         def check(k, v, selfdict):
-            do_write = False
 
             if k in selfdict:
+                updated = False
                 if isinstance(v, dict):
                     for kk, vv in v.items():
-                        do_write |= check(kk, vv, selfdict[k])
-            elif k not in self._aliases:
-                warnings.warn("Your configuration file is out of date. Updating...")
-                do_write = True
-                selfdict[k] = v
+                        updated |= check(kk, vv, selfdict[k])
+                return updated
 
-            else:
+            # Otherwise, we must update selfdict in some way.
+
+            # First way: we have the key under a different name. In this case, we
+            # change the name of the key in the instance to match the schema.
+            if k in self._aliases:
                 for alias in self._aliases[k]:
                     if alias in selfdict:
-                        do_write = True
                         warnings.warn(
-                            f"Your configuration file has old key '{alias}' which has "
-                            f"been re-named '{k}'. Updating..."
+                            f"Your configuration spec has old key '{alias}' which has "
+                            f"been re-named '{k}'."
                         )
                         selfdict[k] = selfdict[alias]
                         del selfdict[alias]
 
-                        if isinstance(v, dict):
-                            for kk, vv in v.items():
-                                do_write |= check(kk, vv, selfdict[kk])
+            # If the key still isn't there, it mustn't have existed as an alias. In this
+            # case, we just write its default into the instance.
+            if k not in selfdict:
+                selfdict[k] = v
 
-                if not do_write:
-                    raise ConfigurationError(
-                        f"The configuration file has key '{alias}' which is not known."
-                    )
-            return do_write
+            # Now, if the value is a dict, we need to recurse into it to check it.
+            if isinstance(v, dict):
+                for kk, vv in v.items():
+                    check(kk, vv, selfdict[k])
 
-        do_write = False
+            return True
+
+        updated = False
         for k, v in self._defaults.items():
-            do_write |= check(k, v, self)
+            updated |= check(k, v, self)
 
-        if do_write:
+        if updated and self.path:
             self.write()
 
     def _add_to_schema(self, new: dict):
@@ -79,7 +95,13 @@ class Config(dict):
     @contextlib.contextmanager
     def use(self, **kwargs):
         """Context manager for using certain configuration options for a set time."""
-        backup = self.copy()
+        for k in kwargs:
+            if k not in self:
+                raise KeyError(
+                    f"Cannot use {k} in config, as it doesn't exist. "
+                    f"Available keys: {list(self.keys())}."
+                )
+        backup = copy.deepcopy(self)
         for k, v in kwargs.items():
             if isinstance(self[k], dict):
                 self[k].update(v)
@@ -91,9 +113,10 @@ class Config(dict):
 
     def write(self, fname=None):
         """Write current configuration to file to make it permanent."""
-        fname = fname or self.file_name
+        fname = fname or self.path
         with open(fname, "w") as fl:
             yaml.dump(self._as_dict(), fl)
+        self.path = Path(fname)
 
     def _as_dict(self):
         """The plain dict defining the instance."""
@@ -102,17 +125,16 @@ class Config(dict):
     @classmethod
     def load(cls, file_name):
         """Create a Config object from a config file."""
-        cls.file_name = file_name
         with open(file_name) as fl:
             config = yaml.load(fl, Loader=yaml.FullLoader)
-        return cls(config)
+        return cls(file_name, _loaded_from_file=True, **config)
 
 
 _config_filename = Path("~/.edges.yml").expanduser()
 
-try:
+try:  # pragma: no cover
     config = Config.load(_config_filename)
-except FileNotFoundError:
+except FileNotFoundError:  # pragma: no cover
     config = Config()
     config.file_name = _config_filename
 

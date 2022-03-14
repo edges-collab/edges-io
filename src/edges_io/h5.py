@@ -585,7 +585,9 @@ def hickleable(
                     return new_instance
 
         else:
-            _load_container = load_container
+            _load_container = (
+                load_container(cls) if callable(load_container) else load_container
+            )
 
         LoaderManager.register_class(
             cls,
