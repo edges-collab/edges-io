@@ -483,7 +483,9 @@ class HDF5RawSpectrum(HDF5Object):
         },
         "freq_ancillary": {"frequencies": lambda x: (x.ndim == 1 and x.dtype == float)},
         "time_ancillary": {
-            "times": lambda x: (x.ndim == 1 and x.dtype == "|S17"),
+            "times": lambda x: (
+                (x.ndim == 1 or x.ndim == 2 and x.shape[-1] == 3) and x.dtype == "|S17"
+            ),
             "adcmax": lambda x: (
                 x.ndim == 2 and x.shape[1] == 3 and x.dtype in (float, np.float32)
             ),
@@ -493,6 +495,35 @@ class HDF5RawSpectrum(HDF5Object):
             "data_drops": "optional",
         },
     }
+
+    @staticmethod
+    def convert_times(times: np.ndarray) -> list[datetime.datetime]:
+        """Convert an array of times in |S17 format to a list of datetime objects."""
+        assert times.dtype == "|S17"
+        assert times.ndim == 1
+
+        return [datetime.strptime(d, "%Y:%j:%H:%M:%S") for d in times.astype(str)]
+
+    def get_times(
+        self, str_times: np.ndarray = None, swpos: int = 0
+    ) -> list[datetime.datetime]:
+        """Obtain a list of datetime objects from the string times in the data."""
+        if str_times is None:
+            str_times = self["time_ancillary"]["times"]
+
+        times = str_times
+
+        if times.ndim == 2:
+            x = times[:, swpos]
+        else:
+            if swpos > 0:
+                warnings.warn(
+                    "Cannot read times for swpos > 0 as your file is in the old format "
+                    "with only swpos=0. Returning that instead."
+                )
+            x = times
+
+        return self.convert_times(x)
 
 
 def register_h5type(cls):

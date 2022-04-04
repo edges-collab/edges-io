@@ -321,14 +321,9 @@ class FieldSpectrum:
     ----------
     path
         The path to the file to read.
-    time_ancillary_swpos
-        If an ACQ file, only the times from one swpos are read, this sets which one.
     """
 
     path: str | Path = attr.ib(converter=Path)
-    time_ancillary_swpos: int = attr.ib(
-        0, converter=int, validator=(attr.validators.ge(0), attr.validators.le(2))
-    )
 
     @path.validator
     def _pth_vld(self, att, val):
@@ -355,9 +350,7 @@ class FieldSpectrum:
         if self.file_format == "h5":
             return HDF5RawSpectrum(self.path)
         elif self.file_format == "acq":
-            spec, freq, time, meta = self._read_acq(
-                self.path, self.time_ancillary_swpos
-            )
+            spec, freq, time, meta = self._read_acq(self.path)
             return HDF5RawSpectrum.from_data(
                 {
                     "spectra": spec,
@@ -370,9 +363,11 @@ class FieldSpectrum:
             raise ValueError(f"File format '{self.file_format}' not supported.")
 
     @staticmethod
-    def _read_acq(file_name, specline_swpos):
+    def _read_acq(file_name):
         Q, px, anc = read_acq.decode_file(
-            file_name, progress=False, meta=True, specline_swpos=specline_swpos
+            file_name,
+            progress=False,
+            meta=True,
         )
 
         freq_anc = {"frequencies": anc.frequencies}
@@ -460,7 +455,7 @@ class Resistance(_SpectrumOrResistance):
         return self.read_csv(self.path)
 
     @classmethod
-    def read_new_style_csv(cls, path: [str, Path]) -> tuple[np.ndarray, dict]:
+    def read_new_style_csv(cls, path: str | Path) -> tuple[np.ndarray, dict]:
         data = np.genfromtxt(
             path,
             skip_header=1,
