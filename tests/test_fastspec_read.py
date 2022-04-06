@@ -19,6 +19,11 @@ def check_obj(obj):
     assert "Q" in obj["spectra"].__memcache__
     assert "p0" not in obj["spectra"].__memcache__
 
+    assert obj.convert_times(obj["time_ancillary"]["times"]) == obj.get_times()
+
+    with pytest.warns(UserWarning, match="Cannot read times for swpos > 0"):
+        obj.get_times(swpos=1)
+
 
 def test_hdf5rawspectrum(fastspec_spectrum_fl):
     obj = HDF5RawSpectrum(fastspec_spectrum_fl)
