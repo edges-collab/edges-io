@@ -19,14 +19,25 @@ def check_obj(obj):
     assert "Q" in obj["spectra"].__memcache__
     assert "p0" not in obj["spectra"].__memcache__
 
-    assert obj.convert_times(obj["time_ancillary"]["times"]) == obj.get_times()
+    t = obj["time_ancillary"]["times"]
+    if t.ndim == 2:
+        tt = t[:, 0]
+    else:
+        tt = t
+    assert obj.convert_times(tt) == obj.get_times()
 
-    with pytest.warns(UserWarning, match="Cannot read times for swpos > 0"):
-        obj.get_times(swpos=1)
+    if t.ndim == 1:
+        with pytest.warns(UserWarning, match="Cannot read times for swpos > 0"):
+            obj.get_times(swpos=1)
 
 
 def test_hdf5rawspectrum(fastspec_spectrum_fl):
     obj = HDF5RawSpectrum(fastspec_spectrum_fl)
+    check_obj(obj)
+
+
+def test_hdf5rawspectrum_2dim_time(fastspec_spectrum_fl_2dim_time):
+    obj = HDF5RawSpectrum(fastspec_spectrum_fl_2dim_time)
     check_obj(obj)
 
 

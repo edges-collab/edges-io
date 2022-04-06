@@ -1,5 +1,6 @@
 import pytest
 
+import copy
 import h5py
 import numpy as np
 from pathlib import Path
@@ -66,6 +67,20 @@ def fastspec_spectrum_fl(tmpdir, fastspec_data):
     """An auto-generate empty Fastspec h5 format file"""
     spectrum = HDF5RawSpectrum.from_data(fastspec_data)
     flname = tmpdir / "fastspec_example_file.h5"
+
+    spectrum.write(flname)
+    return flname
+
+
+@pytest.fixture(scope="session", autouse=True)
+def fastspec_spectrum_fl_2dim_time(tmpdir, fastspec_data):
+    """An auto-generate empty Fastspec h5 format file"""
+    new_fspec_data = copy.deepcopy(fastspec_data)
+
+    t = new_fspec_data["time_ancillary"]["times"]
+    new_fspec_data["time_ancillary"]["times"] = np.vstack((t, t, t)).T
+    spectrum = HDF5RawSpectrum.from_data(new_fspec_data)
+    flname = tmpdir / "fastspec_example_file_time_2dim.h5"
 
     spectrum.write(flname)
     return flname
