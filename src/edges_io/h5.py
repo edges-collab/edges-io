@@ -185,6 +185,10 @@ class HDF5Object(_HDF5Part):
     def __getstate__(self):
         return {a.name: getattr(self, a.name) for a in attr.fields(self.__class__)}
 
+    def __setstate__(self, d):
+        super().__setstate__(d)
+        self.__attrs_post_init__()
+
     def __new__(cls, *args, **kwargs):
         fname = (
             kwargs["filename"] if "filename" in kwargs else (args[0] if args else None)
@@ -612,7 +616,14 @@ def hickleable(
 
                     # py_obj_type should point to MyClass or any of its subclasses
                     new_instance = cls.__new__(cls)
-                    new_instance.__dict__.update(self._content)
+
+                    if hasattr(new_instance, "__sethstate__"):
+                        new_instance.__sethstate__(self._content)
+                    elif hasattr(new_instance, "__setstate__"):
+                        new_instance.__setstate__(self._content)
+                    else:
+                        new_instance.__dict__.update(self._content)
+
                     return new_instance
 
         else:
