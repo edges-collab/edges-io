@@ -314,6 +314,15 @@ class _SpectrumOrResistance(_DataFile):
 @hickleable()
 @attr.s
 class FieldSpectrum:
+    """
+    A simple object able to read any known spectrum format.
+
+    Parameters
+    ----------
+    path
+        The path to the file to read.
+    """
+
     path: str | Path = attr.ib(converter=Path)
 
     @path.validator
@@ -355,7 +364,11 @@ class FieldSpectrum:
 
     @staticmethod
     def _read_acq(file_name):
-        Q, px, anc = read_acq.decode_file(file_name, progress=False, meta=True)
+        Q, px, anc = read_acq.decode_file(
+            file_name,
+            progress=False,
+            meta=True,
+        )
 
         freq_anc = {"frequencies": anc.frequencies}
         time_anc = anc.data
@@ -442,7 +455,7 @@ class Resistance(_SpectrumOrResistance):
         return self.read_csv(self.path)
 
     @classmethod
-    def read_new_style_csv(cls, path: [str, Path]) -> tuple[np.ndarray, dict]:
+    def read_new_style_csv(cls, path: str | Path) -> tuple[np.ndarray, dict]:
         data = np.genfromtxt(
             path,
             skip_header=1,
@@ -607,11 +620,13 @@ class _SpectraOrResistanceFolder(_DataContainer):
         return loads
 
     def __getattr__(self, item):
-        if item in self._loads:
-            return self._loads[item]
+        if item in LOAD_ALIASES:
+            if item in self._loads:
+                return self._loads[item]
 
-        if item in self.simulators:
-            return self.simulators[item]
+        if item in ANTENNA_SIMULATORS:
+            if item in self.simulators:
+                return self.simulators[item]
 
         raise AttributeError(f"{item} does not exist!")
 
@@ -896,9 +911,9 @@ class _S11SubDir(_DataContainer):
         }
 
     def __getattr__(self, item):
-        try:
+        if item in self.STANDARD_NAMES:
             return self.children[item]
-        except KeyError:
+        else:
             raise AttributeError(
                 f"{item} is not an attribute of {self.__class__.__name__}"
             )
@@ -1157,11 +1172,13 @@ class S11Dir(_DataContainer):
         }
 
     def __getattr__(self, item):
-        if item in self._loads:
-            return self._loads[item]
+        if item in self.load_names:
+            if item in self._loads:
+                return self._loads[item]
 
-        if item in self.simulators:
-            return self.simulators[item]
+        if item in ANTENNA_SIMULATORS:
+            if item in self.simulators:
+                return self.simulators[item]
 
         raise AttributeError(f"{item} does not exist!")
 
