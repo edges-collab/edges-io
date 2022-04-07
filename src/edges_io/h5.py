@@ -187,7 +187,6 @@ class HDF5Object(_HDF5Part):
 
     def __setstate__(self, d):
         super().__setstate__(d)
-        self.__attrs_post_init__()
 
     def __new__(cls, *args, **kwargs):
         fname = (
@@ -623,6 +622,9 @@ def hickleable(
                         new_instance.__setstate__(self._content)
                     else:
                         new_instance.__dict__.update(self._content)
+
+                    if hasattr(new_instance, "__attrs_post_init__"):
+                        new_instance.__attrs_post_init__()
 
                     return new_instance
 
