@@ -911,7 +911,7 @@ class _S11SubDir(_DataContainer):
         }
 
     def __getattr__(self, item):
-        if item in self.STANDARD_NAMES:
+        if item in (n.lower() for n in self.STANDARD_NAMES):
             return self.children[item]
         else:
             raise AttributeError(
