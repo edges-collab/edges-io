@@ -1,10 +1,12 @@
 """Tests of the hickleable decorator."""
 import pytest
 
+import attr
 import copy
 import h5py
 import hickle
 from hickle.lookup import PyContainer
+from re import A
 
 from edges_io.h5 import hickleable
 
@@ -145,3 +147,29 @@ def test_custom_load_container(tmpdir):
     hickle.dump(t, tmpdir / "tmp-hickle.h5")
     tt = hickle.load(tmpdir / "tmp-hickle.h5")
     assert tt.a == 8
+
+
+@attr.s
+@hickleable()
+class ClassWithPostAttrs:
+    a = attr.ib(3)
+
+    def __attrs_post_init__(self):
+        self.b = 3 * self.a
+
+
+@attr.s
+@hickleable()
+class ClassWithPostAttrsSetHState(ClassWithPostAttrs):
+    def __sethstate__(self, d):
+        self.__dict__ = d
+
+
+def test_post_attrs_hickle(tmpdir):
+    for cls in (ClassWithPostAttrs, ClassWithPostAttrsSetHState):
+
+        c = cls()
+        hickle.dump(c, tmpdir / "tmp-hickle-c.h5")
+        c1 = hickle.load(tmpdir / "tmp-hickle-c.h5")
+
+        assert c1.b == c.b
