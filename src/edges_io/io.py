@@ -620,11 +620,13 @@ class _SpectraOrResistanceFolder(_DataContainer):
         return loads
 
     def __getattr__(self, item):
-        if item in self._loads:
-            return self._loads[item]
+        if item in LOAD_ALIASES:
+            if item in self._loads:
+                return self._loads[item]
 
-        if item in self.simulators:
-            return self.simulators[item]
+        if item in ANTENNA_SIMULATORS:
+            if item in self.simulators:
+                return self.simulators[item]
 
         raise AttributeError(f"{item} does not exist!")
 
@@ -909,9 +911,9 @@ class _S11SubDir(_DataContainer):
         }
 
     def __getattr__(self, item):
-        try:
+        if item in self.STANDARD_NAMES:
             return self.children[item]
-        except KeyError:
+        else:
             raise AttributeError(
                 f"{item} is not an attribute of {self.__class__.__name__}"
             )
@@ -1170,11 +1172,13 @@ class S11Dir(_DataContainer):
         }
 
     def __getattr__(self, item):
-        if item in self._loads:
-            return self._loads[item]
+        if item in self.load_names:
+            if item in self._loads:
+                return self._loads[item]
 
-        if item in self.simulators:
-            return self.simulators[item]
+        if item in ANTENNA_SIMULATORS:
+            if item in self.simulators:
+                return self.simulators[item]
 
         raise AttributeError(f"{item} does not exist!")
 
