@@ -165,7 +165,7 @@ class HDF5Object(_HDF5Part):
     _require_no_extra = False
     default_root = Path(".")
     _structure = {}
-    _yaml_types = set()
+    _yaml_types = {dict}
 
     filename: Path = attr.ib(default=None, converter=attr.converters.optional(Path))
     require_no_extra = attr.ib(default=_require_no_extra, converter=bool, kw_only=True)
@@ -270,7 +270,9 @@ class HDF5Object(_HDF5Part):
         def _write(grp, struct, cache):
             for k, v in cache.items():
                 try:
-                    if isinstance(v, dict):
+                    if isinstance(v, dict) and not isinstance(
+                        grp, h5py.AttributeManager
+                    ):
                         g = grp.attrs if k in ["meta", "attrs"] else grp.create_group(k)
                         _write(g, struct[k], v)
                     else:
@@ -279,9 +281,7 @@ class HDF5Object(_HDF5Part):
                         elif isinstance(v, Path):
                             v = str(v)
                         elif any(isinstance(v, cls) for cls in self._yaml_types):
-                            for cls in self._yaml_types:
-                                if isinstance(v, cls):
-                                    v = yaml.dump(v)
+                            v = yaml.dump(v)
 
                         grp[k] = v
 
