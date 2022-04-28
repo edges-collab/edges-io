@@ -63,14 +63,15 @@ class _HDF5Part(metaclass=ABCMeta):
                 for k, v in out.items():
                     if isinstance(v, str) and v == "none":
                         out[k] = None
-                    elif isinstance(v, str) and any(
-                        tag in v
-                        for tag in yaml.FullLoader.yaml_constructors
-                        if tag is not None
-                    ):
-                        for tag in yaml.FullLoader.yaml_constructors:
-                            if tag is not None and tag in v:
-                                out[k] = yaml.load(v, Loader=yaml.FullLoader)
+                    elif isinstance(v, str):
+                        for ldr in (yaml.SafeLoader, yaml.FullLoader, yaml.Loader):
+                            try:
+                                out[k] = yaml.load(v, Loader=ldr)
+                                break
+                            except yaml.constructor.ConstructorError as e:
+                                error = e
+                        else:
+                            raise error
 
             elif item not in fl:
                 raise KeyError(
@@ -165,7 +166,7 @@ class HDF5Object(_HDF5Part):
     _require_no_extra = False
     default_root = Path(".")
     _structure = {}
-    _yaml_types = set()
+    _yaml_types = {dict}
 
     filename: Path = attr.ib(default=None, converter=attr.converters.optional(Path))
     require_no_extra = attr.ib(default=_require_no_extra, converter=bool, kw_only=True)
@@ -270,7 +271,9 @@ class HDF5Object(_HDF5Part):
         def _write(grp, struct, cache):
             for k, v in cache.items():
                 try:
-                    if isinstance(v, dict):
+                    if isinstance(v, dict) and not isinstance(
+                        grp, h5py.AttributeManager
+                    ):
                         g = grp.attrs if k in ["meta", "attrs"] else grp.create_group(k)
                         _write(g, struct[k], v)
                     else:
@@ -279,9 +282,7 @@ class HDF5Object(_HDF5Part):
                         elif isinstance(v, Path):
                             v = str(v)
                         elif any(isinstance(v, cls) for cls in self._yaml_types):
-                            for cls in self._yaml_types:
-                                if isinstance(v, cls):
-                                    v = yaml.dump(v)
+                            v = yaml.dump(v)
 
                         grp[k] = v
 
