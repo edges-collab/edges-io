@@ -63,14 +63,15 @@ class _HDF5Part(metaclass=ABCMeta):
                 for k, v in out.items():
                     if isinstance(v, str) and v == "none":
                         out[k] = None
-                    elif isinstance(v, str) and any(
-                        tag in v
-                        for tag in yaml.Loader.yaml_constructors
-                        if tag is not None
-                    ):
-                        for tag in yaml.Loader.yaml_constructors:
-                            if tag is not None and tag in v:
-                                out[k] = yaml.load(v, Loader=yaml.Loader)
+                    elif isinstance(v, str):
+                        for ldr in (yaml.SafeLoader, yaml.FullLoader, yaml.Loader):
+                            try:
+                                out[k] = yaml.load(v, Loader=ldr)
+                                break
+                            except yaml.constructor.ConstructorError as e:
+                                error = e
+                        else:
+                            raise error
 
             elif item not in fl:
                 raise KeyError(
