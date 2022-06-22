@@ -36,7 +36,7 @@ jobs:
           pip install .[dev]
       - name: Run Tests
         run: |
-          python -m pytest --cov-config=.coveragerc --parallel --durations=25
+          python -m pytest --cov-config=.coveragerc --durations=25
   downstream:
     env:
       PYTHON: 3.8
@@ -72,7 +72,7 @@ jobs:
       - name: Run Tests
         run: |
           cd ../${{ matrix.package }}
-          python -m pytest --cov=edges_io --cov-config=../edges-io/.coveragerc --parallel
+          python -m pytest --cov=edges_io --cov-config=../edges-io/.coveragerc
 
   codecov:
     needs: [downstream, tests]
