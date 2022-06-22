@@ -61,17 +61,22 @@ class _HDF5Part(metaclass=ABCMeta):
             if item in ("attrs", "meta"):
                 out = dict(fl.attrs)
                 for k, v in out.items():
-                    if isinstance(v, str) and v == "none":
-                        out[k] = None
-                    elif isinstance(v, str):
-                        for ldr in (yaml.SafeLoader, yaml.FullLoader, yaml.Loader):
-                            try:
-                                out[k] = yaml.load(v, Loader=ldr)
-                                break
-                            except yaml.constructor.ConstructorError as e:
-                                error = e
+                    if isinstance(v, str):
+                        if v == "none":
+                            out[k] = None
                         else:
-                            raise error
+                            error = None
+                            for ldr in (yaml.SafeLoader, yaml.FullLoader, yaml.Loader):
+                                try:
+                                    out[k] = yaml.load(v, Loader=ldr)
+                                    break
+                                except yaml.constructor.ConstructorError as e:
+                                    error = e
+                                except yaml.parser.ParserError:
+                                    continue
+                            else:
+                                if error is not None:
+                                    raise error
 
             elif item not in fl:
                 raise KeyError(
