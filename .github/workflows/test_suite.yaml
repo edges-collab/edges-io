@@ -41,8 +41,12 @@ jobs:
         run: |
           python -m pytest --cov-config=.coveragerc --durations=25
 
+      - name: View Files
+        run: |
+          ls -al
+
       - name: Upload coverage data
-        uses: actions/upload-artifact@v2
+        uses: actions/upload-artifact@v3
         with:
           name: coverage-data
           path: ".coverage.*"
@@ -88,7 +92,7 @@ jobs:
           python -m pytest --cov-config=../edges-io/.coveragerc
 
       - name: Upload coverage data
-        uses: actions/upload-artifact@v2
+        uses: actions/upload-artifact@v3
         with:
           name: coverage-data
           path: ".coverage.*"
@@ -100,7 +104,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Download coverage data.
-        uses: actions/download-artifact@v2
+        uses: actions/download-artifact@v3
         with:
           name: coverage-data
 
