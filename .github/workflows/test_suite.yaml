@@ -21,6 +21,9 @@ jobs:
       matrix:
         os: [ubuntu-latest, macos-latest]
         python-version: [3.8, 3.9, "3.10"]
+        exclude:
+          - os: macos-latest
+            python-version: 3.8
     steps:
       - uses: actions/checkout@master
         with:
@@ -70,11 +73,11 @@ jobs:
         if: matrix.package == 'edges-cal'
         run: python -m ipykernel install --user --name edges --display-name "edges"
       - name: Print Versions
-        run: pip freeze | grep -E "edges-|read_acq"
+        run: pip freeze | grep -E "edges-|read-acq"
       - name: Run Tests
         run: |
           cd ../${{ matrix.package }}
-          python -m pytest --cov=edges_io --cov-config=../edges-io/.coveragerc
+          python -m pytest --cov-config=../edges-io/.coveragerc
 
   codecov:
     needs: [downstream, tests]
