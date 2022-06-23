@@ -10,6 +10,9 @@ source =
     src/
     */site-packages/
 
+[xml]
+output = coverage.xml
+
 [report]
 # Regexes for lines to exclude from consideration
 exclude_lines =
