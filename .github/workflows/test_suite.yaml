@@ -39,7 +39,7 @@ jobs:
           pip install .[dev]
       - name: Run Tests
         run: |
-          python -m pytest --cov-config=.coveragerc --durations=25
+          coverage run -m pytest --durations=25
 
       - name: View Files
         run: |
@@ -89,7 +89,7 @@ jobs:
       - name: Run Tests
         run: |
           cd ../${{ matrix.package }}
-          python -m pytest --cov-config=../edges-io/.coveragerc
+          coverage run --rcfile ../edges-io/.coveragerc -m pytest
 
       - name: Upload coverage data
         uses: actions/upload-artifact@v3
