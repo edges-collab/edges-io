@@ -39,7 +39,7 @@ jobs:
           pip install .[dev]
       - name: Run Tests
         run: |
-          coverage run --paralell-mode -m pytest --durations=25
+          coverage run --parallel-mode -m pytest --durations=25
 
       - name: View Files
         run: |
