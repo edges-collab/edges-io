@@ -6,7 +6,7 @@ source = edges_io
 
 [paths]
 source =
-    */src/
+    src/
     */site-packages/
 
 [report]
