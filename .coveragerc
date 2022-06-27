@@ -2,12 +2,11 @@
 [run]
 branch = True
 source = edges_io
-parallel = True
 # omit = bad_file.py
 
 [paths]
 source =
-    src/
+    */src/
     */site-packages/
 
 [report]
