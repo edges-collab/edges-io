@@ -88,14 +88,13 @@ jobs:
         run: pip freeze | grep -E "edges-|read-acq"
       - name: Run Tests
         run: |
-          cd ../${{ matrix.package }}
-          coverage run --parallel-mode --rcfile ../edges-io/.coveragerc -m pytest
+          coverage run --parallel-mode -m pytest ../${{ matrix.package}}
 
       - name: Upload coverage data
         uses: actions/upload-artifact@v3
         with:
           name: coverage-data
-          path: "../${{ matrix.package }}/.coverage.*"
+          path: ".coverage.*"
           if-no-files-found: error
 
   codecov:
