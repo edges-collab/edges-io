@@ -167,7 +167,6 @@ class ClassWithPostAttrsSetHState(ClassWithPostAttrs):
 
 def test_post_attrs_hickle(tmpdir):
     for cls in (ClassWithPostAttrs, ClassWithPostAttrsSetHState):
-
         c = cls()
         hickle.dump(c, tmpdir / "tmp-hickle-c.h5")
         c1 = hickle.load(tmpdir / "tmp-hickle-c.h5")

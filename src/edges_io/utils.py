@@ -20,7 +20,6 @@ def stable_hash(x) -> str:
 
 
 def make_symlink_tree(files: dict[str, Path], symdir: Path, obs_name):
-
     for fl, fl_abs in files.items():
         sym_path = symdir / obs_name / fl
 

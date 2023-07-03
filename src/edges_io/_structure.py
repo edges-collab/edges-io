@@ -69,7 +69,6 @@ class _ObsNode(ABC):
 
     @classmethod
     def _check_self(cls, path: Path, *, fix: bool = False) -> tuple[Path, dict | None]:
-
         if not path.exists():
             logger.error(f"The path {path} does not exist!")
 
@@ -221,7 +220,6 @@ class _DataContainer(_ObsNode):
 
     @classmethod
     def _run_checks(cls, path, fix):
-
         path, match = cls.check_self(path, fix)
 
         if match is None:

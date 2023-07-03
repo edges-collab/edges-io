@@ -43,7 +43,6 @@ class Config(dict):
         # Ensure the keys that got read in are the right keys for the current version
 
         def check(k, v, selfdict):
-
             if k in selfdict:
                 updated = False
                 if isinstance(v, dict):

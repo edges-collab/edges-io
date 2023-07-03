@@ -546,7 +546,6 @@ def hickleable(
     """Make a class dumpable/loadable by hickle, with sane defaults."""
 
     def inner(cls):
-
         if hkl_str is None:
             hstr = f"!{cls.__module__}.{cls.__name__}!".encode()
         else:
