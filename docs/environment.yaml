@@ -9,7 +9,6 @@ dependencies:
   - numpydoc
   - sphinx>=4.0
   - h5py
-  - python==3.9
   - sphinx_rtd_theme
   - pip:
     - sphinx_click
@@ -23,3 +22,4 @@ dependencies:
     - attrs
     - toml
     - dill
+    - psutil

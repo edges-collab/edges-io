@@ -17,7 +17,6 @@ main = click.Group()
 @click.option("-V", "--less-verbose", count=True, help="decrease output verbosity")
 @click.option("--fix/--no-fix", default=False, help="apply common fixes")
 def check(root, verbosity, less_verbose, fix):
-
     root = Path(root).absolute()
 
     v0 = verbosity or 0

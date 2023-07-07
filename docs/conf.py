@@ -14,6 +14,9 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).absolute().parent.parent / "src"))
 
+# We put this here just so that we can see the error stacktrace if it fails.
+import edges_io
+
 # -- General configuration -----------------------------------------------------
 
 # If your documentation needs a minimal Sphinx version, state it here.
