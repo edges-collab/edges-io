@@ -499,7 +499,7 @@ class Resistance(_SpectrumOrResistance):
                     nheader_lines += 1
                     values = next_line.split(",")
 
-                    out.update({name: value for name, value in zip(names, values)})
+                    out.update(dict(zip(names, values)))
 
                 if line.startswith("1,") or line == "":
                     done = True

@@ -43,7 +43,6 @@ class Config(dict):
         # Ensure the keys that got read in are the right keys for the current version
 
         def check(k, v, selfdict):
-
             if k in selfdict:
                 updated = False
                 if isinstance(v, dict):
@@ -120,7 +119,7 @@ class Config(dict):
 
     def _as_dict(self):
         """The plain dict defining the instance."""
-        return {k: v for k, v in self.items()}
+        return dict(self.items())
 
     @classmethod
     def load(cls, file_name):
