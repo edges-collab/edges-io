@@ -852,7 +852,8 @@ class S1P(_DataFile):
         with open(path_filename) as d:
             comment_rows = 0
             flag = None
-            for line in d.readlines():
+            lines = d.readlines()
+            for line in lines:
                 # checking settings line
                 if line.startswith("#"):
                     if "DB" in line or "dB" in line:
@@ -873,11 +874,21 @@ class S1P(_DataFile):
                     )
                     comment_rows += 1
 
+            # Also check the the last lines for stupid entries like "END"
+            footer_lines = 0
+            for line in lines[::-1]:
+                if line.startswith("#") or ("END" in line) or not line:
+                    footer_lines += 1
+                else:
+                    break
+
         if flag is None:
             raise OSError(f"The file {path_filename} has incorrect format.")
 
         #  loading data
-        d = np.genfromtxt(path_filename, skip_header=comment_rows)
+        d = np.genfromtxt(
+            path_filename, skip_header=comment_rows, skip_footer=footer_lines
+        )
 
         return d, flag
 
