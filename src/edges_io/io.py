@@ -19,6 +19,7 @@ from bidict import bidict
 from cached_property import cached_property
 from copy import copy
 from datetime import datetime
+from hickleable import hickleable
 from io import StringIO
 from pathlib import Path
 from typing import Dict, List, Optional, Sequence, Tuple, Union
@@ -26,7 +27,7 @@ from typing import Dict, List, Optional, Sequence, Tuple, Union
 from . import utils
 from ._structure import _DataContainer, _DataFile
 from .data import DATA_PATH
-from .h5 import HDF5RawSpectrum, hickleable
+from .h5 import HDF5RawSpectrum
 from .logging import logger
 
 with open(DATA_PATH / "calibration_loads.toml") as fl:
