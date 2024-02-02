@@ -29,6 +29,7 @@ from ._structure import _DataContainer, _DataFile
 from .data import DATA_PATH
 from .h5 import HDF5RawSpectrum
 from .logging import logger
+from .vna import SParams
 
 with open(DATA_PATH / "calibration_loads.toml") as fl:
     data = toml.load(fl)
@@ -776,7 +777,7 @@ class S1P(_DataFile):
 
         Corresponds to :attr:`freq`.
         """
-        return self.read(self.path)[0]
+        return self._data.s11
 
     @cached_property
     def freq(self):
@@ -784,7 +785,7 @@ class S1P(_DataFile):
 
         Corresponds to :attr:`s11`.
         """
-        return self.read(self.path)[1]
+        return self._data.freq
 
     @classmethod
     def _validate_match(cls, match: dict[str, str], filename: str):
@@ -795,102 +796,15 @@ class S1P(_DataFile):
 
     @classmethod
     def _get_filename_parameters(cls, dct: dict):
-        # If a lower-case kind is passed, use the upper-case version
-        out = {"repeat_num": 1}
-        if dct.get("kind", None) in (k.lower() for k in cls.POSSIBLE_KINDS):
+        if dct.get("kind") in (k.lower() for k in cls.POSSIBLE_KINDS):
             dct["kind"] = cls.POSSIBLE_KINDS[
                 [k.lower() for k in cls.POSSIBLE_KINDS].index(dct["kind"])
             ]
-        return out
+        return {"repeat_num": 1}
 
-    @classmethod
-    def read(
-        cls, path_filename: str | Path, all_cols: bool = True
-    ) -> tuple[np.ndarray, np.ndarray]:
-        """Read the .s1p or .s2p formatted files.
-
-        Parameters
-        ----------
-        path_filename
-            The path to the file.
-        all_cols
-            If the file is .s2p, it may have more than just S11, also S12, S21, S22.
-            If so, setting ``all_cols=True`` returns all the S-parameters.
-        """
-        d, flag = cls._get_kind(path_filename)
-        f = d[:, 0]
-
-        if flag == "DB":
-            r = 10 ** (d[:, 1] / 20) * (
-                np.cos((np.pi / 180) * d[:, 2]) + 1j * np.sin((np.pi / 180) * d[:, 2])
-            )
-        elif flag == "MA":
-            r = d[:, 1] * (
-                np.cos((np.pi / 180) * d[:, 2]) + 1j * np.sin((np.pi / 180) * d[:, 2])
-            )
-        elif flag == "RI":
-            if all_cols and d.shape[1] > 3:
-                r = np.array(
-                    [
-                        d[:, 1] + 1j * d[:, 2],
-                        d[:, 3] + 1j * d[:, 4],
-                        d[:, 5] + 1j * d[:, 6],
-                        d[:, 7] + 1j * d[:, 8],
-                    ]
-                ).T
-            else:
-                r = d[:, 1] + 1j * d[:, 2]
-        else:
-            raise ValueError("file had no flags set!")
-
-        return r, f * un.Hz
-
-    @staticmethod
-    def _get_kind(path_filename):
-        # identifying the format
-
-        with open(path_filename) as d:
-            comment_rows = 0
-            flag = None
-            lines = d.readlines()
-            for line in lines:
-                # checking settings line
-                if line.startswith("#"):
-                    if "DB" in line or "dB" in line:
-                        flag = "DB"
-                    if "MA" in line:
-                        flag = "MA"
-                    if "RI" in line:
-                        flag = "RI"
-
-                    comment_rows += 1
-                elif line.startswith("!"):
-                    comment_rows += 1
-                elif flag is not None:
-                    break
-                else:
-                    warnings.warn(
-                        f"Non standard line in S11 file {path_filename}: '{line}'\n...Treating as a comment line."
-                    )
-                    comment_rows += 1
-
-            # Also check the the last lines for stupid entries like "END"
-            footer_lines = 0
-            for line in lines[::-1]:
-                if line.startswith("#") or ("END" in line) or not line:
-                    footer_lines += 1
-                else:
-                    break
-
-        if flag is None:
-            raise OSError(f"The file {path_filename} has incorrect format.")
-
-        #  loading data
-        d = np.genfromtxt(
-            path_filename, skip_header=comment_rows, skip_footer=footer_lines
-        )
-
-        return d, flag
+    @cached_property
+    def _data(self) -> SParams:
+        return SParams.from_s1p_file(self.path)
 
 
 @hickleable()
