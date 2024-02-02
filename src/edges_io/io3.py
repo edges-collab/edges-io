@@ -1,4 +1,5 @@
 import attrs
+import numpy as np
 import re
 import warnings
 from astropy import units as un
@@ -149,6 +150,11 @@ def get_mean_temperature(
             temperature_table["time"] <= end_time
         )
 
+        if not np.any(mask):
+            raise ValueError(
+                f"No data found between {start_time} and {end_time} in temperature table"
+            )
+
         temperature_table = temperature_table[mask]
 
     if load in ("hot", "hot_load"):
@@ -207,3 +213,6 @@ class CalibrationObservation:
     @cache
     def get_temperature_table(self):
         return read_temperature_log(self.temperature_file)
+
+    def __gethstate__(self):
+        return attrs.asdict(self)
