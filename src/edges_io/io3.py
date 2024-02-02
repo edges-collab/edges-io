@@ -1,3 +1,6 @@
+"""Methods for dealing with EDGES-3 files and structures."""
+from __future__ import annotations
+
 import attrs
 import numpy as np
 import re
