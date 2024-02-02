@@ -7,6 +7,12 @@ except DistributionNotFound:
 finally:
     del get_distribution, DistributionNotFound
 
-from . import h5, io
+from pathlib import Path
+
+from . import h5, io, io3
 from .h5 import HDF5Object, HDF5RawSpectrum, HDF5StructureError
 from .io import S1P, FieldSpectrum, Spectrum
+
+TEST_DATA_PATH = Path(__file__).parent / "test_data"
+
+del Path

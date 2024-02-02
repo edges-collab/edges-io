@@ -9,7 +9,7 @@
 ;--datadir: /home/edges/edges3/MRO
 ;--site: mro
 ;--instrument: amb
-;--output_file: 
+;--output_file:
 ;--switch_io_port: 1 (0x1)
 ;--switch_delay: 0.500000
 ;--input_channel: 1 (0x1)
@@ -24,7 +24,7 @@
 ;--num_fft_buffers: 1024 (0x400)
 ;--stop_cycles: 450 (0x1c2)
 ;--stop_seconds: 0.000000
-;--stop_time: 
+;--stop_time:
 ;--show_plots: 0
 ;--plot_bin: 1 (0x1)
 # swpos 0 data_drops        0 adcmax  0.21771 adcmin -0.23773 temp  0 C nblk 40956 nspec 32768

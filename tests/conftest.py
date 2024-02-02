@@ -5,6 +5,7 @@ import h5py
 import numpy as np
 from pathlib import Path
 
+from edges_io import TEST_DATA_PATH
 from edges_io.h5 import HDF5RawSpectrum
 
 
@@ -88,4 +89,4 @@ def fastspec_spectrum_fl_2dim_time(tmpdir, fastspec_data):
 
 @pytest.fixture(scope="session")
 def datadir() -> Path:
-    return Path(__file__).parent / "test_data"
+    return TEST_DATA_PATH
