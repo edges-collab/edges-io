@@ -18,7 +18,7 @@ def _get_s1p_kind(path: Path) -> tuple[np.ndarray, str]:
         comment_rows = 0
         flag = None
         lines = d.readlines()
-        if lines[0].startswith("BEGIN"):
+        if lines[0].startswith("BEGIN") and lines[1].strip() in ["DB", "MA", "RI"]:
             # This is a format that has a BEGIN line, then a FLAG line, then data then END
             flag = lines[1].strip()
             comment_rows = 2
