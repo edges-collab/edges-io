@@ -151,9 +151,9 @@ def get_mean_temperature(
 
         temperature_table = temperature_table[mask]
 
-    if load == "hot":
+    if load in ("hot", "hot_load"):
         return temperature_table["hot_load_temperature"].mean()
-    elif load in ("amb", "open", "short", "box"):
+    elif load in ("amb", "ambient", "open", "short", "box"):
         return temperature_table["amb_load_temperature"].mean()
     else:
         raise ValueError(f"Unknown load {load}")
@@ -176,16 +176,23 @@ class CalibrationObservation:
         root_dir: Path | str = "/data5/edges/data/EDGES3_data/MRO/",
     ):
         """Create a CalibrationObservation from a date."""
+        load_map = {
+            "amb": "ambient",
+            "hot": "hot_load",
+            "open": "open",
+            "short": "short",
+            "lna": "lna",
+        }
         s11_files: frozendict[str : frozendict[str, Path]] = frozendict(
             {
-                load: frozendict(get_s1p_files(load, year, day, root_dir))
+                load_map[load]: frozendict(get_s1p_files(load, year, day, root_dir))
                 for load in ["amb", "hot", "open", "short", "lna"]
             }
         )
 
         acq_files: dict[str:Path] = frozendict(
             {
-                load: get_acq_file(load, root_dir, year, day)
+                load_map[load]: get_acq_file(load, root_dir, year, day)
                 for load in ["amb", "hot", "open", "short"]
             }
         )

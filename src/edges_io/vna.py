@@ -1,4 +1,6 @@
 """IO routines for VNA readings (S11, S12, S22 etc)."""
+from __future__ import annotations
+
 import attrs
 import numpy as np
 import warnings
@@ -129,12 +131,13 @@ class SParams:
     @classmethod
     def from_table(cls, table: QTable):
         """Create an SParams object from a table."""
+        # We slice each entry here so that we copy values, so we don't use a weakref
         return cls(
-            freq=table["frequency"],
-            s11=table["s11"] if "s11" in table.columns else None,
-            s12=table["s12"] if "s12" in table.columns else None,
-            s21=table["s21"] if "s21" in table.columns else None,
-            s22=table["s22"] if "s22" in table.columns else None,
+            freq=table["frequency"][:],
+            s11=table["s11"][:] if "s11" in table.columns else None,
+            s12=table["s12"][:] if "s12" in table.columns else None,
+            s21=table["s21"][:] if "s21" in table.columns else None,
+            s22=table["s22"][:] if "s22" in table.columns else None,
         )
 
     def to_table(self) -> QTable:
