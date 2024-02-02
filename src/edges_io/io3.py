@@ -182,6 +182,8 @@ class CalibrationObservation:
         cls,
         year: int,
         day: int,
+        s11_year: int | None = None,
+        s11_day: int | None = None,
         root_dir: Path | str = "/data5/edges/data/EDGES3_data/MRO/",
     ):
         """Create a CalibrationObservation from a date."""
@@ -192,9 +194,16 @@ class CalibrationObservation:
             "short": "short",
             "lna": "lna",
         }
+        if s11_year is None:
+            s11_year = year
+        if s11_day is None:
+            s11_day = day
+
         s11_files: frozendict[str : frozendict[str, Path]] = frozendict(
             {
-                load_map[load]: frozendict(get_s1p_files(load, year, day, root_dir))
+                load_map[load]: frozendict(
+                    get_s1p_files(load, s11_year, s11_day, root_dir)
+                )
                 for load in ["amb", "hot", "open", "short", "lna"]
             }
         )
