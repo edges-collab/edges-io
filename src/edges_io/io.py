@@ -3,6 +3,7 @@ This module defines the overall file structure and internal contents of the
 calibration observations. It does *not* implement any algorithms/methods on that data,
 making it easier to separate the algorithms from the data checking/reading.
 """
+
 from __future__ import annotations
 
 import attr
@@ -1818,9 +1819,9 @@ class CalibrationObservation(_DataContainer):
                                     del file_parts[k]
                                     del files[k]
 
-                        files[
-                            inc_fl.relative_to(this_root_obs / this_obs_name)
-                        ] = inc_fl
+                        files[inc_fl.relative_to(this_root_obs / this_obs_name)] = (
+                            inc_fl
+                        )
                         new_file_parts[inc_fl.relative_to(this_root_obs)] = kinds
 
                 # Updating the file parts after the full loop means that we can add

@@ -1,6 +1,7 @@
 """
 Nicer logger
 """
+
 import logging
 
 BLACK, RED, GREEN, YELLOW, BLUE, MAGENTA, CYAN, WHITE = range(8)
