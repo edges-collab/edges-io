@@ -1,19 +1,20 @@
 """Methods for dealing with EDGES-3 files and structures."""
 from __future__ import annotations
 
-import attrs
-import numpy as np
 import re
 import warnings
+from datetime import datetime, timedelta
+from functools import cache
+from pathlib import Path
+from typing import Any, Literal
+
+import attrs
+import numpy as np
 from astropy import units as un
 from astropy.table import QTable
 from astropy.time import Time
-from datetime import datetime, timedelta
 from frozendict import frozendict
-from functools import cache
 from hickleable import hickleable
-from pathlib import Path
-from typing import Any, Literal
 
 from . import io
 

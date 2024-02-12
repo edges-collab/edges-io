@@ -1,12 +1,13 @@
 """IO routines for VNA readings (S11, S12, S22 etc)."""
 from __future__ import annotations
 
+import warnings
+from pathlib import Path
+
 import attrs
 import numpy as np
-import warnings
 from astropy import units as un
 from astropy.table import QTable
-from pathlib import Path
 
 from . import types as tp
 
