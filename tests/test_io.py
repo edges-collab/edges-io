@@ -1,10 +1,9 @@
-import pytest
-
-import hickle
 import logging
-from bidict import bidict
 from pathlib import Path
 
+import hickle
+import pytest
+from bidict import bidict
 from edges_io import io, utils
 
 LOAD_ALIASES = bidict(
@@ -24,11 +23,11 @@ def test_dir(tmp_path_factory):
     return test_env(tmp_path_factory)
 
 
-@pytest.fixture(scope="function")
+@pytest.fixture()
 def test_env(tmp_path_factory):
     # Create an ideal observation file using tmp_path_factory
-    pthList = ["Spectra", "Resistance", "S11"]
-    s11List = [
+    path_list = ["Spectra", "Resistance", "S11"]
+    s11_list = [
         "Ambient01",
         "AntSim301",
         "HotLoad01",
@@ -46,31 +45,31 @@ def test_env(tmp_path_factory):
     note.touch()
     dlist = []
     slist = []
-    for i, p in enumerate(pthList):
+    for i, p in enumerate(path_list):
         dlist.append(obs_dir / p)
         dlist[i].mkdir()
         if p == "Resistance":
             print("Making Resistance files")
-            fileList = [
+            file_list = [
                 "Ambient",
                 "AntSim3",
                 "HotLoad",
                 "LongCableOpen",
                 "LongCableShorted",
             ]
-            for filename in fileList:
+            for filename in file_list:
                 name1 = filename + "_01_2020_001_01_01_01_lab.csv"
                 file1 = dlist[i] / name1
                 file1.touch()
         elif p == "S11":
             print("Making S11 files")
-            for k, s in enumerate(s11List):
+            for k, s in enumerate(s11_list):
                 slist.append(dlist[i] / s)
                 slist[k].mkdir()
                 if s[:-2] == "ReceiverReading":
-                    fileList = ["ReceiverReading", "Match", "Open", "Short"]
+                    file_list = ["ReceiverReading", "Match", "Open", "Short"]
                 elif s[:-2] == "SwitchingState":
-                    fileList = [
+                    file_list = [
                         "ExternalOpen",
                         "ExternalMatch",
                         "ExternalShort",
@@ -79,8 +78,8 @@ def test_env(tmp_path_factory):
                         "Short",
                     ]
                 else:
-                    fileList = ["External", "Match", "Open", "Short"]
-                for filename in fileList:
+                    file_list = ["External", "Match", "Open", "Short"]
+                for filename in file_list:
                     name1 = filename + "01.s1p"
                     name2 = filename + "02.s1p"
                     file1 = slist[k] / name1
@@ -98,14 +97,14 @@ def test_env(tmp_path_factory):
 
         elif p == "Spectra":
             print("Making Spectra files")
-            fileList = [
+            file_list = [
                 "Ambient",
                 "AntSim3",
                 "HotLoad",
                 "LongCableOpen",
                 "LongCableShorted",
             ]
-            for filename in fileList:
+            for filename in file_list:
                 name1 = filename + "_01_2020_001_01_01_01_lab.acq"
                 file1 = dlist[i] / name1
                 file1.touch()
@@ -113,7 +112,7 @@ def test_env(tmp_path_factory):
 
 
 # function to make observation object
-@pytest.fixture(scope="function")
+@pytest.fixture()
 def calio(test_env):
     return io.CalibrationObservation(test_env)
 
@@ -239,25 +238,12 @@ def test_io_partial(datadir: Path):
 
 
 def test_repeat_num_zero(tmpdir: Path, caplog):
-    open = tmpdir / "Open00.s1p"
-    open.touch()
+    open_s11 = tmpdir / "Open00.s1p"
+    open_s11.touch()
 
-    io.S1P(open)
+    io.S1P(open_s11)
     print(caplog.records)
     assert "The file Open00.s1p has a repeat_num (00) less than one" in caplog.messages
-
-
-### read testing
-# do identical acq and h5 files read in identically?
-# how does the read handle missing fields?
-
-
-### spectra testing
-# test to see if frequency range matches spectra shape
-
-# test to see if flow, fhigh match file
-
-### resistance testing
 
 
 def test_spectrum_from_load(datadir, caplog):
@@ -279,19 +265,16 @@ def test_spectrum_from_load(datadir, caplog):
             direc=datadir / "Receiver01_25C_2019_11_26_040_to_200MHz" / "Spectra",
         )
 
-        assert (
-            "The load specified [derp] is not one of the options available."
-            in caplog.messages
-        )
+    assert (
+        "The load specified [derp] is not one of the options available."
+        in caplog.messages
+    )
 
 
 def test_run_num_not_exist(datadir):
+    direc = datadir / "Receiver01_25C_2019_11_26_040_to_200MHz" / "Spectra"
     with pytest.raises(ValueError, match="No Ambient files exist"):
-        io.Spectrum.from_load(
-            load="ambient",
-            direc=datadir / "Receiver01_25C_2019_11_26_040_to_200MHz" / "Spectra",
-            run_num=2,
-        )
+        io.Spectrum.from_load(load="ambient", direc=direc, run_num=2)
 
 
 def test_spec_matches(datadir):

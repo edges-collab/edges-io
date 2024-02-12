@@ -1,14 +1,13 @@
 from __future__ import annotations
 
 import datetime
-import numpy as np
 import os
 import shutil
 from hashlib import md5
-from itertools import islice
 from pathlib import Path
+
+import numpy as np
 from rich.console import Console
-from typing import List, Optional, Union
 
 IGNORABLE_SUFFIXES = (".old", ".ignore", ".invalid", ".output")
 IGNORABLE_FOLDERS = ("outputs",)
@@ -54,7 +53,7 @@ def get_active_files(path: str | Path) -> list[Path]:
 
 def get_parent_dir(path, n=1):
     for _ in range(n):
-        path = os.path.dirname(os.path.normpath(path))
+        path = Path(os.path.normpath(path)).parent
     return path
 
 
@@ -88,7 +87,7 @@ def _ask_to_rm(fl: Path) -> Path | None:
         if fl.is_dir():
             shutil.rmtree(fl)
         else:
-            os.remove(str(fl))
+            fl.unlink()
         return None
     elif reply == "i":
         shutil.move(fl, str(fl) + ".invalid")
@@ -124,15 +123,15 @@ class LoadExistError(Exception):
     pass
 
 
-class IncompleteObservation(FileStructureError):
+class IncompleteObservationError(FileStructureError):
     pass
 
 
-class InconsistentObservation(FileStructureError):
+class InconsistentObservationError(FileStructureError):
     pass
 
 
-def get_file_list(top_level: Path, filter=None, ignore=None):
+def get_file_list(top_level: Path, filter=None, ignore=None):  # noqa: A002
     ignore = ignore or []
 
     out = []

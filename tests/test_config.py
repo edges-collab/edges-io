@@ -1,8 +1,9 @@
 """Test config class."""
 
-import pytest
+from typing import ClassVar
 
-from edges_io.config import Config, ConfigurationError, config
+import pytest
+from edges_io.config import Config
 
 
 @pytest.fixture(scope="module")
@@ -42,8 +43,8 @@ def test_write_and_load(cfg, tmpdir):
 
 def test_aliases(tmpdir):
     class NewConfig(Config):
-        _aliases = {"key": ("old_key",)}
-        _defaults = {"key": "value"}
+        _aliases: ClassVar = {"key": ("old_key",)}
+        _defaults: ClassVar = {"key": "value"}
 
     with pytest.warns(
         UserWarning, match="Your configuration spec has old key 'old_key'"
@@ -59,8 +60,8 @@ def test_aliases(tmpdir):
 
 def test_extra_keys():
     class NewConfig(Config):
-        _aliases = {"key": ("old_key",)}
-        _defaults = {"key": "value"}
+        _aliases: ClassVar = {"key": ("old_key",)}
+        _defaults: ClassVar = {"key": "value"}
 
     c = NewConfig(new_key="new_value")
     assert c["new_key"] == "new_value"
@@ -73,6 +74,6 @@ def test_bad_load():
 
 
 def test_cant_use_nonexistent(cfg):
-    with pytest.raises(KeyError, match="Cannot use bad in config"):
+    with pytest.raises(KeyError, match="Cannot use bad in config"):  # noqa: SIM117
         with cfg.use(bad="bad"):
             pass

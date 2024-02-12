@@ -1,4 +1,3 @@
-import py
 from os import path
 from pathlib import Path
 
@@ -28,9 +27,9 @@ def test_get_parent(tmpdir: Path):
     direc.mkdir(parents=True)
 
     parent = utils.get_parent_dir(str(direc))
-    assert path.basename(parent) == "child"
+    assert parent.name == "child"
     root = utils.get_parent_dir(str(direc), 2)
-    assert path.basename(root) == "test_get_parent"
+    assert root.name == "test_get_parent"
 
 
 def test_ymd_to_jd():

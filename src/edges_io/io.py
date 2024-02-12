@@ -1,4 +1,5 @@
-"""
+"""A module defining the overall file structure and internal contents of cal obs.
+
 This module defines the overall file structure and internal contents of the
 calibration observations. It does *not* implement any algorithms/methods on that data,
 making it easier to separate the algorithms from the data checking/reading.
@@ -6,24 +7,28 @@ making it easier to separate the algorithms from the data checking/reading.
 
 from __future__ import annotations
 
-import attr
+import contextlib
+import functools
 import logging
-import numpy as np
+import operator
 import re
-import read_acq
 import tempfile
-import toml
 import warnings
+from collections.abc import Sequence
+from datetime import datetime, timezone
+from functools import cached_property
+from io import StringIO
+from pathlib import Path
+from typing import ClassVar
+
+import attr
+import numpy as np
+import read_acq
+import toml
 import yaml
 from astropy import units as un
 from bidict import bidict
-from cached_property import cached_property
-from copy import copy
-from datetime import datetime
 from hickleable import hickleable
-from io import StringIO
-from pathlib import Path
-from typing import Dict, List, Optional, Sequence, Tuple, Union
 
 from . import utils
 from ._structure import _DataContainer, _DataFile
@@ -31,16 +36,16 @@ from .data import DATA_PATH
 from .h5 import HDF5RawSpectrum
 from .logging import logger
 
-with open(DATA_PATH / "calibration_loads.toml") as fl:
+with (DATA_PATH / "calibration_loads.toml").open("r") as fl:
     data = toml.load(fl)
     LOAD_ALIASES = bidict({v["alias"]: k for k, v in data.items()})
     LOAD_MAPPINGS = {
         v: k
         for k, val in data.items()
-        for v in val.get("misspells", []) + [val["alias"]]
+        for v in [*val.get("misspells", []), val["alias"]]
     }
 
-with open(DATA_PATH / "antenna_simulators.toml") as fl:
+with (DATA_PATH / "antenna_simulators.toml").open("r") as fl:
     ANTENNA_SIMULATORS = toml.load(fl)
 
 # Dictionary of misspelled:true mappings.
@@ -72,13 +77,15 @@ class _SpectrumOrResistance(_DataFile):
 
     known_patterns = (
         (
-            r"^(?P<load_name>%s)" % _loadname_pattern
+            r"^(?P<load_name>%s)"
+            % _loadname_pattern
             + r"_25C_(?P<month>\d{1,2})_(?P<day>\d{1,2})_("
             r"?P<year>\d\d\d\d)_(?P<hour>\d{1,2})_(?P<minute>\d{"
             r"1,2})_(?P<second>\d{1,2}).(?P<file_format>\w{2,3})$"
         ),
         (
-            r"^(?P<load_name>%s)" % _loadname_pattern
+            r"^(?P<load_name>%s)"
+            % _loadname_pattern
             + r"_(?P<month>\d{1,2})_(?P<day>\d{1,2})_("
             r"?P<year>\d\d\d\d)_(?P<hour>\d{1,2})_(?P<minute>\d{"
             r"1,2})_(?P<second>\d{1,2}).(?P<file_format>\w{2,3})$"
@@ -91,7 +98,8 @@ class _SpectrumOrResistance(_DataFile):
             r"2})_(?P<second>\d{1,2}).(?P<file_format>\w{2,3})$"
         ),
         (
-            r"(?P<load_name>%s)" % _loadname_pattern
+            r"(?P<load_name>%s)"
+            % _loadname_pattern
             + r"_(?P<year>\d{4})_(?P<day>\d{3})_"
             r"(?P<hour>\d{2})_(?P<minute>\d{2})_(?P<second>\d{2})_lab."
             r"(?P<file_format>\w{2,3})$"
@@ -109,27 +117,32 @@ class _SpectrumOrResistance(_DataFile):
             + r"_(?P<year>\d{4})_(?P<day>\d{3})_lab.(?P<file_format>\w{2,3})$"
         ),
         (
-            r"(?P<load_name>%s)" % _loadname_pattern
+            r"(?P<load_name>%s)"
+            % _loadname_pattern
             + r"_(?P<run_num>\d)_(?P<year>\d{4})_(?P<day>\d{3})_lab.(?P<file_format>\w{2,"
             r"3})$"
         ),
         (
-            r"(?P<load_name>%s)" % _loadname_pattern
+            r"(?P<load_name>%s)"
+            % _loadname_pattern
             + r"_\d{2}C_(?P<month>\d{1,2})_(?P<day>\d{1,2})_(?P<year>\d{4})_(?P<hour>\d{"
             r"1,2})_(?P<minute>\d{1,2})_(?P<second>\d{1,2}).(?P<file_format>\w{2,3})"
         ),
         (
-            r"(?P<load_name>%s)" % _loadname_pattern
+            r"(?P<load_name>%s)"
+            % _loadname_pattern
             + r"_(?P<run_num>\d{2})_(?P<year>\d{4})_(?P<day>\d{3})_("
             r"?P<hour>\d{2})_(?P<minute>\d{2}).(?P<file_format>\w{2,3})$"
         ),
         (
-            r"(?P<load_name>%s)" % _loadname_pattern
+            r"(?P<load_name>%s)"
+            % _loadname_pattern
             + r"_(?P<run_num>\d{2})_(?P<year>\d{4})_(?P<day>\d{3})_("
             r"?P<hour>\d{2}).(?P<file_format>\w{2,3})$"
         ),
         (
-            r"(?P<load_name>%s)" % _loadname_pattern
+            r"(?P<load_name>%s)"
+            % _loadname_pattern
             + r"_(?P<year>\d{4})_(?P<day>\d{3})_("
             r"?P<hour>\d{2})_(?P<minute>\d{2}).(?P<file_format>\w{2,3})$"
         ),
@@ -139,7 +152,7 @@ class _SpectrumOrResistance(_DataFile):
         ),
     )
 
-    known_substitutions = [
+    known_substitutions: ClassVar = [
         ("degC", "C"),
         ("_25C", ""),
         ("_15C", ""),
@@ -147,7 +160,7 @@ class _SpectrumOrResistance(_DataFile):
         ("LongCableShort_", "LongCableShorted_"),
     ]
 
-    supported_formats = []
+    supported_formats: ClassVar = []
 
     @classmethod
     def typestr(cls, name: str):
@@ -202,8 +215,7 @@ class _SpectrumOrResistance(_DataFile):
         run_num: int | None = None,
         filetype: str | None = None,
     ) -> list[_SpectrumOrResistance]:
-        """
-        Initialize the object in a simple way.
+        """Initialize the object in a simple way.
 
         Parameters
         ----------
@@ -218,6 +230,7 @@ class _SpectrumOrResistance(_DataFile):
         filetype
             The filetype of the data. Must be one of the supported formats. Defaults
             to `_default_filetype`.
+
         """
         direc = Path(direc)
 
@@ -272,18 +285,17 @@ class _SpectrumOrResistance(_DataFile):
 
     @cached_property
     def run_num(self):
-        """The run number of the data. All run_nums must be the same for all files in
-        the data.
+        """The run number of the data.
 
-        Every observation may have several runs. Note that different runs may be mixed
-        for different loads.
+        All run_nums must be the same for all files in the data. Every observation may
+        have several runs. Note that different runs may be mixed for different loads.
         """
         # Ensure all load names are the same
         return self._match_dict["run_num"]
 
     @cached_property
     def year(self):
-        """Year on which data acquisition began"""
+        """Year on which data acquisition began."""
         # Ensure all load names are the same
         return int(self._match_dict["year"])
 
@@ -299,30 +311,30 @@ class _SpectrumOrResistance(_DataFile):
 
     @cached_property
     def hour(self):
-        """List of integer hours (one per file) at which data acquisition was begun"""
+        """List of integer hours (one per file) at which data acquisition was begun."""
         return int(self._match_dict["hour"])
 
     @cached_property
     def minute(self):
-        """List of integer minutes (one per file) at which data acquisition was begun"""
+        """List of integer minutes (one per file) at which data acquisition was begun."""
         return int(self._match_dict["minute"])
 
     @cached_property
     def second(self):
-        """List of integer seconds (one per file) at which data acquisition was begun"""
+        """List of integer seconds (one per file) at which data acquisition was begun."""
         return int(self._match_dict["second"])
 
 
 @hickleable()
 @attr.s
 class FieldSpectrum:
-    """
-    A simple object able to read any known spectrum format.
+    """A simple object able to read any known spectrum format.
 
     Parameters
     ----------
     path
         The path to the file to read.
+
     """
 
     path: str | Path = attr.ib(converter=Path)
@@ -366,7 +378,7 @@ class FieldSpectrum:
 
     @staticmethod
     def _read_acq(file_name):
-        Q, px, anc = read_acq.decode_file(
+        q, px, anc = read_acq.decode_file(
             file_name,
             progress=False,
             meta=True,
@@ -374,7 +386,7 @@ class FieldSpectrum:
 
         freq_anc = {"frequencies": anc.frequencies}
         time_anc = anc.data
-        spectra = {"Q": Q, "p0": px[0], "p1": px[1], "p2": px[2]}
+        spectra = {"Q": q, "p0": px[0], "p1": px[1], "p2": px[2]}
 
         meta = anc.meta
         return spectra, freq_anc, time_anc, meta
@@ -383,8 +395,7 @@ class FieldSpectrum:
 @hickleable()
 @attr.s
 class Spectrum(_SpectrumOrResistance):
-    """
-    Class representing an observed spectrum.
+    """Class representing an observed spectrum.
 
     Standard initialization takes a filename which will be read directly (as long as it
     is in one of the supported formats). Initialization via :func:`from_load` will
@@ -398,9 +409,10 @@ class Spectrum(_SpectrumOrResistance):
     >>> spec.file_format
     h5
     >>> spectra = spec.read()
+
     """
 
-    supported_formats = ["h5", "acq", "mat"]
+    supported_formats: ClassVar = ["h5", "acq", "mat"]
 
     @cached_property
     def _raw_spec(self):
@@ -430,9 +442,10 @@ class Resistance(_SpectrumOrResistance):
 
     supported_formats = ("csv",)
 
-    known_patterns = _SpectrumOrResistance.known_patterns + (
-        r"^(?P<load_name>%s)" % _SpectrumOrResistance._loadname_pattern
-        + r".(?P<file_format>\w{2,3})$",
+    known_patterns = (
+        *_SpectrumOrResistance.known_patterns,
+        "^(?P<load_name>%s)" % _SpectrumOrResistance._loadname_pattern
+        + ".(?P<file_format>\\w{2,3})$",
     )
 
     @classmethod
@@ -447,7 +460,7 @@ class Resistance(_SpectrumOrResistance):
 
     @classmethod
     def read_csv(cls, path: Path) -> tuple[np.ndarray, dict]:
-        with open(path, errors="ignore") as fl:
+        with Path(path).open("r", errors="ignore") as fl:
             if fl.readline().startswith("FLUKE"):
                 return cls.read_old_style_csv(path)
             else:
@@ -483,7 +496,7 @@ class Resistance(_SpectrumOrResistance):
 
     @classmethod
     def read_old_style_csv_header(cls, path: Path):
-        with open(path, errors="ignore") as fl:
+        with Path(path).open("r", errors="ignore") as fl:
             if not fl.readline().startswith("FLUKE"):
                 return {}, 0
 
@@ -493,7 +506,7 @@ class Resistance(_SpectrumOrResistance):
             while not done:
                 line = fl.readline()
 
-                if line.startswith("Start Time,") or line.startswith("Max Time,"):
+                if line.startswith(("Start Time,", "Max Time,")):
                     names = line.split(",")
 
                     next_line = fl.readline()
@@ -519,9 +532,9 @@ class Resistance(_SpectrumOrResistance):
         header, nheader_lines = cls.read_old_style_csv_header(path)
         nlines = int(header["Total readings"])
 
-        with open(path, errors="ignore") as fl:
+        with Path(path).open("r", errors="ignore") as fl:
             # Get past the header.
-            for i in range(nheader_lines):
+            for _i in range(nheader_lines):
                 next(fl)
 
             s = StringIO("".join([next(fl) for i in range(nlines - 1)]))
@@ -603,7 +616,7 @@ class _SpectraOrResistanceFolder(_DataContainer):
 
     @cached_property
     def _run_nums(self) -> dict[str, int | None]:
-        if type(self._run_num) is int or self._run_num is None:
+        if isinstance(self._run_num, int) or self._run_num is None:
             return {load: self._run_num for load in LOAD_ALIASES.values()}
         else:
             return self._run_num
@@ -612,23 +625,19 @@ class _SpectraOrResistanceFolder(_DataContainer):
     def _loads(self) -> dict[str, Spectrum | Resistance]:
         loads = {}
         for name, load in LOAD_ALIASES.items():
-            try:
+            with contextlib.suppress(utils.LoadExistError):
                 loads[name] = self._content_type.from_load(
                     load, self.path, self._run_nums.get(load, None), self.filetype
                 )
-            except utils.LoadExistError:
-                pass
 
         return loads
 
     def __getattr__(self, item):
-        if item in LOAD_ALIASES:
-            if item in self._loads:
-                return self._loads[item]
+        if item in LOAD_ALIASES and item in self._loads:
+            return self._loads[item]
 
-        if item in ANTENNA_SIMULATORS:
-            if item in self.simulators:
-                return self.simulators[item]
+        if item in ANTENNA_SIMULATORS and item in self.simulators:
+            return self.simulators[item]
 
         raise AttributeError(f"{item} does not exist!")
 
@@ -651,7 +660,7 @@ class _SpectraOrResistanceFolder(_DataContainer):
 
     @property
     def run_num(self) -> dict[str, int]:
-        """Dictionary of run numbers for each load"""
+        """Dictionary of run numbers for each load."""
         try:
             return {k: getattr(self, k)[0].run_num for k in self.available_load_names}
         except TypeError:
@@ -661,7 +670,7 @@ class _SpectraOrResistanceFolder(_DataContainer):
     def _check_all_files_there(cls, path: Path) -> bool:
         # Just need to check for the loads.
         ok = True
-        for name, load in LOAD_ALIASES.items():
+        for load in LOAD_ALIASES.values():
             if not path.glob(load + "_*"):
                 logger.error(
                     f"{cls.__name__} does not contain any files for load {load}"
@@ -671,7 +680,7 @@ class _SpectraOrResistanceFolder(_DataContainer):
 
     @classmethod
     def get_all_load_names(cls, path) -> set[str]:
-        """Get all load names found in the Spectra directory"""
+        """Get all load names found in the Spectra directory."""
         fls = utils.get_active_files(path)
         return {fl.name.split("_")[0] for fl in fls}
 
@@ -706,7 +715,7 @@ class _SpectraOrResistanceFolder(_DataContainer):
         return ok
 
     def read_all(self):
-        """Read all spectra"""
+        """Read all spectra."""
         out = {}
         meta = {}
         for name in self.available_load_names:
@@ -735,7 +744,7 @@ class Resistances(_SpectraOrResistanceFolder):
 @hickleable()
 @attr.s
 class S1P(_DataFile):
-    POSSIBLE_KINDS = [
+    POSSIBLE_KINDS: ClassVar = [
         "Match",
         "Short",
         "Open",
@@ -798,7 +807,7 @@ class S1P(_DataFile):
     def _get_filename_parameters(cls, dct: dict):
         # If a lower-case kind is passed, use the upper-case version
         out = {"repeat_num": 1}
-        if dct.get("kind", None) in (k.lower() for k in cls.POSSIBLE_KINDS):
+        if dct.get("kind") in (k.lower() for k in cls.POSSIBLE_KINDS):
             dct["kind"] = cls.POSSIBLE_KINDS[
                 [k.lower() for k in cls.POSSIBLE_KINDS].index(dct["kind"])
             ]
@@ -817,6 +826,7 @@ class S1P(_DataFile):
         all_cols
             If the file is .s2p, it may have more than just S11, also S12, S21, S22.
             If so, setting ``all_cols=True`` returns all the S-parameters.
+
         """
         d, flag = cls._get_kind(path_filename)
         f = d[:, 0]
@@ -850,7 +860,7 @@ class S1P(_DataFile):
     def _get_kind(path_filename):
         # identifying the format
 
-        with open(path_filename) as d:
+        with Path(path_filename).open() as d:
             comment_rows = 0
             flag = None
             lines = d.readlines()
@@ -871,7 +881,9 @@ class S1P(_DataFile):
                     break
                 else:
                     warnings.warn(
-                        f"Non standard line in S11 file {path_filename}: '{line}'\n...Treating as a comment line."
+                        f"Non standard line in S11 file {path_filename}: "
+                        f"'{line}'\n...Treating as a comment line.",
+                        stacklevel=2,
                     )
                     comment_rows += 1
 
@@ -982,7 +994,7 @@ class _S11SubDir(_DataContainer):
 @hickleable()
 @attr.s
 class LoadS11(_S11SubDir):
-    STANDARD_NAMES = ["Open", "Short", "Match", "External"]
+    STANDARD_NAMES: ClassVar = ["Open", "Short", "Match", "External"]
     pattern = r"(?P<load_name>%s)(?P<run_num>\d{2})$" % (
         "|".join(LOAD_ALIASES.values())
     )
@@ -1037,7 +1049,7 @@ class SwitchingState(_S11SubDir):
     pattern = r"(?P<load_name>SwitchingState)(?P<run_num>\d{2})$"
     known_patterns = ("(?P<load_name>SwitchingState)",)
 
-    STANDARD_NAMES = [
+    STANDARD_NAMES: ClassVar = [
         "Open",
         "Short",
         "Match",
@@ -1052,7 +1064,7 @@ class SwitchingState(_S11SubDir):
 @attr.s
 class ReceiverReading(_S11SubDir):
     pattern = r"(?P<load_name>ReceiverReading)(?P<run_num>\d{2})$"
-    STANDARD_NAMES = ["Open", "Short", "Match", "ReceiverReading"]
+    STANDARD_NAMES: ClassVar = ["Open", "Short", "Match", "ReceiverReading"]
     known_substitutions = (("ReceiverReadings", "ReceiverReading"),)
     known_patterns = ("(?P<load_name>ReceiverReading)",)
 
@@ -1060,7 +1072,7 @@ class ReceiverReading(_S11SubDir):
 @hickleable()
 @attr.s
 class S11Dir(_DataContainer):
-    """Class representing the entire S11 subdirectory of an observation
+    """Class representing the entire S11 subdirectory of an observation.
 
     Parameters
     ----------
@@ -1078,16 +1090,14 @@ class S11Dir(_DataContainer):
 
     """
 
-    _content_type = {
+    _content_type: ClassVar = {
         **{load: LoadS11 for load in LOAD_ALIASES.values()},
-        **{load: LoadS11 for load in LOAD_MAPPINGS.keys()},
-        **{
-            "SwitchingState": SwitchingState,
-            "ReceiverReading": ReceiverReading,
-            "InternalSwitch": SwitchingState,  # To catch the old way so it can be fixed.
-        },
-        **{key: AntSimS11 for key in ANTENNA_SIMULATORS.keys()},
-        **{key: AntSimS11 for key in ANTSIM_REVERSE.keys()},
+        **{load: LoadS11 for load in LOAD_MAPPINGS},
+        "SwitchingState": SwitchingState,
+        "ReceiverReading": ReceiverReading,
+        "InternalSwitch": SwitchingState,  # To catch the old way so it can be fixed.
+        **{key: AntSimS11 for key in ANTENNA_SIMULATORS},
+        **{key: AntSimS11 for key in ANTSIM_REVERSE},
     }
     pattern = "S11"
     known_patterns = ("s11",)
@@ -1103,11 +1113,12 @@ class S11Dir(_DataContainer):
     @cached_property
     def _run_nums(self) -> dict[str, int]:
         run_nums = {}
-        for name in (
-            ["switching_state", "receiver_reading"]
-            + list(self.available_load_names)
-            + list(self.get_simulator_names(self.path))
-        ):
+        for name in [
+            "switching_state",
+            "receiver_reading",
+            *list(self.available_load_names),
+            *list(self.get_simulator_names(self.path)),
+        ]:
             try:
                 if isinstance(self._run_num, int):
                     run_nums[name] = self._run_num
@@ -1130,10 +1141,8 @@ class S11Dir(_DataContainer):
     def _repeat_nums(self) -> dict[str, int]:
         if not isinstance(self._repeat_num, dict):
             return {
-                **{
-                    "switching_state": self._repeat_num,
-                    "receiver_reading": self._repeat_num,
-                },
+                "switching_state": self._repeat_num,
+                "receiver_reading": self._repeat_num,
                 **{name: self._repeat_num for name in LOAD_ALIASES.values()},
             }
         else:
@@ -1151,10 +1160,7 @@ class S11Dir(_DataContainer):
         out = []
         for rr in rn:
             for rp in rep_num:
-                if rp is None:
-                    kw = {}
-                else:
-                    kw = {"repeat_num": rp}
+                kw = {} if rp is None else {"repeat_num": rp}
 
             out.append(cls(self.path / f"{alias}{rr:>02}", **kw))
 
@@ -1185,13 +1191,11 @@ class S11Dir(_DataContainer):
         }
 
     def __getattr__(self, item):
-        if item in self.load_names:
-            if item in self._loads:
-                return self._loads[item]
+        if item in self.load_names and item in self._loads:
+            return self._loads[item]
 
-        if item in ANTENNA_SIMULATORS:
-            if item in self.simulators:
-                return self.simulators[item]
+        if item in ANTENNA_SIMULATORS and item in self.simulators:
+            return self.simulators[item]
 
         raise AttributeError(f"{item} does not exist!")
 
@@ -1217,9 +1221,10 @@ class S11Dir(_DataContainer):
     def _get_run_repeat_dict(self, kind: str) -> dict[str, list[int]]:
         out = {}
         for key in (
-            self.available_load_names
-            + ("switching_state", "receiver_reading")
-            + tuple(self.simulators.keys())
+            *self.available_load_names,
+            "switching_state",
+            "receiver_reading",
+            *tuple(self.simulators.keys()),
         ):
             out[key] = [getattr(x, kind) for x in getattr(self, key)]
 
@@ -1286,8 +1291,7 @@ class S11Dir(_DataContainer):
 @hickleable()
 @attr.s
 class CalibrationObservation(_DataContainer):
-    """
-    A full set of data required to calibrate field observations.
+    """A full set of data required to calibrate field observations.
 
     Incorporates several lower-level objects, such as :class:`Spectrum`,
     :class:`Resistance` and :class:`S1P` in a seamless way.
@@ -1313,6 +1317,7 @@ class CalibrationObservation(_DataContainer):
         Whether to attempt compiling a virtual observation from a ``definition.yaml``
         inside the observation directory. This is the default behaviour, but can
         be turned off to enforce that the current directory should be used directly.
+
     """
 
     pattern = re.compile(
@@ -1336,7 +1341,7 @@ class CalibrationObservation(_DataContainer):
         "{freq_low:0>3}_to_{freq_hi:0>3}MHz"
     )
 
-    _content_type = {
+    _content_type: ClassVar = {
         "S11": S11Dir,
         "Spectra": Spectra,
         "Resistance": Resistances,
@@ -1447,11 +1452,11 @@ class CalibrationObservation(_DataContainer):
         obs_yaml = Path(obs_yaml)
         assert obs_yaml.exists(), f"{obs_yaml} does not exist!"
 
-        with open(obs_yaml) as fl:
+        with obs_yaml.open("r") as fl:
             obs_yaml_data = yaml.load(fl, Loader=yaml.FullLoader)
 
         root = obs_yaml_data["root"]
-        root = obs_yaml.parent.absolute() if not root else Path(root).absolute()
+        root = Path(root).absolute() if root else obs_yaml.parent.absolute()
         assert (
             root.exists()
         ), f"The root {root} specified in the observation does not exist."
@@ -1475,8 +1480,10 @@ class CalibrationObservation(_DataContainer):
 
         # Link all Spectra and Resistance files.
         for key, thing in zip(["spectra", "resistance"], [spec, res]):
-            for kind, kind_files in files[key].items():
-                these_files = sum((list(root.glob(fl)) for fl in kind_files), [])
+            for kind_files in files[key].values():
+                these_files = functools.reduce(
+                    operator.iadd, (list(root.glob(fl)) for fl in kind_files), []
+                )
                 for fl in these_files:
                     (thing / fl.name).symlink_to(root / fl)
 
@@ -1541,14 +1548,13 @@ class CalibrationObservation(_DataContainer):
     @classmethod
     def check_definition(cls, path: Path) -> dict:
         """Check the associated definition.yaml file within an observation."""
-
         definition_file = path / "definition.yaml"
 
         # Read in the definition file (if it exists)
         if not definition_file.exists():
             return {}
 
-        with open(definition_file) as fl:
+        with definition_file.open("r") as fl:
             definition = yaml.load(fl, Loader=yaml.FullLoader) or {}
 
         allowed_keys = {
@@ -1644,7 +1650,12 @@ class CalibrationObservation(_DataContainer):
             logger.setLevel(pre_level)
 
         if match:
-            return datetime(int(match["year"]), int(match["month"]), int(match["day"]))
+            return datetime(
+                int(match["year"]),
+                int(match["month"]),
+                int(match["day"]),
+                tzinfo=timezone.utc,
+            )
         else:
             raise utils.FileStructureError("The path is not valid for an Observation.")
 
@@ -1686,7 +1697,7 @@ class CalibrationObservation(_DataContainer):
                 if all(name in val for val in dct.values())
             ]
         else:
-            names = list(dct.values())[0]
+            names = next(iter(dct.values()))
 
         return set(names)
 
@@ -1751,6 +1762,7 @@ class CalibrationObservation(_DataContainer):
             cleaned up.
         name : str
             The name of the observation (i.e. the directory inside the temporary direc).
+
         """
         path = Path(path).absolute()
         obs_name = path.name
@@ -1782,7 +1794,7 @@ class CalibrationObservation(_DataContainer):
                 # Need to get this root_obs if inc_path is absolute, because we need
                 # to know where the observation starts (in the path)
                 if inc_path.is_absolute():
-                    for indx, part in enumerate(inc_path.parts[::-1]):
+                    for part in inc_path.parts[::-1]:
                         if cls.pattern.search(part):
                             break
                     else:
@@ -1819,9 +1831,9 @@ class CalibrationObservation(_DataContainer):
                                     del file_parts[k]
                                     del files[k]
 
-                        files[inc_fl.relative_to(this_root_obs / this_obs_name)] = (
-                            inc_fl
-                        )
+                        files[
+                            inc_fl.relative_to(this_root_obs / this_obs_name)
+                        ] = inc_fl
                         new_file_parts[inc_fl.relative_to(this_root_obs)] = kinds
 
                 # Updating the file parts after the full loop means that we can add
@@ -1834,7 +1846,7 @@ class CalibrationObservation(_DataContainer):
             # Look for a previous definition in the root observation directory.
             potential_obs = root_obs.glob(obs_name.split("_")[0] + "_*")
             potential_obs = sorted(
-                str(p.name) for p in list(potential_obs) + [path.parent]
+                str(p.name) for p in [*list(potential_obs), path.parent]
             )
             if len(potential_obs) > 1:
                 indx = potential_obs.index(obs_name) - 1
@@ -1849,7 +1861,7 @@ class CalibrationObservation(_DataContainer):
         stuff = f"{path}_{include_previous}"
         if (path / "definition.yaml").exists():
             # Now make a full symlink directory with these files.
-            with open(path / "definition.yaml") as fl:
+            with (path / "definition.yaml").open("r") as fl:
                 stuff += fl.read()
         hsh = utils.stable_hash(stuff)
         dirname = f"calobs_{hsh}"
@@ -1872,6 +1884,7 @@ class CalibrationObservation(_DataContainer):
         --------
         >>> CalibrationObservation.match_path('Spectra')
         >>> (Spectra, )
+
         """
         structure = {
             CalibrationObservation: {
@@ -1910,7 +1923,7 @@ class CalibrationObservation(_DataContainer):
                     pth, match = thing.check_self(part, fix=False)
 
                     if match is not None:
-                        parts = parts + (thing.typestr(part),)
+                        parts = (*parts, thing.typestr(part))
 
                         if isinstance(_strc, dict):
                             _strc = _strc[thing]
@@ -1935,7 +1948,7 @@ class CalibrationObservation(_DataContainer):
 
     @property
     def run_num(self) -> dict[str, int]:
-        """Dictionary specifying run numbers for each component"""
+        """Dictionary specifying run numbers for each component."""
         return self.s11.run_num
 
     @property
@@ -1943,10 +1956,18 @@ class CalibrationObservation(_DataContainer):
         """A list of all data files used in this observation."""
         fls = []
         for name in self.s11.available_load_names:
-            fls += sum((list(rr.filenames) for rr in getattr(self.s11, name)), [])
+            fls += functools.reduce(
+                operator.iadd,
+                (list(rr.filenames) for rr in getattr(self.s11, name)),
+                [],
+            )
 
-        fls += sum((list(rr.filenames) for rr in self.s11.receiver_reading), [])
-        fls += sum((list(rr.filenames) for rr in self.s11.switching_state), [])
+        fls += functools.reduce(
+            operator.iadd, (list(rr.filenames) for rr in self.s11.receiver_reading), []
+        )
+        fls += functools.reduce(
+            operator.iadd, (list(rr.filenames) for rr in self.s11.switching_state), []
+        )
 
         for name in self.spectra.load_names:
             fls += [x.path for x in getattr(self.spectra, name)]
