@@ -1,10 +1,13 @@
-"""
-Module defining EDGES-specific reading functions for weather and auxiliary data.
-"""
-import numpy as np
+"""Module defining EDGES-specific reading functions for weather and auxiliary data."""
+from __future__ import annotations
+
 import re
 import warnings
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
+from pathlib import Path
+from typing import Optional
+
+import numpy as np
 
 _NEW_WEATHER_PATTERN = re.compile(
     r"(?P<year>\d{4}):(?P<day>\d{3}):(?P<hour>\d{2}):(?P<minute>\d{2}):(?P<second>\d{2})  "
@@ -30,19 +33,6 @@ _THERMLOG_PATTERN = re.compile(
 )
 
 
-def _parse_line(line, pattern):
-    match = re.match(pattern, line)
-    if match:
-        dct = {}
-        for k, v in match.groupdict().items():
-            try:
-                dct[k] = int(v)
-            except ValueError:
-                dct[k] = float(v)
-
-        return dct
-
-
 def _parse_lines(text, pattern):
     for match in pattern.finditer(text):
         dct = {}
@@ -54,8 +44,14 @@ def _parse_lines(text, pattern):
         yield dct
 
 
-def _get_chunk_pos_and_size(fname, start_time, end_time=None, n_hours=None):
-    """
+def _get_chunk_pos_and_size(
+    fname: str | Path,
+    start_time: tuple[int, int, int, int],
+    end_time: tuple[int, int, int, int] | None = None,
+    n_hours: int | None = None,
+):
+    """Get the chunk and position size for a given time range in a file.
+
     Parameters
     ----------
     fname : path
@@ -73,13 +69,19 @@ def _get_chunk_pos_and_size(fname, start_time, end_time=None, n_hours=None):
         Starting position in file.
     nlines :
         Number of lines required to read for this chunk.
+
     """
     if end_time is None:
         if n_hours is None:
             end_time = f"{start_time[0]:04}:{start_time[1]+1:03}:00:00"
         else:
             first_day = datetime(
-                start_time[0], 1, 1, hour=start_time[2], minute=start_time[3]
+                start_time[0],
+                1,
+                1,
+                hour=start_time[2],
+                minute=start_time[3],
+                tzinfo=timezone.utc,
             )
             dt = first_day + timedelta(days=start_time[1])
             end = dt + timedelta(hours=n_hours)
@@ -94,8 +96,9 @@ def _get_chunk_pos_and_size(fname, start_time, end_time=None, n_hours=None):
         f"{start_time[0]:04}:{start_time[1]:03}:{start_time[2]:02}:{start_time[3]:02}"
     )
 
+    fname = Path(fname)
     line = "0000:000:00:00"
-    with open(fname) as fl:
+    with fname.open("r") as fl:
         # Get our starting position in the file.
         while line and line[:14] < start_time:
             line = fl.readline()
@@ -123,10 +126,15 @@ def _get_chunk_pos_and_size(fname, start_time, end_time=None, n_hours=None):
 
 
 def read_weather_file(
-    weather_file, year, day, hour=0, minute=0, n_hours=None, end_time=None
+    weather_file: str | Path,
+    year: int,
+    day: int,
+    hour: int = 0,
+    minute: int = 0,
+    n_hours: int | None = None,
+    end_time: tuple[int, int, int, int] | None = None,
 ):
-    """
-    Read (a chunk of) the weather file maintained by the on-site (MRO) monitoring.
+    """Read (a chunk of) the weather file maintained by the on-site (MRO) monitoring.
 
     The primary location of this file is on the enterprise cluster at
     ``/data5/edges/data/2014_February_Boolardy/weather2.txt``, but the function
@@ -161,8 +169,10 @@ def read_weather_file(
         * ``ambient_hum``: ambient humidity on site (%)
         * ``frontend_temp``: temperature of the frontend (K)
         * ``lna_temp``: temperature of the LNA (K).
+
     """
-    with open(weather_file) as fl:
+    weather_file = Path(weather_file)
+    with weather_file.open("r") as fl:
         if _NEW_WEATHER_PATTERN.match(fl.readline()) is not None:
             pattern = _NEW_WEATHER_PATTERN
         else:
@@ -186,7 +196,7 @@ def read_weather_file(
 
     weather = np.zeros(n_lines, dtype)
 
-    with open(weather_file) as fl:
+    with weather_file.open("r") as fl:
         # Go back to the starting position of the day, and read in each line of the day.
         fl.seek(start_line)
 
@@ -206,18 +216,16 @@ def read_weather_file(
             )
 
             if pattern == _NEW_WEATHER_PATTERN:
-                w = w + (
-                    match["frontend_temp"],
-                    match["lna_temp"],
-                )
+                w = (*w, match["frontend_temp"], match["lna_temp"])
             else:
-                w = w + (np.nan, np.nan)
+                w = (*w, np.nan, np.nan)
 
             weather[i] = w
 
         if i < len(weather) - 1:
             warnings.warn(
-                f"Only {i+1}/{n_lines} lines of {weather_file} were able to be parsed."
+                f"Only {i+1}/{n_lines} lines of {weather_file} were able to be parsed.",
+                stacklevel=2,
             )
             weather = weather[: i + 1]
 
@@ -225,10 +233,15 @@ def read_weather_file(
 
 
 def read_thermlog_file(
-    filename, year, day, hour=0, minute=0, n_hours=None, end_time=None
+    filename: str | Path,
+    year: int,
+    day: int,
+    hour: int = 0,
+    minute: int = 0,
+    n_hours: int | None = None,
+    end_time: tuple[int, int, int, int] | None = None,
 ):
-    """
-    Read (a chunk of) the thermlog file maintained by the on-site (MRO) monitoring.
+    """Read (a chunk of) the thermlog file maintained by the on-site (MRO) monitoring.
 
     The primary location of this file is on the enterprise cluster at
     ``/data5/edges/data/2014_February_Boolardy/thermlog_{band}.txt``, but the function
@@ -261,6 +274,7 @@ def read_thermlog_file(
         * ``temp_set``: temperature that it was set to (?) (C)
         * ``receiver_temp``: temperature of the receiver (C)
         * ``power_percent``: power of something (%)
+
     """
     start_line, n_lines, nchar = _get_chunk_pos_and_size(
         filename, (year, day, hour, minute), end_time=end_time, n_hours=n_hours
@@ -280,7 +294,7 @@ def read_thermlog_file(
         ],
     )
 
-    with open(filename) as fl:
+    with Path(filename).open("r") as fl:
         fl.seek(start_line)
 
         matches = _parse_lines(fl.read(nchar), _THERMLOG_PATTERN)
@@ -299,7 +313,8 @@ def read_thermlog_file(
             )
         if i < len(therm) - 1:
             warnings.warn(
-                f"Only {i+1}/{n_lines} lines of {filename} were able to be parsed."
+                f"Only {i+1}/{n_lines} lines of {filename} were able to be parsed.",
+                stacklevel=2,
             )
             therm = therm[: i + 1]
 
@@ -307,19 +322,16 @@ def read_thermlog_file(
 
 
 def auxiliary_data(
-    weather_file,
-    thermlog_file,
-    year,
-    day,
-    hour=0,
-    minute=0,
-    n_hours=None,
-    end_time=None,
+    weather_file: str | Path,
+    thermlog_file: str | Path,
+    year: int,
+    day: int,
+    hour: int = 0,
+    minute: int = 0,
+    n_hours: int | None = None,
+    end_time: tuple[int, int, int, int] | None = None,
 ):
-    """
-    Simple wrapper for reading both weather and thermlog files.
-
-    See their documentation for details.
+    """Read both weather and thermlog files for a given time range.
 
     Parameters
     ----------
@@ -347,6 +359,7 @@ def auxiliary_data(
         The weather data (see :func:`read_weather_file`).
     structured array :
         The thermlog data (see :func:`read_thermlog_file`)
+
     """
     weather = read_weather_file(
         weather_file,

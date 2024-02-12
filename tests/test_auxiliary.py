@@ -1,6 +1,6 @@
-import numpy as np
 from pathlib import Path
 
+import numpy as np
 from edges_io.auxiliary import read_thermlog_file, read_weather_file
 
 

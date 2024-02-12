@@ -1,13 +1,12 @@
-import pytest
-
 from pathlib import Path
 
+import pytest
 from edges_io.io import CalibrationObservation, Spectrum
 from edges_io.utils import FileStructureError
 
 
 def test_spectrum_file_params(tmpdir: Path):
-    """test that the Spectrum class can use default values for file keys"""
+    """Test that the Spectrum class can use default values for file keys."""
     fname = tmpdir / "AmbientLoad_25C_01_01_2017_01_01_01.acq"
     fname.touch()
 

@@ -1,7 +1,8 @@
-import numpy as np
 from pathlib import Path
 
-from edges_io.vna import SParams
+import numpy as np
+from edges_io.io import S1P
+from edges_io.sparams import SParams
 
 
 def test_s1p_read(datadir: Path):

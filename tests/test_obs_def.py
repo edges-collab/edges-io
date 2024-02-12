@@ -1,4 +1,5 @@
 """Tests for defining observations inside the observation itself."""
+
 import os
 from pathlib import Path
 

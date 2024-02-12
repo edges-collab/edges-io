@@ -1,8 +1,9 @@
-import click
 import re
 import shutil
-from os import path, remove, rename
+from os import rename
 from pathlib import Path
+
+import click
 
 from . import io
 from .logging import logger, logging
@@ -77,20 +78,15 @@ def mv(root, clean):
     if not match:
         raise FileStructureError("Could not normalize root observation directory.")
 
-    rename(
-        root,
-        str(
-            parent.parent
-            / io.CalibrationObservation.write_pattern.format(
-                **match.groupdict(), temp=root.name[:2]
-            )
-        ),
+    root.rename(
+        parent.parent
+        / io.CalibrationObservation.write_pattern.format(
+            **match.groupdict(), temp=root.name[:2]
+        )
     )
 
-    if clean:
-        print("Cleaning up...")
-        if not list(parent.glob("*")):
-            shutil.rmtree(parent)
+    if clean and not list(parent.glob("*")):
+        shutil.rmtree(parent)
 
 
 @main.command()
@@ -100,5 +96,4 @@ def mv(root, clean):
 def mv_all(ctx, roots, clean):
     """Move all temperature directories corresponding to the glob-pattern given."""
     for root in roots:
-        print(f"Moving {root}")
         ctx.invoke(mv, root=root, clean=clean)

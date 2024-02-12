@@ -1,18 +1,19 @@
 from __future__ import annotations
 
-import attr
 import contextlib
-import h5py
 import logging
-import numpy as np
-import psutil
 import warnings
 import weakref
-import yaml
 from abc import ABCMeta
-from datetime import datetime
-from hickle.lookup import LoaderManager, PyContainer
+from datetime import datetime, timezone
 from pathlib import Path
+from typing import ClassVar
+
+import attr
+import h5py
+import numpy as np
+import psutil
+import yaml
 
 from . import __version__, utils
 
@@ -29,7 +30,7 @@ class HDF5StructureValidationError(HDF5StructureError):
     pass
 
 
-class HDF5StructureExtraKey(HDF5StructureError):
+class HDF5StructureExtraKeyError(HDF5StructureError):
     pass
 
 
@@ -41,7 +42,7 @@ class _HDF5Part(metaclass=ABCMeta):
         self.__memcache__ = {}
 
     def __getstate__(self):
-        """Prepare class for pickling. HDF5 files are not pickleable!"""
+        """Prepare class for pickling. HDF5 files are not pickleable!."""
         return {
             key: (val if not key.endswith("__fl_inst") else None)
             for key, val in self.__dict__.items()
@@ -133,8 +134,7 @@ class _HDF5Part(metaclass=ABCMeta):
 
 @attr.s
 class HDF5Object(_HDF5Part):
-    """
-    An object that provides a transparent wrapper of a HDF5 file.
+    """An object that provides a transparent wrapper of a HDF5 file.
 
     Creation of this object can be done in two ways: either by passing a filename
     to wrap, or by using ``.from_data``, in which case you must pass all the data to it,
@@ -166,12 +166,13 @@ class HDF5Object(_HDF5Part):
 
         with obj.open() as fl:
             val = fl.attrs['key']
+
     """
 
     _require_no_extra = False
-    default_root = Path(".")
-    _structure = {}
-    _yaml_types = {dict}
+    default_root = Path()
+    _structure: ClassVar = {}
+    _yaml_types: ClassVar = {dict}
 
     filename: Path = attr.ib(default=None, converter=attr.converters.optional(Path))
     require_no_extra = attr.ib(default=_require_no_extra, converter=bool, kw_only=True)
@@ -214,7 +215,7 @@ class HDF5Object(_HDF5Part):
         if "meta" not in cls._structure:
             cls._structure["meta"] = {}
 
-        for k, v in cls._get_extra_meta().items():
+        for k in cls._get_extra_meta():
             if k not in cls._structure["meta"]:
                 cls._structure["meta"][k] = None
 
@@ -232,14 +233,15 @@ class HDF5Object(_HDF5Part):
 
             try:
                 cls._checkgrp(data, cls._structure)
-            except HDF5StructureExtraKey as e:
+            except HDF5StructureExtraKeyError as e:
                 if false_if_extra:
-                    raise HDF5StructureExtraKey(
+                    raise HDF5StructureExtraKeyError(
                         f"Data had extra key(s)! Extras: {str(e).split(':')[-1]}"
-                    )
+                    ) from e
                 else:
                     warnings.warn(
-                        f"Data had extra key! Extras: {str(e).split(':')[-1]}"
+                        f"Data had extra key! Extras: {str(e).split(':')[-1]}",
+                        stacklevel=2,
                     )
 
         inst.__memcache__ = data
@@ -248,9 +250,7 @@ class HDF5Object(_HDF5Part):
     @classmethod
     def _get_extra_meta(cls):
         return {
-            "write_time": datetime.now().strftime(
-                datetime.now().strftime("%Y-%M-%D:%H:%M:%S")
-            ),
+            "write_time": datetime.now(tz=timezone.utc).strftime("%Y-%M-%D:%H:%M:%S"),
             "edges_io_version": __version__,
             "object_name": cls.__name__,
         }
@@ -291,11 +291,11 @@ class HDF5Object(_HDF5Part):
 
                         grp[k] = v
 
-                except TypeError:
+                except TypeError as e:
                     raise TypeError(
                         f"For key '{k}' in class '{self.__class__.__name__}', type '"
                         f"{type(v)}' is not allowed in HDF5."
-                    )
+                    ) from e
 
         to_write = self.__memcache__
 
@@ -338,8 +338,8 @@ class HDF5Object(_HDF5Part):
 
         # Ensure there's no extra keys in the group
         if len(strc) < len(grp.keys()):
-            extras = [k for k in grp.keys() if k not in strc]
-            raise HDF5StructureExtraKey(f"Extra keys found in {grp}: {extras}")
+            extras = [k for k in grp if k not in strc]
+            raise HDF5StructureExtraKeyError(f"Extra keys found in {grp}: {extras}")
 
     @classmethod
     def check(cls, filename, false_if_extra=None):
@@ -356,24 +356,25 @@ class HDF5Object(_HDF5Part):
         with h5py.File(filename, "r") as fl:
             try:
                 cls._checkgrp(fl, cls._structure)
-            except HDF5StructureExtraKey as e:
+            except HDF5StructureExtraKeyError as e:
                 if false_if_extra:
                     raise e
                 else:
-                    warnings.warn(f"{e}. Filename={filename}. ")
+                    warnings.warn(f"{e}. Filename={filename}. ", stacklevel=2)
 
         logger.debug(
             f"Memory After Checking HDF5 File: {pr.memory_info().rss / 1024**2} MB"
         )
 
     @contextlib.contextmanager
-    def open(self, mode="r") -> h5py.Group:
+    def open(self, mode="r") -> h5py.Group:  # noqa: A003
         """Context manager for opening up the file.
 
         Yields
         ------
         grp : :class:`h5py.Group`
             The h5py Group corresponding to this instance.
+
         """
         assert mode in {"r", "r+"}
 
@@ -420,13 +421,14 @@ class _HDF5Group(_HDF5Part):
     _structure = attr.ib(factory=dict, converter=dict)
 
     @contextlib.contextmanager
-    def open(self, mode="r") -> h5py.Group:
+    def open(self, mode="r") -> h5py.Group:  # noqa: A003
         """Context manager for opening up the file.
 
         Yields
         ------
         grp : :class:`h5py.Group`
             The h5py Group corresponding to this instance.
+
         """
         assert mode in {"r", "r+"}
 
@@ -441,7 +443,7 @@ class _HDF5Group(_HDF5Part):
 class HDF5RawSpectrum(HDF5Object):
     _require_no_extra = False
 
-    _structure = {
+    _structure: ClassVar = {
         "meta": {
             "fastspec_version": utils.optional(utils.isstringish),
             "start": utils.optional(utils.isintish),
@@ -528,7 +530,8 @@ class HDF5RawSpectrum(HDF5Object):
             if swpos > 0:
                 warnings.warn(
                     "Cannot read times for swpos > 0 as your file is in the old format "
-                    "with only swpos=0. Returning that instead."
+                    "with only swpos=0. Returning that instead.",
+                    stacklevel=2,
                 )
             x = times
 

@@ -1,8 +1,4 @@
 import pytest
-
-import numpy as np
-from pathlib import Path
-
 from edges_io.h5 import HDF5RawSpectrum
 from edges_io.io import Spectrum
 
@@ -20,10 +16,7 @@ def check_obj(obj):
     assert "p0" not in obj["spectra"].__memcache__
 
     t = obj["time_ancillary"]["times"]
-    if t.ndim == 2:
-        tt = t[:, 0]
-    else:
-        tt = t
+    tt = t[:, 0] if t.ndim == 2 else t
     assert obj.convert_times(tt) == obj.get_times()
 
     if t.ndim == 1:
@@ -57,5 +50,5 @@ def test_read_acq(datadir):
 
 def test_read_bad_format(datadir):
     spec = Spectrum(datadir / "bad.file")
-    with pytest.raises(IOError):
-        spec.data
+    with pytest.raises(OSError, match="does not exist"):
+        spec.data  # noqa: B018
