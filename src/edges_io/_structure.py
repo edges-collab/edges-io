@@ -1,15 +1,16 @@
 from __future__ import annotations
 
-import attr
+import contextlib
 import os
 import re
 import shutil
 import subprocess
 from abc import ABC, abstractmethod
-from cached_property import cached_property
 from copy import copy
 from pathlib import Path
-from typing import Dict, Iterable, Optional, Tuple, Union
+
+import attr
+from cached_property import cached_property
 
 from . import utils
 from .logging import logger
@@ -34,7 +35,7 @@ class _ObsNode(ABC):
 
     def __attrs_post_init__(self):
         # Here we just access this to ensure the checks run on instantiation.
-        self._path_and_match_dict
+        self._path_and_match_dict  # noqa: B018
 
     @cached_property
     def _path_and_match_dict(self) -> tuple[Path, dict | None]:
@@ -107,7 +108,8 @@ class _ObsNode(ABC):
         """Return a dictionary of filename parameters to be inserted into `write_pattern`.
 
         These should be defaults if appropriate.
-        If a particular parameter has no default and cannot be obtained, omit it."""
+        If a particular parameter has no default and cannot be obtained, omit it.
+        """
         return {}
 
     @classmethod
@@ -117,7 +119,6 @@ class _ObsNode(ABC):
     @classmethod
     def _fix(cls, root: Path, basename: str) -> tuple[Path | None, re.Match | None]:
         """Auto-fix a basename."""
-
         # First try simple substitutions
         new_name = copy(basename)
         for sub, correct in cls.known_substitutions:
@@ -185,15 +186,14 @@ class _ObsNode(ABC):
             shutil.move(root / basename, new_path)
             return new_path, match
 
-    @classmethod
+    @classmethod  # noqa: B027
     def _validate_match(cls, match: dict[str, str], filename: str):
         pass
 
 
 @attr.s
 class _DataFile(_ObsNode):
-    """
-    Abstract Object representing a file in a calibration observation.
+    """Abstract Object representing a file in a calibration observation.
 
     Parameters
     ----------
@@ -202,6 +202,7 @@ class _DataFile(_ObsNode):
     fix
         Whether to attempt to fix the file in place if its filename is in the wrong
         format.
+
     """
 
     @classmethod
@@ -238,8 +239,11 @@ class _DataContainer(_ObsNode):
 
     @classmethod
     def check_contents(cls, path: str | Path, fix=False) -> bool:
-        """Abstract method for checking whether the contents of this container are in
-        the correct format for the DB"""
+        """Check whether contents of this container are in the correct format.
+
+        Abstract method for checking whether the contents of this container are in
+        the correct format for the DB.
+        """
         # Check that everything that *is* there has correct format.
         path = Path(path)
         ok_selves = cls._check_contents_selves(path, fix=fix)
@@ -291,7 +295,7 @@ class _DataContainer(_ObsNode):
                                 )
                                 fl = fl.with_suffix(".txt")
                                 if fl.exists():
-                                    os.remove(str(fl.with_suffix(".odt")))
+                                    fl.with_suffix(".odt").unlink()
 
                                 logger.success(f"Successfully converted to {fl}")
                             except subprocess.CalledProcessError as e:
@@ -313,7 +317,7 @@ class _DataContainer(_ObsNode):
 
                                     if match is None:
                                         logger.warning(
-                                            f"New name '{str(new_path.relative_to(fl.parent))}' is not "
+                                            f"New name '{new_path.relative_to(fl.parent)!s}' is not "
                                             f"correctly formatted either!"
                                         )
                                     else:
@@ -332,11 +336,8 @@ class _DataContainer(_ObsNode):
             fl, _ = content_type.check_self(fl, fix=fix)
 
             # Recursively check the contents of the contents.
-            try:
+            with contextlib.suppress(AttributeError):
                 content_type.check_contents(fl, fix=fix)
-            except AttributeError:
-                # It's a DataFile, not a DataContainer
-                pass
 
         ok = not bool(logger.errored)
         logger.errored = n_errors + logger.errored

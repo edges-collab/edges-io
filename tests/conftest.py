@@ -1,10 +1,8 @@
-import pytest
-
 import copy
-import h5py
-import numpy as np
 from pathlib import Path
 
+import numpy as np
+import pytest
 from edges_io.h5 import HDF5RawSpectrum
 
 
@@ -64,7 +62,7 @@ def fastspec_data():
 
 @pytest.fixture(scope="session", autouse=True)
 def fastspec_spectrum_fl(tmpdir, fastspec_data):
-    """An auto-generate empty Fastspec h5 format file"""
+    """An auto-generated empty Fastspec h5 format file."""
     spectrum = HDF5RawSpectrum.from_data(fastspec_data)
     flname = tmpdir / "fastspec_example_file.h5"
 
@@ -74,7 +72,7 @@ def fastspec_spectrum_fl(tmpdir, fastspec_data):
 
 @pytest.fixture(scope="session", autouse=True)
 def fastspec_spectrum_fl_2dim_time(tmpdir, fastspec_data):
-    """An auto-generate empty Fastspec h5 format file"""
+    """An auto-generate empty Fastspec h5 format file."""
     new_fspec_data = copy.deepcopy(fastspec_data)
 
     t = new_fspec_data["time_ancillary"]["times"]

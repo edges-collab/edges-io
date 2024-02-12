@@ -5,8 +5,10 @@ from __future__ import annotations
 import contextlib
 import copy
 import warnings
-import yaml
 from pathlib import Path
+from typing import ClassVar
+
+import yaml
 
 
 class ConfigurationError(Exception):
@@ -20,11 +22,11 @@ class Config(dict):
     are defined.
     """
 
-    _defaults = {}
+    _defaults: ClassVar = {}
 
     # The following gives a way to change the keys of defaults over time,
     # and update the base config file.
-    _aliases = {}
+    _aliases: ClassVar = {}
 
     def __init__(
         self,
@@ -60,7 +62,8 @@ class Config(dict):
                     if alias in selfdict:
                         warnings.warn(
                             f"Your configuration spec has old key '{alias}' which has "
-                            f"been re-named '{k}'."
+                            f"been re-named '{k}'.",
+                            stacklevel=2,
                         )
                         selfdict[k] = selfdict[alias]
                         del selfdict[alias]
@@ -113,19 +116,20 @@ class Config(dict):
 
     def write(self, fname=None):
         """Write current configuration to file to make it permanent."""
-        fname = fname or self.path
-        with open(fname, "w") as fl:
+        fname = Path(fname or self.path)
+
+        with fname.open("w") as fl:
             yaml.dump(self._as_dict(), fl)
-        self.path = Path(fname)
+        self.path = fname
 
     def _as_dict(self):
-        """The plain dict defining the instance."""
+        """Get the plain dict defining the instance."""
         return dict(self.items())
 
     @classmethod
     def load(cls, file_name):
         """Create a Config object from a config file."""
-        with open(file_name) as fl:
+        with Path(file_name).open("r") as fl:
             config = yaml.load(fl, Loader=yaml.FullLoader)
         return cls(file_name, _loaded_from_file=True, **config)
 
@@ -138,9 +142,7 @@ except FileNotFoundError:  # pragma: no cover
     config = Config()
     config.file_name = _config_filename
 
-    try:
+    with contextlib.suppress(Exception):
         config.write()
-    except Exception:
-        pass
 
 default_config = copy.deepcopy(config)

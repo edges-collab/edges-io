@@ -1,6 +1,4 @@
-"""
-Nicer logger
-"""
+"""Nicer logger."""
 
 import logging
 
@@ -41,7 +39,7 @@ class ColoredFormatter(logging.Formatter):
         super().__init__(fmt="%(levelname)-18s| %(message)s", datefmt=None, style="%")
         self.use_color = use_color
 
-    def format(self, record):
+    def format(self, record):  # noqa: A003
         orig = self._style._fmt
         levelname = record.levelname
         if self.use_color and levelname in COLORS:

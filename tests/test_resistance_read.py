@@ -1,9 +1,7 @@
-import pytest
-
-import numpy as np
 import shutil
 from pathlib import Path
 
+import numpy as np
 from edges_io.io import Resistance
 
 

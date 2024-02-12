@@ -1,10 +1,8 @@
-import pytest
-
 import shutil
-from click.testing import CliRunner
 from pathlib import Path
-from typing import Tuple
 
+import pytest
+from click.testing import CliRunner
 from edges_io import cli
 from edges_io.utils import console
 
@@ -107,7 +105,7 @@ def test_check_verbosity_overkill(datadir, caplog):
     assert result.exit_code == 0
 
 
-def unmove(temp: str, datadir: Path, tmpdir: Path) -> Tuple[str, Path]:
+def unmove(temp: str, datadir: Path, tmpdir: Path) -> tuple[str, Path]:
     folder = "Receiver01_25C_2019_11_26_040_to_200MHz"
     bad = tmpdir / "Receiver01_2019_11_26_040_to_200MHz"
     shutil.copytree(datadir / folder, bad / temp)
@@ -137,7 +135,7 @@ def test_mv_all(datadir: Path, tmpdir: Path):
 
     runner = CliRunner()
     folders = [str(x) for x in bad.glob("*C")]
-    result = runner.invoke(cli.mv_all, folders + ["--clean"])
+    result = runner.invoke(cli.mv_all, [*folders, "--clean"])
     print(result.stdout)
     print(result.exception)
 
