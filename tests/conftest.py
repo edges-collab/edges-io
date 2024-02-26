@@ -4,7 +4,7 @@ from pathlib import Path
 import numpy as np
 import pytest
 from edges_io import TEST_DATA_PATH
-from edges_io.h5 import HDF5RawSpectrum
+from pygsdata import GSData
 
 
 @pytest.fixture(scope="session")
@@ -64,7 +64,7 @@ def fastspec_data():
 @pytest.fixture(scope="session", autouse=True)
 def fastspec_spectrum_fl(tmpdir, fastspec_data):
     """An auto-generated empty Fastspec h5 format file."""
-    spectrum = HDF5RawSpectrum.from_data(fastspec_data)
+    spectrum = GSData.from_file(fastspec_data)
     flname = tmpdir / "fastspec_example_file.h5"
 
     spectrum.write(flname)
@@ -78,7 +78,7 @@ def fastspec_spectrum_fl_2dim_time(tmpdir, fastspec_data):
 
     t = new_fspec_data["time_ancillary"]["times"]
     new_fspec_data["time_ancillary"]["times"] = np.vstack((t, t, t)).T
-    spectrum = HDF5RawSpectrum.from_data(new_fspec_data)
+    spectrum = GSData.from_data(new_fspec_data)
     flname = tmpdir / "fastspec_example_file_time_2dim.h5"
 
     spectrum.write(flname)

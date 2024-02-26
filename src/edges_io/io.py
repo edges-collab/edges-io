@@ -29,11 +29,12 @@ import yaml
 from astropy import units as un
 from bidict import bidict
 from hickleable import hickleable
+from pygsdata import GSData
+from read_acq.gsdata import read_acq_to_gsdata
 
 from . import utils
 from ._structure import _DataContainer, _DataFile
 from .data import DATA_PATH
-from .h5 import HDF5RawSpectrum
 from .logging import logger
 from .vna import SParams
 
@@ -353,44 +354,18 @@ class FieldSpectrum:
         """The file format of the data to be read."""
         return self.path.suffix[1:]
 
-    @cached_property
-    def data(self) -> HDF5RawSpectrum | list[HDF5RawSpectrum]:
-        """A view of the data in the file as a HDF5Object.
+    def get_data(self) -> GSData:
+        """Get a GSData object from the file.
 
-        If the file is an ACQ file, it will be read completely into memory and cast
-        into the same format as a :class:`~h5.HDF5Object` so that the API is the same.
-
+        If the file is an ACQ file, it will be read completely into memory.
         If the number of files is more than one, `data` will be a list of objects.
         """
-        if self.file_format == "h5":
-            return HDF5RawSpectrum(self.path)
+        if self.file_format in ("h5", "gsh5"):
+            return GSData.from_file(self.path)
         elif self.file_format == "acq":
-            spec, freq, time, meta = self._read_acq(self.path)
-            return HDF5RawSpectrum.from_data(
-                {
-                    "spectra": spec,
-                    "time_ancillary": time,
-                    "freq_ancillary": freq,
-                    "meta": meta,
-                }
-            )
+            return read_acq_to_gsdata(self.path, telescope_location="edges")
         else:
             raise ValueError(f"File format '{self.file_format}' not supported.")
-
-    @staticmethod
-    def _read_acq(file_name):
-        q, px, anc = read_acq.decode_file(
-            file_name,
-            progress=False,
-            meta=True,
-        )
-
-        freq_anc = {"frequencies": anc.frequencies}
-        time_anc = anc.data
-        spectra = {"Q": q, "p0": px[0], "p1": px[1], "p2": px[2]}
-
-        meta = anc.meta
-        return spectra, freq_anc, time_anc, meta
 
 
 @hickleable()
@@ -413,7 +388,7 @@ class Spectrum(_SpectrumOrResistance):
 
     """
 
-    supported_formats: ClassVar = ["h5", "acq", "mat"]
+    supported_formats: ClassVar = ["h5", "acq", "gsh5"]
 
     @cached_property
     def _raw_spec(self):
@@ -424,16 +399,13 @@ class Spectrum(_SpectrumOrResistance):
         """The file format of the data to be read."""
         return self._raw_spec.file_format
 
-    @cached_property
-    def data(self) -> HDF5RawSpectrum | list[HDF5RawSpectrum]:
-        """A view of the data in the file as a HDF5Object.
+    def get_data(self) -> GSData:
+        """Get a GSData object from the file.
 
-        If the file is an ACQ file, it will be read completely into memory and cast
-        into the same format as a :class:`~h5.HDF5Object` so that the API is the same.
-
+        If the file is an ACQ file, it will be read completely into memory.
         If the number of files is more than one, `data` will be a list of objects.
         """
-        return self._raw_spec.data
+        return self._raw_spec.get_data()
 
 
 @hickleable()
