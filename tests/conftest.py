@@ -3,8 +3,12 @@ from pathlib import Path
 
 import numpy as np
 import pytest
+from astropy import units as apu
+from astropy.coordinates import EarthLocation
+from astropy.time import Time
 from edges_io import TEST_DATA_PATH
 from pygsdata import GSData
+from read_acq.gsdata import write_gsdata_to_acq
 
 
 @pytest.fixture(scope="session")
@@ -13,75 +17,40 @@ def tmpdir(tmp_path_factory):
 
 
 @pytest.fixture(scope="session")
-def fastspec_data():
+def edgesloc():
+    return EarthLocation(lat=-26.714778 * apu.deg, lon=116.605528 * apu.deg)
+
+
+@pytest.fixture(scope="session")
+def small_gsdata_obj(edgesloc: EarthLocation):
     ntimes = 2
     nfreqs = 32768
-
-    attrs = {
-        "fastspec_version": "0.0.0",
-        "start": 0,
-        "stop": 0,
-        "site": "simulated",
-        "instrument": "mid",
-        "switch_delay": 0.5,
-        "input_channel": 1,
-        "voltage_range": 0,
-        "samples_per_accumulation": 4294967269,
-        "acquisition_rate": 400,
-        "num_channels": nfreqs,
-        "num_taps": 5,
-        "window_function_id": 3,
-        "num_fft_threads": 10,
-        "num_fft_buffers": 100,
-        "stop_cycles": 0,
-        "stop_seconds": 0.0,
-        "stop_time": "",
-    }
-
-    spec = {
-        "p0": np.zeros((ntimes, nfreqs)),
-        "p1": np.zeros((ntimes, nfreqs)),
-        "p2": np.zeros((ntimes, nfreqs)),
-        "Q": np.zeros((ntimes, nfreqs)),
-    }
-
-    fq_anc = {"frequencies": np.linspace(40, 200, nfreqs)}
-    time_anc = {
-        "times": np.array(["2020:001:01:01:01", "2020:001:01:02:01"], dtype="|S17"),
-        "adcmax": np.zeros((ntimes, 3)),
-        "adcmin": np.zeros((ntimes, 3)),
-        "data_drops": np.zeros((ntimes, 3), dtype="int"),
-    }
-
-    return {
-        "meta": attrs,
-        "spectra": spec,
-        "time_ancillary": time_anc,
-        "freq_ancillary": fq_anc,
-    }
+    npols = 1
+    nloads = 3
+    return GSData(
+        data=np.zeros((nloads, npols, ntimes, nfreqs)),
+        freq_array=np.linspace(0, 200, nfreqs) * apu.MHz,
+        time_array=Time(
+            [
+                ["2020:001:01:01:01", "2020:001:01:01:01", "2020:001:01:01:01"],
+                ["2020:001:01:02:01", "2020:001:01:02:01", "2020:001:01:02:01"],
+            ]
+        ),
+        telescope_location=edgesloc,
+        data_unit="power",
+        auxiliary_measurements={
+            "adcmax": np.zeros((ntimes, nloads)),
+            "adcmin": np.zeros((ntimes, nloads)),
+            "data_drops": np.zeros((ntimes, nloads), dtype="int"),
+        },
+    )
 
 
 @pytest.fixture(scope="session", autouse=True)
-def fastspec_spectrum_fl(tmpdir, fastspec_data):
+def fastspec_spectrum_fl(tmpdir, small_gsdata_obj: GSData):
     """An auto-generated empty Fastspec h5 format file."""
-    spectrum = GSData.from_file(fastspec_data)
-    flname = tmpdir / "fastspec_example_file.h5"
-
-    spectrum.write(flname)
-    return flname
-
-
-@pytest.fixture(scope="session", autouse=True)
-def fastspec_spectrum_fl_2dim_time(tmpdir, fastspec_data):
-    """An auto-generate empty Fastspec h5 format file."""
-    new_fspec_data = copy.deepcopy(fastspec_data)
-
-    t = new_fspec_data["time_ancillary"]["times"]
-    new_fspec_data["time_ancillary"]["times"] = np.vstack((t, t, t)).T
-    spectrum = GSData.from_data(new_fspec_data)
-    flname = tmpdir / "fastspec_example_file_time_2dim.h5"
-
-    spectrum.write(flname)
+    flname = tmpdir / "fastspec_example_file.acq"
+    write_gsdata_to_acq(small_gsdata_obj, flname)
     return flname
 
 

@@ -1,8 +1,7 @@
-import pytest
-
-from astropy import units as un
 from pathlib import Path
 
+import pytest
+from astropy import units as un
 from edges_io import io3
 from edges_io.vna import read_s1p
 
@@ -17,8 +16,9 @@ def smallcal(datadir: Path) -> io3.CalibrationObservation:
 
 
 def test_all_files_present(smallcal: io3.CalibrationObservation):
-    loads = ["hot", "amb", "short", "open"]
+    loads = ["hot_load", "ambient", "short", "open"]
     assert len(smallcal.s11_files) == len(loads) + 1  # +1 for the LNA
+    print(smallcal.s11_files.keys())
     assert all(load in smallcal.s11_files for load in loads)
 
     assert all(
@@ -68,7 +68,7 @@ def test_get_mean_temperature(smallcal: io3.CalibrationObservation):
     mean_temp0 = io3.get_mean_temperature(temp_table, load="hot")
     assert mean_temp0 > mean_temp
 
-    with pytest.raises(ValueError):
+    with pytest.raises(ValueError, match="Uknown load fake"):
         io3.get_mean_temperature(temp_table, load="fake")
 
 
