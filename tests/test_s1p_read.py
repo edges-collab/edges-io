@@ -2,7 +2,7 @@ from pathlib import Path
 
 import numpy as np
 from edges_io.io import S1P
-from edges_io.sparams import SParams
+from edges_io.vna import SParams
 
 
 def test_s1p_read(datadir: Path):
