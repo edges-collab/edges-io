@@ -1,4 +1,4 @@
-exclude: '^docs/conf.py|^tests/test_data/'
+exclude: '^docs/conf.py|^src/edges_io/test_data/'
 
 ci:
   autoupdate_schedule: monthly
