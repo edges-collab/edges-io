@@ -73,7 +73,7 @@ def _get_chunk_pos_and_size(
     """
     if end_time is None:
         if n_hours is None:
-            end_time = f"{start_time[0]:04}:{start_time[1]+1:03}:00:00"
+            end_time = f"{start_time[0]:04}:{start_time[1] + 1:03}:00:00"
         else:
             first_day = datetime(
                 start_time[0],
@@ -224,7 +224,7 @@ def read_weather_file(
 
         if i < len(weather) - 1:
             warnings.warn(
-                f"Only {i+1}/{n_lines} lines of {weather_file} were able to be parsed.",
+                f"Only {i + 1}/{n_lines} lines of {weather_file} were able to be parsed.",
                 stacklevel=2,
             )
             weather = weather[: i + 1]
@@ -313,7 +313,7 @@ def read_thermlog_file(
             )
         if i < len(therm) - 1:
             warnings.warn(
-                f"Only {i+1}/{n_lines} lines of {filename} were able to be parsed.",
+                f"Only {i + 1}/{n_lines} lines of {filename} were able to be parsed.",
                 stacklevel=2,
             )
             therm = therm[: i + 1]

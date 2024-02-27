@@ -6,7 +6,7 @@ from edges_io.io import Resistance
 
 
 def test_resistance_read_old_header(datadir: Path, tmpdir: Path):
-    header, nlines = Resistance.read_old_style_csv_header(
+    header, _nlines = Resistance.read_old_style_csv_header(
         datadir / "old_resistance_file.csv"
     )
 

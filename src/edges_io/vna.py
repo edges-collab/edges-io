@@ -15,7 +15,7 @@ from . import types as tp
 def _get_s1p_kind(path: Path) -> tuple[np.ndarray, str]:
     # identifying the format
 
-    with open(path) as d:
+    with path.open("r") as d:
         comment_rows = 0
         flag = None
         lines = d.readlines()
@@ -43,7 +43,8 @@ def _get_s1p_kind(path: Path) -> tuple[np.ndarray, str]:
                 else:
                     warnings.warn(
                         f"Non standard line in S11 file {path}: '{line}'\n"
-                        "...Treating as a comment line."
+                        "...Treating as a comment line.",
+                        stacklevel=1,
                     )
                     comment_rows += 1
 

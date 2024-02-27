@@ -26,7 +26,7 @@ def test_spectrum_file_param_validation(tmpdir: Path, caplog):
     fname = tmpdir / "Ambient_00_2050_400_61_61_61_lab.cst"
     fname.touch()
 
-    path, _ = Spectrum.check_self(fname, fix=True)
+    _path, _ = Spectrum.check_self(fname, fix=True)
 
     assert caplog.text.count("ERROR") == 7
 

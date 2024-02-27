@@ -1,3 +1,5 @@
+import functools
+import operator
 from pathlib import Path
 
 import pytest
@@ -72,7 +74,9 @@ def test_get_mean_temperature(smallcal: io3.CalibrationObservation):
 
 
 def test_read_s11s(smallcal: io3.CalibrationObservation):
-    files = sum((list(d.values()) for d in smallcal.s11_files.values()), start=[])
+    files = functools.reduce(
+        operator.iadd, (list(d.values()) for d in smallcal.s11_files.values()), []
+    )
     for fl in files:
         table = read_s1p(fl)
         assert table["frequency"].unit == un.Hz

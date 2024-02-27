@@ -618,7 +618,7 @@ class _SpectraOrResistanceFolder(_DataContainer):
     @cached_property
     def _run_nums(self) -> dict[str, int | None]:
         if isinstance(self._run_num, int) or self._run_num is None:
-            return {load: self._run_num for load in LOAD_ALIASES.values()}
+            return dict.fromkeys(LOAD_ALIASES.values(), self._run_num)
         else:
             return self._run_num
 
@@ -1002,13 +1002,13 @@ class S11Dir(_DataContainer):
     """
 
     _content_type: ClassVar = {
-        **{load: LoadS11 for load in LOAD_ALIASES.values()},
-        **{load: LoadS11 for load in LOAD_MAPPINGS},
+        **dict.fromkeys(LOAD_ALIASES.values(), LoadS11),
+        **dict.fromkeys(LOAD_MAPPINGS, LoadS11),
         "SwitchingState": SwitchingState,
         "ReceiverReading": ReceiverReading,
         "InternalSwitch": SwitchingState,  # To catch the old way so it can be fixed.
-        **{key: AntSimS11 for key in ANTENNA_SIMULATORS},
-        **{key: AntSimS11 for key in ANTSIM_REVERSE},
+        **dict.fromkeys(ANTENNA_SIMULATORS, AntSimS11),
+        **dict.fromkeys(ANTSIM_REVERSE, AntSimS11),
     }
     pattern = "S11"
     known_patterns = ("s11",)
@@ -1054,7 +1054,7 @@ class S11Dir(_DataContainer):
             return {
                 "switching_state": self._repeat_num,
                 "receiver_reading": self._repeat_num,
-                **{name: self._repeat_num for name in LOAD_ALIASES.values()},
+                **dict.fromkeys(LOAD_ALIASES.values(), self._repeat_num),
             }
         else:
             return self._repeat_num
@@ -1454,7 +1454,7 @@ class CalibrationObservation(_DataContainer):
 
                     assert (
                         root / files[key][key2][0]
-                    ).exists(), f"Directory '{root /files[key][key2][0]}' included at files.{key}.{key2} does not exist."
+                    ).exists(), f"Directory '{root / files[key][key2][0]}' included at files.{key}.{key2} does not exist."
 
     @classmethod
     def check_definition(cls, path: Path) -> dict:
@@ -1831,7 +1831,7 @@ class CalibrationObservation(_DataContainer):
                 full_part = Path(full_part) / Path(part)
 
                 for thing in _strc:
-                    pth, match = thing.check_self(part, fix=False)
+                    _pth, match = thing.check_self(part, fix=False)
 
                     if match is not None:
                         parts = (*parts, thing.typestr(part))
