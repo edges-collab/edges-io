@@ -14,6 +14,10 @@ __pycache__/*
 */.ipynb_checkpoints/*
 .DS_Store
 
+!src/edges_io/test_data/
+!src/edges_io/test_data/*
+!src/edges_io/test_data/**/*
+
 # Project files
 .ropeproject
 .project

@@ -495,7 +495,8 @@ class HDF5RawSpectrum(HDF5Object):
         "freq_ancillary": {"frequencies": lambda x: (x.ndim == 1 and x.dtype == float)},
         "time_ancillary": {
             "times": lambda x: (
-                (x.ndim == 1 or x.ndim == 2 and x.shape[-1] == 3) and x.dtype == "|S17"
+                (x.ndim == 1 or (x.ndim == 2 and x.shape[-1] == 3))
+                and x.dtype == "|S17"
             ),
             "adcmax": lambda x: (
                 x.ndim == 2 and x.shape[1] == 3 and x.dtype in (float, np.float32)
