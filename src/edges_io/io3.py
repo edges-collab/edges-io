@@ -1,19 +1,20 @@
 """Methods for dealing with EDGES-3 files and structures."""
 from __future__ import annotations
 
-import attrs
-import numpy as np
 import re
 import warnings
+from datetime import datetime, timedelta, timezone
+from functools import cache
+from pathlib import Path
+from typing import Any, Literal
+
+import attrs
+import numpy as np
 from astropy import units as un
 from astropy.table import QTable
 from astropy.time import Time
-from datetime import datetime, timedelta
 from frozendict import frozendict
-from functools import cache
 from hickleable import hickleable
-from pathlib import Path
-from typing import Any, Literal
 
 from . import io
 
@@ -85,7 +86,9 @@ def read_temperature_log_entry(lines: list[str]) -> dict[str, Any]:
         raise ValueError(f"Hour mismatch in temperature log entry. Got {hour} and {hh}")
 
     # don't care about the third line
-    date_object = datetime(year, 1, 1, hh, mm, ss) + timedelta(days=day - 1)
+    date_object = datetime(year, 1, 1, hh, mm, ss, tzinfo=timezone.utc) + timedelta(
+        days=day - 1
+    )
     try:
         return {
             "time": Time(date_object),
@@ -97,7 +100,7 @@ def read_temperature_log_entry(lines: list[str]) -> dict[str, Any]:
             "battery_voltage": float(lines[8].split(" ")[1]),  # 150
             "pr59_current": float(lines[9].split(" ")[1]),  # 152
         }
-    except ValueError as e:
+    except (ValueError, IndexError) as e:
         linestr = "".join(lines)
         raise ValueError(f"Error parsing temperature log entry:\n{linestr}") from e
 
@@ -105,7 +108,7 @@ def read_temperature_log_entry(lines: list[str]) -> dict[str, Any]:
 def read_temperature_log(logfile: Path | str) -> QTable:
     """Read a full temperature log file."""
     pattern = re.compile(r"(\d{4})_(\d{3})_(\d{2})")
-    with open(logfile) as fl:
+    with Path(logfile).open("r") as fl:
         lines = fl.readlines()
 
         # First, let's locate all the individual entries
@@ -124,7 +127,7 @@ def read_temperature_log(logfile: Path | str) -> QTable:
             try:
                 all_data.append(read_temperature_log_entry(lines[c[0] : c[1]]))
             except ValueError as e:
-                warnings.warn(str(e))
+                warnings.warn(str(e), stacklevel=2)
 
     out = QTable(all_data)
 
@@ -222,7 +225,7 @@ class CalibrationObservation:
     def get_spectra(self, load: str) -> io.FieldSpectrum:
         return io.FieldSpectrum(self.acq_files[load])
 
-    @cache
+    @cache  # noqa: B019
     def get_temperature_table(self):
         return read_temperature_log(self.temperature_file)
 

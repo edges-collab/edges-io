@@ -1,12 +1,13 @@
 """IO routines for VNA readings (S11, S12, S22 etc)."""
 from __future__ import annotations
 
+import warnings
+from pathlib import Path
+
 import attrs
 import numpy as np
-import warnings
 from astropy import units as un
 from astropy.table import QTable
-from pathlib import Path
 
 from . import types as tp
 
@@ -14,7 +15,7 @@ from . import types as tp
 def _get_s1p_kind(path: Path) -> tuple[np.ndarray, str]:
     # identifying the format
 
-    with open(path) as d:
+    with path.open("r") as d:
         comment_rows = 0
         flag = None
         lines = d.readlines()
@@ -42,7 +43,8 @@ def _get_s1p_kind(path: Path) -> tuple[np.ndarray, str]:
                 else:
                     warnings.warn(
                         f"Non standard line in S11 file {path}: '{line}'\n"
-                        "...Treating as a comment line."
+                        "...Treating as a comment line.",
+                        stacklevel=1,
                     )
                     comment_rows += 1
 

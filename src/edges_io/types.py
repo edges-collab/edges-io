@@ -1,7 +1,8 @@
 """Simple type definitions for use internally."""
-from astropy import units
 from pathlib import Path
 from typing import Union
+
+from astropy import units
 
 PathLike = Union[str, Path]
 FreqType = units.Quantity["frequency"]
