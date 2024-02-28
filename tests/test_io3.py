@@ -68,7 +68,7 @@ def test_get_mean_temperature(smallcal: io3.CalibrationObservation):
     mean_temp0 = io3.get_mean_temperature(temp_table, load="hot")
     assert mean_temp0 > mean_temp
 
-    with pytest.raises(ValueError, match="Uknown load fake"):
+    with pytest.raises(ValueError, match="Unknown load fake"):
         io3.get_mean_temperature(temp_table, load="fake")
 
 
