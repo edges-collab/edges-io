@@ -6,8 +6,8 @@ from pygsdata import GSData
 from read_acq.gsdata import read_acq_to_gsdata
 
 
-def test_hdf5rawspectrum(fastspec_spectrum_fl, edgesloc):
-    obj = read_acq_to_gsdata(fastspec_spectrum_fl, telescope_location=edgesloc)
+def test_hdf5rawspectrum(fastspec_spectrum_fl, edgeslow):
+    obj = read_acq_to_gsdata(fastspec_spectrum_fl, telescope=edgeslow)
     assert isinstance(obj, GSData)
 
 

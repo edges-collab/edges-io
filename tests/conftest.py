@@ -7,7 +7,7 @@ from astropy import units as apu
 from astropy.coordinates import EarthLocation
 from astropy.time import Time
 from edges_io import TEST_DATA_PATH
-from pygsdata import GSData
+from pygsdata import KNOWN_TELESCOPES, GSData, Telescope
 from read_acq.gsdata import write_gsdata_to_acq
 
 
@@ -17,26 +17,26 @@ def tmpdir(tmp_path_factory):
 
 
 @pytest.fixture(scope="session")
-def edgesloc():
-    return EarthLocation(lat=-26.714778 * apu.deg, lon=116.605528 * apu.deg)
+def edgeslow():
+    return KNOWN_TELESCOPES["edges-low"]
 
 
 @pytest.fixture(scope="session")
-def small_gsdata_obj(edgesloc: EarthLocation):
+def small_gsdata_obj(edgeslow: Telescope):
     ntimes = 2
     nfreqs = 32768
     npols = 1
     nloads = 3
     return GSData(
         data=np.zeros((nloads, npols, ntimes, nfreqs)),
-        freq_array=np.linspace(0, 200, nfreqs) * apu.MHz,
-        time_array=Time(
+        freqs=np.linspace(0, 200, nfreqs) * apu.MHz,
+        times=Time(
             [
                 ["2020:001:01:01:01", "2020:001:01:01:01", "2020:001:01:01:01"],
                 ["2020:001:01:02:01", "2020:001:01:02:01", "2020:001:01:02:01"],
             ]
         ),
-        telescope_location=edgesloc,
+        telescope=edgeslow,
         data_unit="power",
         auxiliary_measurements={
             "adcmax": np.zeros((ntimes, nloads)),

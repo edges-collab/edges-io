@@ -29,7 +29,7 @@ import yaml
 from astropy import units as un
 from bidict import bidict
 from hickleable import hickleable
-from pygsdata import GSData
+from pygsdata import KNOWN_TELESCOPES, GSData
 from read_acq.gsdata import read_acq_to_gsdata
 
 from . import utils
@@ -363,7 +363,9 @@ class FieldSpectrum:
         if self.file_format in ("h5", "gsh5"):
             return GSData.from_file(self.path)
         elif self.file_format == "acq":
-            return read_acq_to_gsdata(self.path, telescope_location="edges")
+            return read_acq_to_gsdata(
+                self.path, telescope=KNOWN_TELESCOPES["edges-low"]
+            )
         else:
             raise ValueError(f"File format '{self.file_format}' not supported.")
 
