@@ -19,14 +19,25 @@ from hickleable import hickleable
 from . import io
 
 
-def _get_single_s1p_file(root: Path, year: int, day: int, label: str) -> Path:
-    glob = f"{year:04d}_{day:03d}_??_{label}.s1p"
+def _get_single_s1p_file(
+    root: Path, year: int, day: int, label: str, hour: int | str = "first"
+) -> Path:
+    if isinstance(hour, int):
+        glob = f"{year:04d}_{day:03d}_{hour:02d}_{label}.s1p"
+    else:
+        glob = f"{year:04d}_{day:03d}_??_{label}.s1p"
+
     file_temp = sorted(root.glob(glob))
 
     if len(file_temp) == 0:
         raise FileNotFoundError(f"No s1p files found in {root} with glob {glob}")
     elif len(file_temp) > 1:
-        raise OSError(f"More than one file found for {year}, {day}, {label}")
+        if hour == "first":
+            return file_temp[0]
+        elif hour == "last":
+            return file_temp[-1]
+        else:
+            raise OSError(f"More than one file found for {year}, {day}, {label}")
 
     return file_temp[0]
 
@@ -36,16 +47,17 @@ def get_s1p_files(
     year: int,
     day: int,
     root_dir: Path | str,
+    hour: int | str = "first",
 ) -> dict[str, Path]:
     """Take the load and return a list of .s1p files for that load."""
     root_dir = Path(root_dir)
 
-    files = {"input": _get_single_s1p_file(root_dir, year, day, load)}
+    files = {"input": _get_single_s1p_file(root_dir, year, day, load, hour)}
 
     for name, label in {"open": "O", "short": "S", "match": "L"}.items():
         if load == "lna":
             label = f"{load}_{label}"
-        files[name] = _get_single_s1p_file(root_dir, year, day, label)
+        files[name] = _get_single_s1p_file(root_dir, year, day, label, hour)
 
     return files
 
@@ -187,6 +199,7 @@ class CalibrationObservation:
         day: int,
         s11_year: int | None = None,
         s11_day: int | None = None,
+        s11_hour: int | str = "first",
         root_dir: Path | str = "/data5/edges/data/EDGES3_data/MRO/",
     ):
         """Create a CalibrationObservation from a date."""
@@ -205,7 +218,7 @@ class CalibrationObservation:
         s11_files: frozendict[str : frozendict[str, Path]] = frozendict(
             {
                 load_map[load]: frozendict(
-                    get_s1p_files(load, s11_year, s11_day, root_dir)
+                    get_s1p_files(load, s11_year, s11_day, root_dir, s11_hour)
                 )
                 for load in ["amb", "hot", "open", "short", "lna"]
             }
