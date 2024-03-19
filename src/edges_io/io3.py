@@ -20,7 +20,12 @@ from . import io
 
 
 def _get_single_s1p_file(
-    root: Path, year: int, day: int, label: str, hour: int | str = "first"
+    root: Path,
+    year: int,
+    day: int,
+    label: str,
+    hour: int | str = "first",
+    allow_closest: bool = True,
 ) -> Path:
     if isinstance(hour, int):
         glob = f"{year:04d}_{day:03d}_{hour:02d}_{label}.s1p"
@@ -30,6 +35,34 @@ def _get_single_s1p_file(
     file_temp = sorted(root.glob(glob))
 
     if len(file_temp) == 0:
+        if allow_closest:
+            for dday in range(1, 30):
+                try:
+                    fl = _get_single_s1p_file(
+                        root,
+                        year,
+                        day + dday,
+                        label=label,
+                        hour=hour,
+                        allow_closest=False,
+                    )
+                    break
+                except FileNotFoundError:
+                    pass
+
+                try:
+                    fl = _get_single_s1p_file(
+                        root,
+                        year,
+                        day - dday,
+                        label=label,
+                        hour=hour,
+                        allow_closest=False,
+                    )
+                    break
+                except FileNotFoundError:
+                    pass
+            return fl
         raise FileNotFoundError(f"No s1p files found in {root} with glob {glob}")
     elif len(file_temp) > 1:
         if hour == "first":
