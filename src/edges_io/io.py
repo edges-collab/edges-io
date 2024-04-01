@@ -1742,9 +1742,9 @@ class CalibrationObservation(_DataContainer):
                                     del file_parts[k]
                                     del files[k]
 
-                        files[
-                            inc_fl.relative_to(this_root_obs / this_obs_name)
-                        ] = inc_fl
+                        files[inc_fl.relative_to(this_root_obs / this_obs_name)] = (
+                            inc_fl
+                        )
                         new_file_parts[inc_fl.relative_to(this_root_obs)] = kinds
 
                 # Updating the file parts after the full loop means that we can add

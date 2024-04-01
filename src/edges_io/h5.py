@@ -367,7 +367,7 @@ class HDF5Object(_HDF5Part):
         )
 
     @contextlib.contextmanager
-    def open(self, mode="r") -> h5py.Group:  # noqa: A003
+    def open(self, mode="r") -> h5py.Group:
         """Context manager for opening up the file.
 
         Yields
@@ -421,7 +421,7 @@ class _HDF5Group(_HDF5Part):
     _structure = attr.ib(factory=dict, converter=dict)
 
     @contextlib.contextmanager
-    def open(self, mode="r") -> h5py.Group:  # noqa: A003
+    def open(self, mode="r") -> h5py.Group:
         """Context manager for opening up the file.
 
         Yields
