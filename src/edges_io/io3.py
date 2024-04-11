@@ -38,7 +38,7 @@ def _get_single_s1p_file(
         if allow_closest:
             for dday in range(1, allow_closest):
                 try:
-                    fl = _get_single_s1p_file(
+                    return _get_single_s1p_file(
                         root,
                         year,
                         day + dday,
@@ -46,12 +46,11 @@ def _get_single_s1p_file(
                         hour=hour,
                         allow_closest=False,
                     )
-                    break
                 except FileNotFoundError:
                     pass
 
                 try:
-                    fl = _get_single_s1p_file(
+                    return _get_single_s1p_file(
                         root,
                         year,
                         day - dday,
@@ -59,10 +58,8 @@ def _get_single_s1p_file(
                         hour=hour,
                         allow_closest=False,
                     )
-                    break
                 except FileNotFoundError:
                     pass
-            return fl
         raise FileNotFoundError(f"No s1p files found in {root} with glob {glob}")
     elif len(file_temp) > 1:
         if hour == "first":
