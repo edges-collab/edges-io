@@ -25,7 +25,7 @@ def _get_single_s1p_file(
     day: int,
     label: str,
     hour: int | str = "first",
-    allow_closest: bool = True,
+    allow_closest: int = 30,
 ) -> Path:
     if isinstance(hour, int):
         glob = f"{year:04d}_{day:03d}_{hour:02d}_{label}.s1p"
@@ -36,7 +36,7 @@ def _get_single_s1p_file(
 
     if len(file_temp) == 0:
         if allow_closest:
-            for dday in range(1, 30):
+            for dday in range(1, allow_closest):
                 try:
                     fl = _get_single_s1p_file(
                         root,
@@ -81,16 +81,23 @@ def get_s1p_files(
     day: int,
     root_dir: Path | str,
     hour: int | str = "first",
+    allow_closest_s11_within: int = 5,
 ) -> dict[str, Path]:
     """Take the load and return a list of .s1p files for that load."""
     root_dir = Path(root_dir)
 
-    files = {"input": _get_single_s1p_file(root_dir, year, day, load, hour)}
+    files = {
+        "input": _get_single_s1p_file(
+            root_dir, year, day, load, hour, allow_closest_s11_within
+        )
+    }
 
     for name, label in {"open": "O", "short": "S", "match": "L"}.items():
         if load == "lna":
             label = f"{load}_{label}"
-        files[name] = _get_single_s1p_file(root_dir, year, day, label, hour)
+        files[name] = _get_single_s1p_file(
+            root_dir, year, day, label, hour, allow_closest_s11_within
+        )
 
     return files
 
@@ -234,8 +241,30 @@ class CalibrationObservation:
         s11_day: int | None = None,
         s11_hour: int | str = "first",
         root_dir: Path | str = "/data5/edges/data/EDGES3_data/MRO/",
+        allow_closest_s11_within: int = 5,
     ):
-        """Create a CalibrationObservation from a date."""
+        """Create a CalibrationObservation from a date.
+
+        Parameters
+        ----------
+        year : int
+            The year of the observed spectra.
+        day : int
+            The day of the year of the observed spectra.
+        s11_year : int, optional
+            The year of the S11 files. If None, defaults to `year`.
+        s11_day : int, optional
+            The day of the S11 files. If None, defaults to `day`.
+        s11_hour : int | str, optional
+            The hour of the S11 files (if multiple files exist at different hours on
+            the same day).
+            If "first" or "last", will take the first or last file.
+        root_dir : Path | str, optional
+            The root directory of the EDGES-3 data.
+        allow_closest_s11_within : int, optional
+            The maximum number of days to search for the closest S11 file if none is
+            found on the given day.
+        """
         load_map = {
             "amb": "ambient",
             "hot": "hot_load",
@@ -251,7 +280,14 @@ class CalibrationObservation:
         s11_files: frozendict[str : frozendict[str, Path]] = frozendict(
             {
                 load_map[load]: frozendict(
-                    get_s1p_files(load, s11_year, s11_day, root_dir, s11_hour)
+                    get_s1p_files(
+                        load,
+                        s11_year,
+                        s11_day,
+                        root_dir,
+                        s11_hour,
+                        allow_closest_s11_within,
+                    )
                 )
                 for load in ["amb", "hot", "open", "short", "lna"]
             }
