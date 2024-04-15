@@ -9,8 +9,7 @@ finally:
 
 from pathlib import Path
 
-from . import h5, io, io3
-from .h5 import HDF5Object, HDF5RawSpectrum, HDF5StructureError
+from . import io, io3
 from .io import S1P, FieldSpectrum, Spectrum
 
 TEST_DATA_PATH = Path(__file__).parent / "test_data"

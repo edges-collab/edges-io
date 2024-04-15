@@ -1,5 +1,3 @@
-import functools
-import operator
 from pathlib import Path
 
 import pytest
@@ -20,6 +18,7 @@ def smallcal(datadir: Path) -> io3.CalibrationObservation:
 def test_all_files_present(smallcal: io3.CalibrationObservation):
     loads = ["hot_load", "ambient", "short", "open"]
     assert len(smallcal.s11_files) == len(loads) + 1  # +1 for the LNA
+    print(smallcal.s11_files.keys())
     assert all(load in smallcal.s11_files for load in loads)
 
     assert all(
@@ -74,9 +73,8 @@ def test_get_mean_temperature(smallcal: io3.CalibrationObservation):
 
 
 def test_read_s11s(smallcal: io3.CalibrationObservation):
-    files = functools.reduce(
-        operator.iadd, (list(d.values()) for d in smallcal.s11_files.values()), []
-    )
+    files = sum((list(d.values()) for d in smallcal.s11_files.values()), [])
+
     for fl in files:
         table = read_s1p(fl)
         assert table["frequency"].unit == un.Hz
