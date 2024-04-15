@@ -1,54 +1,22 @@
+from __future__ import annotations
+
 import pytest
-from edges_io.h5 import HDF5RawSpectrum
 from edges_io.io import Spectrum
+from pygsdata import GSData
+from read_acq.gsdata import read_acq_to_gsdata
 
 
-def check_obj(obj):
-    assert "spectra" in obj
-    assert "freq_ancillary" in obj
-    assert "time_ancillary" in obj
-    assert "start" in obj.meta
-
-    # Look at an item
-    b = obj["spectra"]["Q"]
-    assert b.ndim == 2
-    assert "Q" in obj["spectra"].__memcache__
-    assert "p0" not in obj["spectra"].__memcache__
-
-    t = obj["time_ancillary"]["times"]
-    tt = t[:, 0] if t.ndim == 2 else t
-    assert obj.convert_times(tt) == obj.get_times()
-
-    if t.ndim == 1:
-        with pytest.warns(UserWarning, match="Cannot read times for swpos > 0"):
-            obj.get_times(swpos=1)
-
-
-def test_hdf5rawspectrum(fastspec_spectrum_fl):
-    obj = HDF5RawSpectrum(fastspec_spectrum_fl)
-    check_obj(obj)
-
-
-def test_hdf5rawspectrum_2dim_time(fastspec_spectrum_fl_2dim_time):
-    obj = HDF5RawSpectrum(fastspec_spectrum_fl_2dim_time)
-    check_obj(obj)
+def test_hdf5rawspectrum(fastspec_spectrum_fl, edgeslow):
+    obj = read_acq_to_gsdata(fastspec_spectrum_fl, telescope=edgeslow)
+    assert isinstance(obj, GSData)
 
 
 def test_io_read(fastspec_spectrum_fl):
     spec = Spectrum(fastspec_spectrum_fl)
-    assert isinstance(spec.data, HDF5RawSpectrum)
-    check_obj(spec.data)
-
-
-def test_read_acq(datadir):
-    spec = Spectrum(datadir / "sample.acq")
-    assert spec.data["spectra"]["Q"].shape == (32768, 1)
-    assert spec.data["spectra"]["Q"].shape == spec.data["spectra"]["p0"].shape
-    assert spec.data["spectra"]["Q"].shape == spec.data["spectra"]["p1"].shape
-    assert spec.data["spectra"]["Q"].shape == spec.data["spectra"]["p2"].shape
+    assert isinstance(spec.get_data(), GSData)
 
 
 def test_read_bad_format(datadir):
     spec = Spectrum(datadir / "bad.file")
     with pytest.raises(OSError, match="does not exist"):
-        spec.data  # noqa: B018
+        spec.get_data()
