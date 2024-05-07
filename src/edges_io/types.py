@@ -3,6 +3,7 @@ from pathlib import Path
 from typing import Union
 
 from astropy import units
+from pygsdata.types import *
 
 PathLike = Union[str, Path]
 FreqType = units.Quantity["frequency"]
