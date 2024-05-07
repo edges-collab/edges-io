@@ -79,15 +79,13 @@ class _SpectrumOrResistance(_DataFile):
 
     known_patterns = (
         (
-            r"^(?P<load_name>%s)"
-            % _loadname_pattern
+            rf"^(?P<load_name>{_loadname_pattern})"
             + r"_25C_(?P<month>\d{1,2})_(?P<day>\d{1,2})_("
             r"?P<year>\d\d\d\d)_(?P<hour>\d{1,2})_(?P<minute>\d{"
             r"1,2})_(?P<second>\d{1,2}).(?P<file_format>\w{2,3})$"
         ),
         (
-            r"^(?P<load_name>%s)"
-            % _loadname_pattern
+            rf"^(?P<load_name>{_loadname_pattern})"
             + r"_(?P<month>\d{1,2})_(?P<day>\d{1,2})_("
             r"?P<year>\d\d\d\d)_(?P<hour>\d{1,2})_(?P<minute>\d{"
             r"1,2})_(?P<second>\d{1,2}).(?P<file_format>\w{2,3})$"
@@ -100,56 +98,49 @@ class _SpectrumOrResistance(_DataFile):
             r"2})_(?P<second>\d{1,2}).(?P<file_format>\w{2,3})$"
         ),
         (
-            r"(?P<load_name>%s)"
-            % _loadname_pattern
-            + r"_(?P<year>\d{4})_(?P<day>\d{3})_"
+            rf"(?P<load_name>{_loadname_pattern})" + r"_(?P<year>\d{4})_(?P<day>\d{3})_"
             r"(?P<hour>\d{2})_(?P<minute>\d{2})_(?P<second>\d{2})_lab."
             r"(?P<file_format>\w{2,3})$"
         ),
         (
-            r"(?P<load_name>%s)" % _loadname_pattern
+            rf"(?P<load_name>{_loadname_pattern})"
             + r"_(?P<year>\d{4})_(?P<day>\d{3})_(?P<hour>\d{2}).(?P<file_format>\w{2,3})$"
         ),
         (
-            r"(?P<load_name>%s)" % _loadname_pattern
+            rf"(?P<load_name>{_loadname_pattern})"
             + r"_(?P<year>\d{4})_(?P<day>\d{3})_(?P<hour>\d{2}).(?P<file_format>\w{2,3})$"
         ),
         (
-            r"(?P<load_name>%s)" % _loadname_pattern
+            rf"(?P<load_name>{_loadname_pattern})"
             + r"_(?P<year>\d{4})_(?P<day>\d{3})_lab.(?P<file_format>\w{2,3})$"
         ),
         (
-            r"(?P<load_name>%s)"
-            % _loadname_pattern
+            rf"(?P<load_name>{_loadname_pattern})"
             + r"_(?P<run_num>\d)_(?P<year>\d{4})_(?P<day>\d{3})_lab.(?P<file_format>\w{2,"
             r"3})$"
         ),
         (
-            r"(?P<load_name>%s)"
-            % _loadname_pattern
+            rf"(?P<load_name>{_loadname_pattern})"
             + r"_\d{2}C_(?P<month>\d{1,2})_(?P<day>\d{1,2})_(?P<year>\d{4})_(?P<hour>\d{"
             r"1,2})_(?P<minute>\d{1,2})_(?P<second>\d{1,2}).(?P<file_format>\w{2,3})"
         ),
         (
-            r"(?P<load_name>%s)"
-            % _loadname_pattern
+            rf"(?P<load_name>{_loadname_pattern})"
             + r"_(?P<run_num>\d{2})_(?P<year>\d{4})_(?P<day>\d{3})_("
             r"?P<hour>\d{2})_(?P<minute>\d{2}).(?P<file_format>\w{2,3})$"
         ),
         (
-            r"(?P<load_name>%s)"
-            % _loadname_pattern
+            rf"(?P<load_name>{_loadname_pattern})"
             + r"_(?P<run_num>\d{2})_(?P<year>\d{4})_(?P<day>\d{3})_("
             r"?P<hour>\d{2}).(?P<file_format>\w{2,3})$"
         ),
         (
-            r"(?P<load_name>%s)"
-            % _loadname_pattern
+            rf"(?P<load_name>{_loadname_pattern})"
             + r"_(?P<year>\d{4})_(?P<day>\d{3})_("
             r"?P<hour>\d{2})_(?P<minute>\d{2}).(?P<file_format>\w{2,3})$"
         ),
         (
-            r"(?P<load_name>%s)" % _loadname_pattern
+            rf"(?P<load_name>{_loadname_pattern})"
             + r"_(?P<year>\d{4})_(?P<day>\d{3})_(?P<hour>\d{2}).(?P<file_format>\w{2,3})$"
         ),
     )
@@ -419,7 +410,7 @@ class Resistance(_SpectrumOrResistance):
 
     known_patterns = (
         *_SpectrumOrResistance.known_patterns,
-        "^(?P<load_name>%s)" % _SpectrumOrResistance._loadname_pattern
+        f"^(?P<load_name>{_SpectrumOrResistance._loadname_pattern})"
         + ".(?P<file_format>\\w{2,3})$",
     )
 
@@ -730,13 +721,15 @@ class S1P(_DataFile):
         "ReceiverReading",
         "ExternalLoad",
     ]
-    pattern = r"^(?P<kind>%s)(?P<repeat_num>\d{2}).s1p$" % ("|".join(POSSIBLE_KINDS))
+    pattern = r"^(?P<kind>{})(?P<repeat_num>\d{{2}}).s1p$".format(
+        "|".join(POSSIBLE_KINDS)
+    )
     write_pattern = "{kind}{repeat_num:>02}.s1p"
     known_patterns = (
-        r"^(?P<kind>%s)(?P<repeat_num>\d{1}).s1p$" % ("|".join(POSSIBLE_KINDS)),
+        r"^(?P<kind>{})(?P<repeat_num>\d{{1}}).s1p$".format("|".join(POSSIBLE_KINDS)),
         rf"^(?P<kind>{'|'.join(k.lower() for k in POSSIBLE_KINDS)})(?P<repeat_num>\d{2}).s1p$",
         rf"^(?P<kind>{'|'.join(k.lower() for k in POSSIBLE_KINDS)})(?P<repeat_num>\d{1}).s1p$",
-        r"^(?P<kind>%s).s1p$" % ("|".join(POSSIBLE_KINDS)),
+        r"^(?P<kind>{}).s1p$".format("|".join(POSSIBLE_KINDS)),
         rf"^(?P<kind>{'|'.join(k.lower() for k in POSSIBLE_KINDS)}).s1p$",
     )
     known_substitutions = (("Ext_", "External"), ("Int_", ""))  # "Internal"
@@ -880,13 +873,15 @@ class _S11SubDir(_DataContainer):
 @attr.s
 class LoadS11(_S11SubDir):
     STANDARD_NAMES: ClassVar = ["Open", "Short", "Match", "External"]
-    pattern = r"(?P<load_name>%s)(?P<run_num>\d{2})$" % (
+    pattern = r"(?P<load_name>{})(?P<run_num>\d{{2}})$".format(
         "|".join(LOAD_ALIASES.values())
     )
     known_patterns = (
         f"(?P<load_name>{'|'.join(LOAD_MAPPINGS.keys())})$",
         f"(?P<load_name>{'|'.join(LOAD_ALIASES.values())})$",
-        r"(?P<load_name>%s)(?P<run_num>\d{1})$" % ("|".join(LOAD_ALIASES.values())),
+        r"(?P<load_name>{})(?P<run_num>\d{{1}})$".format(
+            "|".join(LOAD_ALIASES.values())
+        ),
     )
 
     known_substitutions = (
@@ -911,12 +906,12 @@ class LoadS11(_S11SubDir):
 @hickleable()
 @attr.s
 class AntSimS11(LoadS11):
-    pattern = r"(?P<load_name>%s)(?P<run_num>\d{2})$" % (
+    pattern = r"(?P<load_name>{})(?P<run_num>\d{{2}})$".format(
         "|".join(ANTENNA_SIMULATORS.keys())
     )
     known_patterns = (
-        r"(?P<load_name>%s)$" % ("|".join(ANTSIM_REVERSE.keys())),
-        r"(?P<load_name>%s)$" % ("|".join(ANTENNA_SIMULATORS.keys())),
+        r"(?P<load_name>{})$".format("|".join(ANTSIM_REVERSE.keys())),
+        r"(?P<load_name>{})$".format("|".join(ANTENNA_SIMULATORS.keys())),
     )
 
     @classmethod
@@ -1716,9 +1711,9 @@ class CalibrationObservation(_DataContainer):
                                     del file_parts[k]
                                     del files[k]
 
-                        files[
-                            inc_fl.relative_to(this_root_obs / this_obs_name)
-                        ] = inc_fl
+                        files[inc_fl.relative_to(this_root_obs / this_obs_name)] = (
+                            inc_fl
+                        )
                         new_file_parts[inc_fl.relative_to(this_root_obs)] = kinds
 
                 # Updating the file parts after the full loop means that we can add
