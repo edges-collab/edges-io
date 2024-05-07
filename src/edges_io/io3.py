@@ -1,4 +1,5 @@
 """Methods for dealing with EDGES-3 files and structures."""
+
 from __future__ import annotations
 
 import re
