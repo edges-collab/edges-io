@@ -17,7 +17,7 @@ from .logging import logger
 
 
 @attr.s(frozen=True)
-class _ObsNode(ABC):
+class _ObsNode:
     """Abstract base class representing a node in a calibration observation.
 
     A node could be a file or a directory.
@@ -186,7 +186,7 @@ class _ObsNode(ABC):
             shutil.move(root / basename, new_path)
             return new_path, match
 
-    @classmethod  # noqa: B027
+    @classmethod
     def _validate_match(cls, match: dict[str, str], filename: str):
         pass
 
