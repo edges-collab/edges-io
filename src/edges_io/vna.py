@@ -37,7 +37,7 @@ def _get_s1p_kind(path: Path) -> tuple[np.ndarray, str]:
                         flag = "RI"
 
                     comment_rows += 1
-                elif line.startswith("!"):
+                elif line.startswith(("!", "BEGIN")):
                     comment_rows += 1
                 elif flag is not None:
                     break
