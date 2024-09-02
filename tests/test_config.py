@@ -3,6 +3,7 @@
 from typing import ClassVar
 
 import pytest
+
 from edges_io.config import Config
 
 

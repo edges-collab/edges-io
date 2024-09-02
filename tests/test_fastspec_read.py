@@ -1,9 +1,10 @@
 from __future__ import annotations
 
 import pytest
-from edges_io.io import Spectrum
 from pygsdata import GSData
 from read_acq.gsdata import read_acq_to_gsdata
+
+from edges_io.io import Spectrum
 
 
 def test_hdf5rawspectrum(fastspec_spectrum_fl, edgeslow):

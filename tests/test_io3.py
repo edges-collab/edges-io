@@ -4,6 +4,7 @@ from pathlib import Path
 
 import pytest
 from astropy import units as un
+
 from edges_io import io3
 from edges_io.vna import read_s1p
 
