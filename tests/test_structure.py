@@ -1,6 +1,7 @@
 from pathlib import Path
 
 import pytest
+
 from edges_io.io import CalibrationObservation, Spectrum
 from edges_io.utils import FileStructureError
 

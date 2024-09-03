@@ -6,9 +6,10 @@ import pytest
 from astropy import units as apu
 from astropy.coordinates import EarthLocation
 from astropy.time import Time
-from edges_io import TEST_DATA_PATH
 from pygsdata import KNOWN_TELESCOPES, GSData, Telescope
 from read_acq.gsdata import write_gsdata_to_acq
+
+from edges_io import TEST_DATA_PATH
 
 
 @pytest.fixture(scope="session")

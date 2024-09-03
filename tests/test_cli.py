@@ -3,6 +3,7 @@ from pathlib import Path
 
 import pytest
 from click.testing import CliRunner
+
 from edges_io import cli
 from edges_io.utils import console
 

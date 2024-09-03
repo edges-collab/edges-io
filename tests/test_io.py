@@ -4,6 +4,7 @@ from pathlib import Path
 import hickle
 import pytest
 from bidict import bidict
+
 from edges_io import io, utils
 
 LOAD_ALIASES = bidict(
@@ -23,7 +24,7 @@ def test_dir(tmp_path_factory):
     return test_env(tmp_path_factory)
 
 
-@pytest.fixture()
+@pytest.fixture
 def test_env(tmp_path_factory):
     # Create an ideal observation file using tmp_path_factory
     path_list = ["Spectra", "Resistance", "S11"]
@@ -112,7 +113,7 @@ def test_env(tmp_path_factory):
 
 
 # function to make observation object
-@pytest.fixture()
+@pytest.fixture
 def calio(test_env):
     return io.CalibrationObservation(test_env)
 
