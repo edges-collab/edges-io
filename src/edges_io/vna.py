@@ -61,7 +61,7 @@ def _get_s1p_kind(path: Path) -> tuple[np.ndarray, str]:
         raise OSError(f"The file {path} has incorrect format.")
 
     #  loading data
-    d = np.genfromtxt(path, skip_header=comment_rows, skip_footer=footer_lines)
+    d = np.genfromtxt(path, skip_header=comment_rows, skip_footer=footer_lines,delimiter=',')
 
     return d, flag
 
