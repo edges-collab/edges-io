@@ -169,7 +169,7 @@ def read_temperature_log(logfile: Path | str) -> QTable:
         chunk_indices.append(len(lines))
 
         # Only take chunks that are length 10
-        chunk_indices = list(zip(chunk_indices[:-1], chunk_indices[1:]))
+        chunk_indices = list(zip(chunk_indices[:-1], chunk_indices[1:], strict=False))
         chunk_indices = [c for c in chunk_indices if c[1] - c[0] == 10]
 
         all_data = []

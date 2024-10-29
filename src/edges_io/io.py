@@ -266,7 +266,7 @@ class _SpectrumOrResistance(_DataFile):
             run_num = max(run_nums)
 
         pre_files = files.copy()
-        files = [fl for fl, num in zip(files, run_nums) if num == run_num]
+        files = [fl for fl, num in zip(files, run_nums, strict=False) if num == run_num]
 
         if not files:
             raise ValueError(
@@ -479,7 +479,7 @@ class Resistance(_SpectrumOrResistance):
                     nheader_lines += 1
                     values = next_line.split(",")
 
-                    out.update(dict(zip(names, values)))
+                    out.update(dict(zip(names, values, strict=False)))
 
                 if line.startswith("1,") or line == "":
                     done = True
@@ -664,7 +664,7 @@ class _SpectraOrResistanceFolder(_DataContainer):
         ]
 
         # Ensure all years are the same
-        for fl, group in zip(fls, groups):
+        for fl, group in zip(fls, groups, strict=False):
             if group["year"] != groups[0]["year"]:
                 logger.error(
                     f"All years must be the same in a Spectra folder, but {fl} was not"
@@ -1358,7 +1358,7 @@ class CalibrationObservation(_DataContainer):
         res.mkdir()
 
         # Link all Spectra and Resistance files.
-        for key, thing in zip(["spectra", "resistance"], [spec, res]):
+        for key, thing in zip(["spectra", "resistance"], [spec, res], strict=False):
             for kind_files in files[key].values():
                 these_files = functools.reduce(
                     operator.iadd, (list(root.glob(fl)) for fl in kind_files), []
