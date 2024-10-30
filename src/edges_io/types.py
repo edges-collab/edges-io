@@ -6,7 +6,7 @@ from typing import Union
 from astropy import units
 from pygsdata.types import *
 
-PathLike = Union[str, Path]
+PathLike = str | Path
 FreqType = units.Quantity["frequency"]
 ImpedanceType = units.Quantity["electrical impedance"]
 OhmType = units.Quantity[units.ohm]

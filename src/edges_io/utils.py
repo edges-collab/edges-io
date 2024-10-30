@@ -157,16 +157,16 @@ def optional(fnc):
 
 
 def isintish(x):
-    return isinstance(x, (int, np.int64))
+    return isinstance(x, int | np.int64)
 
 
 def isfloatish(x):
-    return isinstance(x, (float, np.float32))
+    return isinstance(x, float | np.float32)
 
 
 def isstringish(x):
-    return isinstance(x, (str, bytes))
+    return isinstance(x, str | bytes)
 
 
 def isnumeric(x):
-    return isinstance(x, (int, float, np.number))
+    return isinstance(x, int | float | np.number)
