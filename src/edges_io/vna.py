@@ -18,6 +18,7 @@ def _get_s1p_kind(path: Path) -> tuple[np.ndarray, str]:
 
     with path.open("r") as d:
         comment_rows = 0
+        uses_commas = False
         flag = None
         lines = d.readlines()
         if lines[0].startswith("BEGIN") and lines[1].strip() in ["DB", "MA", "RI"]:
@@ -40,6 +41,8 @@ def _get_s1p_kind(path: Path) -> tuple[np.ndarray, str]:
                 elif line.startswith(("!", "BEGIN")):
                     comment_rows += 1
                 elif flag is not None:
+                    if "," in line:
+                        uses_commas = True
                     break
                 else:
                     warnings.warn(
@@ -62,7 +65,10 @@ def _get_s1p_kind(path: Path) -> tuple[np.ndarray, str]:
 
     #  loading data
     d = np.genfromtxt(
-        path, skip_header=comment_rows, skip_footer=footer_lines, delimiter=","
+        path,
+        skip_header=comment_rows,
+        skip_footer=footer_lines,
+        delimiter="," if uses_commas else None,
     )
 
     return d, flag
