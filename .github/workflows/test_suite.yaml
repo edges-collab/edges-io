@@ -20,7 +20,7 @@ jobs:
       fail-fast: false
       matrix:
         os: [ubuntu-latest, macos-latest]
-        python-version: [3.9, "3.10", "3.11", "3.12"]
+        python-version: ["3.10", "3.11", "3.12"]
 
     steps:
       - uses: actions/checkout@master
@@ -49,6 +49,7 @@ jobs:
           name: coverage-data-tests-${{ matrix.python-version }}-${{ matrix.os }}
           path: ".coverage.*"
           if-no-files-found: error
+          include-hidden-files: true
 
   downstream:
     env:
@@ -94,6 +95,7 @@ jobs:
           name: coverage-data-downstream-${{ matrix.package }}
           path: ".coverage.*"
           if-no-files-found: error
+          include-hidden-files: true
 
   codecov:
     needs: [downstream, tests]
