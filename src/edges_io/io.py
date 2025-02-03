@@ -1336,9 +1336,9 @@ class CalibrationObservation(_DataContainer):
 
         root = obs_yaml_data["root"]
         root = Path(root).absolute() if root else obs_yaml.parent.absolute()
-        assert (
-            root.exists()
-        ), f"The root {root} specified in the observation does not exist."
+        assert root.exists(), (
+            f"The root {root} specified in the observation does not exist."
+        )
 
         files = obs_yaml_data["files"]
         meta = obs_yaml_data["meta"]
@@ -1399,30 +1399,30 @@ class CalibrationObservation(_DataContainer):
         for key in ["spectra", "resistance", "s11"]:
             assert key in files, f"{key} must be in observation YAML 'files'"
             for key2 in ["open", "short", "hot_load", "ambient"]:
-                assert (
-                    key2 in files[key]
-                ), f"{key2} must be in observation YAML 'files.{key}'"
+                assert key2 in files[key], (
+                    f"{key2} must be in observation YAML 'files.{key}'"
+                )
 
                 if key != "s11":
                     for fl in files[key][key2]:
-                        assert (
-                            len(list(root.glob(fl))) > 0
-                        ), f"File '{root / fl}' included at files.{key}.{key2} does not exist or match any glob patterns."
+                        assert len(list(root.glob(fl))) > 0, (
+                            f"File '{root / fl}' included at files.{key}.{key2} does not exist or match any glob patterns."
+                        )
                 else:
                     fl = files[key][key2][0]
-                    assert (
-                        root / fl
-                    ).exists(), f"Directory '{root / fl}' included at files.{key}.{key2} does not exist."
+                    assert (root / fl).exists(), (
+                        f"Directory '{root / fl}' included at files.{key}.{key2} does not exist."
+                    )
 
             if key == "s11":
                 for key2 in ["receiver", "switch"]:
-                    assert (
-                        key2 in files[key]
-                    ), f"{key2} must be in observation YAML 'files.{key}'. Available: {list(files[key].keys())}"
+                    assert key2 in files[key], (
+                        f"{key2} must be in observation YAML 'files.{key}'. Available: {list(files[key].keys())}"
+                    )
 
-                    assert (
-                        root / files[key][key2][0]
-                    ).exists(), f"Directory '{root / files[key][key2][0]}' included at files.{key}.{key2} does not exist."
+                    assert (root / files[key][key2][0]).exists(), (
+                        f"Directory '{root / files[key][key2][0]}' included at files.{key}.{key2} does not exist."
+                    )
 
     @classmethod
     def check_definition(cls, path: Path) -> dict:
