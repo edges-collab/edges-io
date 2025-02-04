@@ -54,3 +54,4 @@ MANIFEST
 .venv*/
 .vscode/
 docs/reference/_autosummary/
+.coverage

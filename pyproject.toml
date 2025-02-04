@@ -48,6 +48,7 @@ ignore = [
     "E231",
     "D1",  # missing docstrings. TODO: add this back in.
     "PERF203",  # no try/except in loops
+    "A005",     # module shadows builtin
 ]
 
 [tool.ruff.lint.per-file-ignores]
