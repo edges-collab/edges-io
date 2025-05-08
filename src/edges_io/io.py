@@ -337,7 +337,7 @@ class FieldSpectrum:
         if not val.exists():
             raise OSError(f"{self.path} does not exist!")
 
-        if self.file_format not in ["h5", "acq"]:
+        if self.file_format not in ["h5", "acq", "gsh5"]:
             raise TypeError(f"{self.path} has bad file format, must be h5 or acq")
 
     @cached_property
