@@ -307,14 +307,14 @@ class CalibrationObservation:
                 for load in ["amb", "hot", "open", "short", "lna"]
             }
         )
-       if ext == '.acq':
+        if ext == '.acq':
             acq_files: dict[str:Path] = frozendict(
                 {
                     load_map[load]: get_acq_file(load, root_dir, year, day)
                     for load in ["amb", "hot", "open", "short"]
                 }
             )
-       else:
+        else:
            acq_files: dict[str:Path] = frozendict(
                 {
                     load_map[load]: get_gsh5_file(load, root_dir, year, day)
