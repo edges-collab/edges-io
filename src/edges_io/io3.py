@@ -117,6 +117,22 @@ def get_acq_file(
     return files[0]
 
 
+def get_gsh5_file(
+    load: Literal["amb", "hot", "short", "open"], root: Path, year: int, day: int
+) -> Path:
+    """Get the ACQ files for a particular load."""
+    d = root / "mro" / load / str(year)
+    glob = f"{year}_{day:03d}_??_??_??_{load}.gsh5"
+    files = sorted(d.glob(glob))
+
+    if not files:
+        raise FileNotFoundError(f"No files found in {d} for {glob}")
+    elif len(files) > 1:
+        raise OSError(f"More than one file found in {d} for {glob}")
+
+    return files[0]
+
+
 def read_temperature_log_entry(lines: list[str]) -> dict[str, Any]:
     if len(lines) != 10:
         raise ValueError("Expected 10 lines for a temperature log entry")
@@ -241,6 +257,7 @@ class CalibrationObservation:
         s11_hour: int | str = "first",
         root_dir: Path | str = "/data5/edges/data/EDGES3_data/MRO/",
         allow_closest_s11_within: int = 5,
+        ext: str = ".acq",
     ):
         """Create a CalibrationObservation from a date.
 
@@ -291,13 +308,20 @@ class CalibrationObservation:
                 for load in ["amb", "hot", "open", "short", "lna"]
             }
         )
-
-        acq_files: dict[str:Path] = frozendict(
-            {
-                load_map[load]: get_acq_file(load, root_dir, year, day)
-                for load in ["amb", "hot", "open", "short"]
-            }
-        )
+        if ext == ".acq":
+            acq_files: dict[str:Path] = frozendict(
+                {
+                    load_map[load]: get_acq_file(load, root_dir, year, day)
+                    for load in ["amb", "hot", "open", "short"]
+                }
+            )
+        else:
+            acq_files: dict[str:Path] = frozendict(
+                {
+                    load_map[load]: get_gsh5_file(load, root_dir, year, day)
+                    for load in ["amb", "hot", "open", "short"]
+                }
+            )
 
         temperature_file = root_dir / "temperature_logger/temperature.log"
 
