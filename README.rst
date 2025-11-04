@@ -12,8 +12,9 @@ edges-io
 
 **Module for reading EDGES data and working with EDGES databases.**
 
+:warning:
 .. note:: This repo is deprecated -- all functionality is now included in 
-  `edges-analysis <https://github.com/edges-collab/edges-analysis>_`
+  `edges-analysis <https://github.com/edges-collab/edges-analysis>`_.
 
 This package implements all necessary functionality for reading EDGES data.
 It's two main concerns are:
