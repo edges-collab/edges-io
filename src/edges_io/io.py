@@ -508,6 +508,10 @@ class Resistance(_SpectrumOrResistance):
             # Determine whether the file is in KOhm
 
             def float_from_kohm(x):
+                try:
+                    x = x.decode("utf-8")
+                except AttributeError:
+                    pass
                 kohm = "KOhm" in x
                 y = float(x.split(" ")[0])
                 return y * 1000 if kohm else y
